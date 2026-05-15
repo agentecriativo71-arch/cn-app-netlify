@@ -1,0 +1,138 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-dark: var(--primary-dark);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chip: var(--chip);
+  --color-chip-foreground: var(--chip-foreground);
+  --color-surface: var(--surface);
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+:root {
+  /* C&N Tecidos brand */
+  --background: oklch(1 0 0);                    /* #FFFFFF */
+  --foreground: oklch(0.22 0 0);                 /* #222222 */
+  --primary: oklch(0.48 0.13 145);               /* #1A6B2F verde escuro */
+  --primary-dark: oklch(0.42 0.13 145);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.58 0.14 145);             /* #2E8B47 verde médio */
+  --secondary-foreground: oklch(1 0 0);
+  --accent: oklch(0.92 0.04 15);                 /* #FCE4EC rosa suave */
+  --accent-foreground: oklch(0.42 0.13 145);
+  --muted: oklch(0.97 0 0);                      /* #F8F8F8 */
+  --muted-foreground: oklch(0.6 0 0);            /* #888888 */
+  --surface: oklch(0.91 0.07 145);               /* #C8E6C9 verde claro */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0 0);
+  --border: oklch(0.92 0 0);
+  --input: oklch(0.92 0 0);
+  --ring: oklch(0.48 0.13 145);
+  --chip: oklch(0.96 0 0);
+  --chip-foreground: oklch(0.25 0 0);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html, body {
+    font-family: var(--font-sans);
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    background-color: var(--color-primary);
+    color: var(--color-primary-foreground);
+    border-radius: 24px;
+    padding: 14px 20px;
+    font-weight: 600;
+    font-size: 16px;
+    transition: background-color 200ms ease, transform 200ms ease;
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn-primary:hover { background-color: var(--color-primary-dark); }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--color-secondary);
+    border: 1.5px solid var(--color-secondary);
+    border-radius: 24px;
+    padding: 14px 20px;
+    font-weight: 600;
+    font-size: 16px;
+    width: 100%;
+    transition: background-color 200ms ease;
+  }
+  .btn-secondary:hover { background-color: var(--color-surface); }
+
+  .chip {
+    background-color: var(--color-chip);
+    color: var(--color-chip-foreground);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-weight: 500;
+    font-size: 13px;
+    transition: all 200ms ease;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .chip[data-selected="true"] {
+    background-color: var(--color-primary);
+    color: var(--color-primary-foreground);
+    border-color: var(--color-primary);
+  }
+
+  .card-soft {
+    background-color: var(--color-card);
+    border-radius: 12px;
+    box-shadow: var(--shadow-card);
+    padding: 16px;
+  }
+
+  .h1-screen { font-size: 24px; font-weight: 700; color: var(--color-primary); }
+  .h2-section { font-size: 18px; font-weight: 600; color: var(--color-secondary); }
+
+  .fade-in { animation: fadeIn 400ms ease both; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
