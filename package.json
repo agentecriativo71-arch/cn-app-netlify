@@ -1,5 +1,5 @@
 {
-  "name": "cn-app-easy",
+  "name": "cn-app-netlify",
   "private": true,
   "sideEffects": false,
   "type": "module",
@@ -10,7 +10,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "start": "PORT=3000 node .output/server/index.mjs",
+    "start": "vite preview",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write ."

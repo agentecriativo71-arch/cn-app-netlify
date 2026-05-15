@@ -8,15 +8,11 @@ export default defineConfig({
   plugins: [
     tanstackStart({
       deployment: {
-        preset: "node-server",
+        preset: "netlify",
       },
     }),
     react(),
     tailwindcss(),
     tsconfigPaths(),
   ],
-  server: {
-    host: "0.0.0.0",
-    port: 3000,
-  },
 });
