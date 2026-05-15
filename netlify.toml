@@ -2,9 +2,11 @@
   command = "npm run build"
   publish = "dist/client"
 
+[build.environment]
+  NODE_VERSION = "22"
+
 [functions]
   directory = "dist/server"
-  node_version = "22"
 
 [[redirects]]
   from = "/*"
