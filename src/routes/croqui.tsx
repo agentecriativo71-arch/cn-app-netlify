@@ -26,6 +26,8 @@ function Croqui() {
     if (!loading) return;
     const i = setInterval(() => setMsg((m) => (m + 1) % MSGS.length), 1500);
     
+    let active = true;
+
     async function doGeneration() {
       try {
         const res = await generateCroquiFn({
@@ -34,10 +36,14 @@ function Croqui() {
             biotipo: s.biotipo,
             comprimento: s.comprimento,
             decote: s.decote,
-            manga: s.manga
+            manga: s.manga,
+            saia: s.saia,
+            renda: s.renda,
+            comentario: s.comentario,
           }
         });
         
+        if (!active) return;
         s.set({ croquiUrl: res.url });
         
         const dbRes = await saveLookDbFn({
@@ -54,18 +60,25 @@ function Croqui() {
           }
         });
         
+        if (!active) return;
         s.set({ dbId: dbRes.id }); 
       } catch (err) {
+        if (!active) return;
         console.error(err);
         alert("Erro ao gerar croqui. Tente novamente.");
         router.history.back();
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     }
     
     doGeneration();
-    return () => clearInterval(i);
+    return () => {
+      active = false;
+      clearInterval(i);
+    };
   }, [loading]);
 
   if (loading) {

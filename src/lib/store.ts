@@ -7,7 +7,10 @@ export type LookState = {
   comprimento: string | null;
   decote: string | null;
   manga: string | null;
+  saia: string | null;
+  renda: string | null;
   cor: string | null;
+  comentario: string | null;
   modo: "manequim" | "foto" | null;
   fotoUrl: string | null;
   croquiUrl: string | null;
@@ -19,8 +22,9 @@ export type LookState = {
 
 const initial = {
   ocasiao: null, biotipo: null, peca: null, comprimento: null,
-  decote: null, manga: null, cor: null, modo: null,
-  fotoUrl: null, croquiUrl: null, realistaUrl: null, dbId: null,
+  decote: null, manga: null, saia: null, renda: null, cor: null,
+  comentario: null, modo: null, fotoUrl: null, croquiUrl: null,
+  realistaUrl: null, dbId: null,
 };
 
 export const useLook = create<LookState>((set) => ({

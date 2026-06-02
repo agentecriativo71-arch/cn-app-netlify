@@ -13,7 +13,7 @@ function Realista() {
   const s = useLook();
 
   const choose = (modo: "manequim" | "foto") => {
-    s.set({ modo });
+    s.set({ modo, realistaUrl: null });
     router.navigate({ to: "/resultado" });
   };
 
