@@ -160,11 +160,17 @@ export const generateCroquiFn = createServerFn({ method: 'POST' })
       leadingInstructions = `This is a ${lengthPrefix}${pecaEn}. Present the garment fully visible from neckline/collar to hem, showing the complete silhouette: neckline, sleeves, body fit, waistline, and hem.\n${hemInstruction}`;
     }
 
+    // Build strong front/back consistency instruction
+    const isSleevelessDesign = SLEEVELESS_DECOTES.includes(decote || '');
+    const sleevelessBackRule = isSleevelessDesign
+      ? ` CRITICAL BACK VIEW RULE: The front of this garment is strapless/sleeveless (${decote}). The back MUST also be strapless — do NOT add any straps, racerback, halter neck, shoulder coverage, tank-top back, or any fabric covering the shoulders or upper back that does not exist on the front. The back neckline must match the same strapless construction as the front. The upper back and shoulders must be completely bare, matching the front.`
+      : '';
+
     const backViewInstruction = isBottom
       ? 'The back view must show closure details and seam lines ONLY on the garment itself (below the waistband). The mannequin torso above the waistband must remain completely bare — no zippers, seams, or lines on the upper back.'
       : isTop
         ? `The back view must show closure details and seam lines ONLY on the garment itself (above the waist/hips). The mannequin lower body below the hem of the ${pecaEn} must remain completely bare.`
-        : 'The back view must show closure details (zippers, buttons), back seam lines, darts, and how the garment looks from behind — from neckline to hem.';
+        : `CRITICAL FRONT/BACK CONSISTENCY: The back view must be structurally consistent with the front view — same neckline type, same sleeve type (or lack thereof), same overall silhouette and construction. Do NOT add structural elements to the back (straps, sleeves, coverage) that do not exist on the front. The back view should show: the reverse of the same garment construction, any back closure details (invisible zipper, buttons), back seam lines, and darts — but the overall structure must match the front exactly.${sleevelessBackRule}`;
 
     const prompt = `${sleevelessInstruction}${leadingInstructions}
 Professional fashion design croqui of a ${comprimentoEn} ${pecaEn}.${elementFragment}${bodyContext}

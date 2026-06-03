@@ -1,7 +1,8 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
+import { Stepper } from "@/components/Stepper";
 import { useLook, LookState } from "@/lib/store";
-import { ImageOff } from "lucide-react";
+import { ImageOff, Check } from "lucide-react";
 import elementosData from "@/lib/elementos_vestuario.json";
 
 export const Route = createFileRoute("/criar")({
@@ -49,6 +50,7 @@ function ChipRow({ items, selected, onSelect }: {
           data-selected={selected === item}
           onClick={() => onSelect(item)}
         >
+          {selected === item && <Check size={12} strokeWidth={3} />}
           {item}
         </button>
       ))}
@@ -56,25 +58,22 @@ function ChipRow({ items, selected, onSelect }: {
   );
 }
 
-/** Grid de cards com imagem + descrição (para Manga, Decote, Saia, Renda) */
+/** Grid de cards com imagem (para Manga, Decote, Saia, Renda) */
 function ElementGrid({ items, selected, onSelect }: {
   items: typeof MANGAS;
   selected: string | null;
   onSelect: (nome: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="element-grid">
       {items.map(el => {
         const isSelected = selected === el.nome;
         return (
           <button
             key={el.id}
             onClick={() => onSelect(isSelected ? "" : el.nome)}
-            className="w-full h-44 border rounded-xl overflow-hidden transition-all duration-200 bg-white flex items-center justify-center p-3"
-            style={{
-              borderColor: isSelected ? "var(--color-primary)" : "var(--color-border)",
-              boxShadow: isSelected ? "0 0 0 2px var(--color-primary)" : "var(--shadow-card)",
-            }}
+            className="card-element"
+            data-selected={isSelected}
           >
             {el.image_url ? (
               <img
@@ -121,7 +120,8 @@ function Criar() {
   return (
     <>
       <Header title="Nova Criação" back="/" />
-      <main className="px-5 py-6 space-y-8 pb-32 fade-in">
+      <Stepper current="criar" />
+      <main className="container-app px-5 py-6 space-y-8 pb-32 fade-in">
 
         <Section title="Ocasião">
           <ChipRow items={OCASIOES} selected={s.ocasiao} onSelect={(v) => s.set({ ocasiao: v })} />
@@ -205,7 +205,7 @@ function Criar() {
 
         <Section title="Observações ou detalhes extras" hint="Opcional">
           <textarea
-            className="w-full min-h-[90px] p-3 border rounded-xl bg-card text-foreground placeholder:text-muted-foreground text-[13px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
+            className="w-full min-h-[90px] p-3.5 border rounded-xl bg-card text-foreground placeholder:text-muted-foreground text-[14px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none transition-all"
             placeholder="Ex: Gostaria de um laço grande nas costas, caimento esvoaçante ou cinto fino..."
             value={s.comentario || ""}
             onChange={(e) => s.set({ comentario: e.target.value || null })}
@@ -214,10 +214,12 @@ function Criar() {
 
       </main>
 
-      <div className="fixed bottom-0 inset-x-0 px-5 py-4 bg-background/95 backdrop-blur border-t">
-        <button className="btn-primary" disabled={!valid} onClick={submit}>
-          ✨ Gerar croqui
-        </button>
+      <div className="bottom-bar">
+        <div className="bottom-bar-inner">
+          <button className="btn-primary" disabled={!valid} onClick={submit}>
+            ✨ Gerar croqui
+          </button>
+        </div>
       </div>
     </>
   );

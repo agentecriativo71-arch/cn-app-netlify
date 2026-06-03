@@ -1,5 +1,6 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
+import { Stepper } from "@/components/Stepper";
 import { useLook } from "@/lib/store";
 import { useState, useRef } from "react";
 import { User, Camera, Upload } from "lucide-react";
@@ -82,7 +83,8 @@ function Realista() {
   return (
     <>
       <Header title="Configurar foto realista" back="/croqui" />
-      <main className="px-5 py-6 space-y-8 pb-32 fade-in">
+      <Stepper current="realista" />
+      <main className="container-app px-5 py-6 space-y-8 pb-32 fade-in">
         <p className="text-[15px] text-muted-foreground text-center">
           Configure as opções para gerar a visualização realista da sua peça.
         </p>
@@ -96,12 +98,9 @@ function Realista() {
                 <button
                   key={c.nome}
                   onClick={() => s.set({ cor: c.nome })}
-                  className="w-10 h-10 rounded-full border border-border flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
-                  style={{
-                    background: c.hex,
-                    boxShadow: isSelected ? "0 0 0 2px var(--color-background), 0 0 0 4px var(--color-primary)" : "none",
-                    transform: isSelected ? "scale(1.1)" : "scale(1)",
-                  }}
+                  className="color-swatch"
+                  data-selected={isSelected}
+                  style={{ background: c.hex }}
                   title={c.nome}
                 />
               );
@@ -112,11 +111,10 @@ function Realista() {
               const isCustomSelected = s.cor && !CORES.some(c => c.nome === s.cor || c.hex === s.cor);
               return (
                 <label
-                  className="relative w-10 h-10 rounded-full border border-border cursor-pointer flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
+                  className="color-swatch relative cursor-pointer"
+                  data-selected={isCustomSelected || undefined}
                   style={{
                     background: isCustomSelected ? s.cor! : "conic-gradient(from 0deg, red, yellow, green, cyan, blue, magenta, red)",
-                    boxShadow: isCustomSelected ? "0 0 0 2px var(--color-background), 0 0 0 4px var(--color-primary)" : "none",
-                    transform: isCustomSelected ? "scale(1.1)" : "scale(1)",
                   }}
                   title="Cor personalizada"
                 >
@@ -142,36 +140,32 @@ function Realista() {
 
         {/* Seção 2: Modelo de Visualização */}
         <Section title="Como quer ver?" hint="Obrigatório">
-          <div className="space-y-4">
+          <div className="mode-grid">
             <button
               onClick={() => setSelectedModo("manequim")}
-              className="w-full card-soft text-left flex items-center gap-4 hover:bg-surface/30 transition border"
-              style={{
-                borderColor: selectedModo === "manequim" ? "var(--color-primary)" : "transparent",
-              }}
+              className="mode-card"
+              data-selected={selectedModo === "manequim"}
             >
-              <div className="w-14 h-14 rounded-xl bg-surface flex items-center justify-center text-primary">
+              <div className="w-14 h-14 rounded-xl bg-surface flex items-center justify-center text-primary shrink-0">
                 <User size={28} />
               </div>
               <div>
                 <p className="font-semibold text-foreground">No manequim</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Veja como a peça fica em um modelo 3D realista</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Modelo 3D realista</p>
               </div>
             </button>
 
             <button
               onClick={() => setSelectedModo("foto")}
-              className="w-full card-soft text-left flex items-center gap-4 hover:bg-surface/30 transition border"
-              style={{
-                borderColor: selectedModo === "foto" ? "var(--color-primary)" : "transparent",
-              }}
+              className="mode-card"
+              data-selected={selectedModo === "foto"}
             >
-              <div className="w-14 h-14 rounded-xl bg-accent flex items-center justify-center text-primary">
+              <div className="w-14 h-14 rounded-xl bg-accent flex items-center justify-center text-primary shrink-0">
                 <Camera size={28} />
               </div>
               <div>
                 <p className="font-semibold text-foreground">Na minha foto</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Vista a peça digitalmente em sua própria foto</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Vista digitalmente</p>
               </div>
             </button>
           </div>
@@ -180,13 +174,13 @@ function Realista() {
         {/* Seção 3: Upload de Foto (Se selecionou Foto) */}
         {selectedModo === "foto" && (
           <Section title="Sua foto" hint="Obrigatório">
-            <div className="card-soft bg-muted flex flex-col items-center gap-4 p-5">
+            <div className="card-soft bg-muted/30 flex flex-col items-center gap-4 p-6">
               <p className="text-xs text-muted-foreground text-center max-w-[280px]">
                 Envie uma foto de corpo inteiro, de frente, com boa iluminação e roupas justas para melhor resultado.
               </p>
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickFile} />
               <button
-                className="btn-secondary w-full max-w-[200px]"
+                className="btn-secondary w-full max-w-[200px] flex items-center justify-center gap-2"
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
               >
@@ -202,14 +196,16 @@ function Realista() {
         )}
       </main>
 
-      <div className="fixed bottom-0 inset-x-0 px-5 py-4 bg-background/95 backdrop-blur border-t">
-        <button
-          className="btn-primary w-full"
-          disabled={!isValid || uploading}
-          onClick={handleGenerate}
-        >
-          ✨ Gerar foto realista
-        </button>
+      <div className="bottom-bar">
+        <div className="bottom-bar-inner">
+          <button
+            className="btn-primary w-full"
+            disabled={!isValid || uploading}
+            onClick={handleGenerate}
+          >
+            ✨ Gerar foto realista
+          </button>
+        </div>
       </div>
     </>
   );
