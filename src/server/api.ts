@@ -298,3 +298,76 @@ export const updateLookDbFn = createServerFn({ method: 'POST' })
       throw error;
     }
   });
+
+export const sendWhatsAppLookFn = createServerFn({ method: 'POST' })
+  .handler(async ({ data }: { data: { nome: string; telefone: string; croquiUrl: string; realistaUrl?: string | null } }) => {
+    const { nome, telefone, croquiUrl, realistaUrl } = data;
+
+    const evolutionUrl = process.env.EVOLUTION_API_URL || import.meta.env.EVOLUTION_API_URL || "";
+    const evolutionInstance = process.env.EVOLUTION_INSTANCE || import.meta.env.EVOLUTION_INSTANCE || "";
+    const evolutionKey = process.env.EVOLUTION_API_KEY || import.meta.env.EVOLUTION_API_KEY || "";
+
+    if (!evolutionUrl || !evolutionInstance || !evolutionKey) {
+      console.error("[WPP] Evolution API credentials are missing!");
+      throw new Error("Evolution API credentials not configured on the server.");
+    }
+
+    const cleanPhone = (phone: string) => {
+      const num = phone.replace(/\D/g, "");
+      return num.startsWith("55") && num.length >= 12 ? num : `55${num}`;
+    };
+
+    const targetNumber = cleanPhone(telefone);
+    const baseUrl = evolutionUrl.replace(/\/$/, "");
+    const headers = {
+      "apikey": evolutionKey,
+      "Content-Type": "application/json"
+    };
+
+    try {
+      // 1. Send introductory text message
+      const textMsg = `Olá, ${nome}! Seguem as imagens da sua criação na C&N Tecidos. Ficamos muito felizes em fazer parte da sua jornada de moda! 👗✨`;
+      await fetch(`${baseUrl}/message/sendText/${evolutionInstance}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          number: targetNumber,
+          text: textMsg,
+          delay: 1000
+        })
+      });
+
+      // 2. Send Croqui image
+      await fetch(`${baseUrl}/message/sendMedia/${evolutionInstance}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          number: targetNumber,
+          mediatype: "image",
+          mimetype: "image/jpeg",
+          caption: "Aqui está o croqui do seu look personalizado! 🎨",
+          media: croquiUrl
+        })
+      });
+
+      // 3. Send Realistic image if available
+      if (realistaUrl) {
+        await fetch(`${baseUrl}/message/sendMedia/${evolutionInstance}`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            number: targetNumber,
+            mediatype: "image",
+            mimetype: "image/jpeg",
+            caption: "Aqui está a visualização realista da sua peça! ✨",
+            media: realistaUrl
+          })
+        });
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("[WPP] Error sending WhatsApp message via Evolution API:", error);
+      throw error;
+    }
+  });

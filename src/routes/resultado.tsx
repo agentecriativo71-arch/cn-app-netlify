@@ -4,7 +4,7 @@ import { useLook } from "@/lib/store";
 import { useEffect, useState } from "react";
 import { Download, MessageCircle, RotateCcw } from "lucide-react";
 
-import { generateRealistaFn, updateLookDbFn } from "@/server/api";
+import { generateRealistaFn, updateLookDbFn, sendWhatsAppLookFn } from "@/server/api";
 
 export const Route = createFileRoute("/resultado")({
   component: Resultado,
@@ -20,6 +20,13 @@ function Resultado() {
   const s = useLook();
   const [loading, setLoading] = useState(!s.realistaUrl);
   const [msg, setMsg] = useState(0);
+
+  // Lead capture states
+  const [showLeadModal, setShowLeadModal] = useState(false);
+  const [nome, setNome] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [submittingLead, setSubmittingLead] = useState(false);
+  const [leadSaved, setLeadSaved] = useState(false);
 
   useEffect(() => {
     if (!loading) return;
@@ -99,6 +106,60 @@ function Resultado() {
     router.navigate({ to: "/criar" });
   };
 
+  const handlePrint = () => {
+    // Basic browser printing mechanism
+    window.print();
+  };
+
+  const handleSubmitLead = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nome || !telefone) return;
+    setSubmittingLead(true);
+    try {
+      // 1. Update Lead details in Database (Non-blocking)
+      try {
+        if (s.dbId) {
+          await updateLookDbFn({
+            data: {
+              id: s.dbId,
+              update: {
+                nome_cliente: nome,
+                telefone_cliente: telefone
+              }
+            }
+          });
+        }
+      } catch (dbErr) {
+        console.warn("[DB] Failed to update lead in database, continuing to send WhatsApp:", dbErr);
+      }
+
+      // 2. Call server function to send messages automatically via Evolution API
+      await sendWhatsAppLookFn({
+        data: {
+          nome,
+          telefone,
+          croquiUrl: s.croquiUrl!,
+          realistaUrl: s.realistaUrl
+        }
+      });
+
+      setLeadSaved(true);
+
+      // Auto close modal after success
+      setTimeout(() => {
+        setShowLeadModal(false);
+        setLeadSaved(false);
+        setNome("");
+        setTelefone("");
+      }, 3000);
+    } catch (err) {
+      console.error("Erro ao salvar contato ou enviar mensagens:", err);
+      alert("Erro ao enviar. Por favor, verifique o número e tente novamente.");
+    } finally {
+      setSubmittingLead(false);
+    }
+  };
+
   return (
     <>
       <Header title="Seu look" back="/realista" />
@@ -115,17 +176,81 @@ function Resultado() {
         </div>
 
         <div className="space-y-3">
-          <a href={WHATSAPP} target="_blank" rel="noreferrer" className="btn-primary">
-            <MessageCircle size={18} /> Falar com a Camila
-          </a>
-          <a href={s.realistaUrl!} download className="btn-secondary inline-flex items-center justify-center gap-2">
-            <Download size={18} /> Baixar imagem
-          </a>
+          <button onClick={() => setShowLeadModal(true)} className="btn-primary flex items-center justify-center gap-2 w-full">
+            <MessageCircle size={18} /> Enviar por WhatsApp
+          </button>
+          
+          <button onClick={handlePrint} className="btn-secondary inline-flex items-center justify-center gap-2">
+            🖨️ Imprimir Look
+          </button>
+          
           <button onClick={reset} className="btn-secondary inline-flex items-center justify-center gap-2">
             <RotateCcw size={18} /> Criar outro look
           </button>
         </div>
       </main>
+
+      {/* Lead Capture Modal */}
+      {showLeadModal && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-5 fade-in">
+          <div className="bg-card w-full max-w-md rounded-2xl border shadow-lg overflow-hidden p-6 space-y-4 relative">
+            <h3 className="text-lg font-bold text-foreground">Receber fotos no WhatsApp</h3>
+            <p className="text-xs text-muted-foreground">
+              Insira seus dados abaixo para enviar o croqui e a visualização no manequim para o seu número e salvar seu contato.
+            </p>
+
+            {leadSaved ? (
+              <div className="py-6 text-center text-primary font-semibold text-sm animate-pulse">
+                ✓ Contato salvo! Redirecionando para o WhatsApp...
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitLead} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Nome completo</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Ana Maria Silva"
+                    value={nome}
+                    onChange={(e) => setNome(e.target.value)}
+                    className="w-full p-3 border rounded-xl bg-muted/50 text-foreground placeholder:text-muted-foreground text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">WhatsApp (com DDD)</label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="Ex: 19999999999"
+                    value={telefone}
+                    onChange={(e) => setTelefone(e.target.value)}
+                    className="w-full p-3 border rounded-xl bg-muted/50 text-foreground placeholder:text-muted-foreground text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLeadModal(false)}
+                    className="btn-secondary py-2 text-xs flex-1"
+                    disabled={submittingLead}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary py-2 text-xs flex-1"
+                    disabled={submittingLead || !nome || !telefone}
+                  >
+                    {submittingLead ? "Enviando..." : "Receber fotos"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

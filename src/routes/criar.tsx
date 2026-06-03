@@ -1,9 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
 import { useLook, LookState } from "@/lib/store";
-import { useRef, useState } from "react";
-import { Upload, ImageOff } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { ImageOff } from "lucide-react";
 import elementosData from "@/lib/elementos_vestuario.json";
 
 export const Route = createFileRoute("/criar")({
@@ -15,20 +13,6 @@ const OCASIOES = ["Casamento", "Festa", "Trabalho", "Casual", "Gala"];
 const BIOTIPOS = ["Ampulheta", "Triângulo", "Triângulo Invertido", "Retângulo", "Oval"];
 const PECAS = ["Vestido", "Saia", "Blusa", "Calça", "Macacão"];
 const COMPRIMENTOS = ["Curto", "Médio", "Longo", "Midi"];
-const CORES = [
-  { nome: "Verde C&N", hex: "#1A6B2F" },
-  { nome: "Preto", hex: "#000000" },
-  { nome: "Branco", hex: "#FFFFFF" },
-  { nome: "Azul Marinho", hex: "#1E3A8A" },
-  { nome: "Vermelho Rubi", hex: "#BE123C" },
-  { nome: "Rosa Pastel", hex: "#FBCFE8" },
-  { nome: "Roxo Imperial", hex: "#6D28D9" },
-  { nome: "Terracota", hex: "#C2410C" },
-  { nome: "Amarelo Mostarda", hex: "#D97706" },
-  { nome: "Nude/Bege", hex: "#F5F5DC" },
-  { nome: "Lilás", hex: "#C084FC" },
-  { nome: "Verde Menta", hex: "#A7F3D0" }
-];
 
 // Elementos por categoria que possuem imagem
 const MANGAS = elementosData.filter(e => e.categoria === "manga" && e.image_url);
@@ -117,8 +101,6 @@ function ElementGrid({ items, selected, onSelect }: {
 function Criar() {
   const router = useRouter();
   const s = useLook();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
 
   const valid = s.peca && s.biotipo;
 
@@ -128,28 +110,6 @@ function Criar() {
   const showManga = s.peca === "Vestido" || s.peca === "Blusa" || s.peca === "Macacão";
   const showSaia = s.peca === "Vestido" || s.peca === "Saia";
   const showRenda = RENDAS.length > 0 && (s.peca === "Vestido" || s.peca === "Saia" || s.peca === "Blusa");
-
-  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const fileName = `${Date.now()}-${file.name}`;
-      const { data, error } = await supabase.storage
-        .from("fotos_usuarios")
-        .upload(fileName, file);
-      if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage
-        .from("fotos_usuarios")
-        .getPublicUrl(data.path);
-      s.set({ fotoUrl: publicUrl });
-    } catch (err) {
-      console.error("Erro ao subir foto:", err);
-      alert("Erro ao subir foto. Verifique se o bucket 'fotos_usuarios' existe e é público.");
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const submit = () => {
     if (!valid) return;
@@ -236,68 +196,6 @@ function Criar() {
           </Section>
         )}
 
-        <Section title="Cor ou tecido" hint="Toque para escolher">
-          <div className="flex flex-wrap gap-3 items-center">
-            {CORES.map(c => {
-              const isSelected = s.cor === c.nome || s.cor === c.hex;
-              return (
-                <button
-                  key={c.nome}
-                  onClick={() => s.set({ cor: c.nome })}
-                  className="w-10 h-10 rounded-full border border-border flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
-                  style={{
-                    background: c.hex,
-                    boxShadow: isSelected ? "0 0 0 2px var(--color-background), 0 0 0 4px var(--color-primary)" : "none",
-                    transform: isSelected ? "scale(1.1)" : "scale(1)",
-                  }}
-                  title={c.nome}
-                />
-              );
-            })}
-
-            {/* Custom Color Selector */}
-            {(() => {
-              const isCustomSelected = s.cor && !CORES.some(c => c.nome === s.cor || c.hex === s.cor);
-              return (
-                <label
-                  className="relative w-10 h-10 rounded-full border border-border cursor-pointer flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
-                  style={{
-                    background: isCustomSelected ? s.cor! : "conic-gradient(from 0deg, red, yellow, green, cyan, blue, magenta, red)",
-                    boxShadow: isCustomSelected ? "0 0 0 2px var(--color-background), 0 0 0 4px var(--color-primary)" : "none",
-                    transform: isCustomSelected ? "scale(1.1)" : "scale(1)",
-                  }}
-                  title="Cor personalizada"
-                >
-                  <input
-                    type="color"
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    value={isCustomSelected ? s.cor! : "#ffffff"}
-                    onChange={(e) => s.set({ cor: e.target.value })}
-                  />
-                  {!isCustomSelected && (
-                    <span className="text-[16px] font-bold text-white drop-shadow-md select-none">+</span>
-                  )}
-                </label>
-              );
-            })()}
-          </div>
-          {s.cor && (
-            <p className="text-xs text-muted-foreground mt-2 font-medium">
-              Cor selecionada: <span className="font-semibold text-foreground">{s.cor}</span>
-            </p>
-          )}
-        </Section>
-
-        <Section title="Sua foto (opcional)" hint="Para gerar o look em você depois">
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickFile} />
-          <button className="chip" onClick={() => fileRef.current?.click()} disabled={uploading}>
-            <Upload size={14} /> {uploading ? "Enviando..." : s.fotoUrl ? "Trocar foto" : "Enviar foto"}
-          </button>
-          {s.fotoUrl && (
-            <img src={s.fotoUrl} alt="Sua foto" className="w-16 h-16 rounded-lg object-cover border" />
-          )}
-        </Section>
-
         <Section title="Observações ou detalhes extras" hint="Opcional">
           <textarea
             className="w-full min-h-[90px] p-3 border rounded-xl bg-card text-foreground placeholder:text-muted-foreground text-[13px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
@@ -310,7 +208,7 @@ function Criar() {
       </main>
 
       <div className="fixed bottom-0 inset-x-0 px-5 py-4 bg-background/95 backdrop-blur border-t">
-        <button className="btn-primary" disabled={!valid || uploading} onClick={submit}>
+        <button className="btn-primary" disabled={!valid} onClick={submit}>
           ✨ Gerar croqui
         </button>
       </div>

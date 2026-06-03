@@ -15,7 +15,6 @@ if (dbUrl) {
     ssl: dbUrl.includes('localhost') ? false : { rejectUnauthorized: false }
   });
   
-  // Ensure tables exist on startup
   pool.query(`
     CREATE TABLE IF NOT EXISTS looks (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -31,6 +30,8 @@ if (dbUrl) {
       realista_url TEXT,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
+    ALTER TABLE looks ADD COLUMN IF NOT EXISTS nome_cliente VARCHAR(255);
+    ALTER TABLE looks ADD COLUMN IF NOT EXISTS telefone_cliente VARCHAR(255);
   `).catch(err => {
     console.error('[DB] Error verifying/creating looks table:', err);
   });
