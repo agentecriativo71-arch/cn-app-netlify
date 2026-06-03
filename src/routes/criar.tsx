@@ -107,7 +107,8 @@ function Criar() {
   // Condicionais de exibição baseadas na peça principal selecionada
   const showComprimento = s.peca === "Vestido" || s.peca === "Saia";
   const showDecote = s.peca === "Vestido" || s.peca === "Blusa" || s.peca === "Macacão";
-  const showManga = s.peca === "Vestido" || s.peca === "Blusa" || s.peca === "Macacão";
+  const isSleevelessDecote = s.decote === "Frente Única" || s.decote === "Coração (Sweetheart)" || s.decote === "Tomara que Caia";
+  const showManga = (s.peca === "Vestido" || s.peca === "Blusa" || s.peca === "Macacão") && !isSleevelessDecote;
   const showSaia = s.peca === "Vestido" || s.peca === "Saia";
   const showRenda = RENDAS.length > 0 && (s.peca === "Vestido" || s.peca === "Saia" || s.peca === "Blusa");
 
@@ -161,7 +162,13 @@ function Criar() {
             <ElementGrid
               items={DECOTES}
               selected={s.decote}
-              onSelect={(nome) => s.set({ decote: nome || null })}
+              onSelect={(nome) => {
+                const isSleeveless = nome === "Frente Única" || nome === "Coração (Sweetheart)" || nome === "Tomara que Caia";
+                s.set({
+                  decote: nome || null,
+                  ...(isSleeveless ? { manga: null } : {})
+                });
+              }}
             />
           </Section>
         )}

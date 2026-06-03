@@ -106,10 +106,6 @@ function Resultado() {
     router.navigate({ to: "/criar" });
   };
 
-  const handlePrint = () => {
-    // Basic browser printing mechanism
-    window.print();
-  };
 
   const handleSubmitLead = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,10 +174,6 @@ function Resultado() {
         <div className="space-y-3">
           <button onClick={() => setShowLeadModal(true)} className="btn-primary flex items-center justify-center gap-2 w-full">
             <MessageCircle size={18} /> Enviar por WhatsApp
-          </button>
-          
-          <button onClick={handlePrint} className="btn-secondary inline-flex items-center justify-center gap-2">
-            🖨️ Imprimir Look
           </button>
           
           <button onClick={reset} className="btn-secondary inline-flex items-center justify-center gap-2">

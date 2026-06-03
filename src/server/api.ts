@@ -33,6 +33,7 @@ function buildElementPromptFragment(specs: {
   manga?: string | null;
   saia?: string | null;
   renda?: string | null;
+  peca?: string | null;
 }): string {
   const parts: string[] = [];
 
@@ -40,7 +41,11 @@ function buildElementPromptFragment(specs: {
   if (dSpec) parts.push(`NECKLINE STYLE — ${dSpec.nameEn}: ${dSpec.descEn}`);
 
   const mSpec = getElementSpecs(specs.manga);
-  if (mSpec) parts.push(`SLEEVE STYLE — ${mSpec.nameEn}: ${mSpec.descEn}`);
+  if (mSpec) {
+    parts.push(`SLEEVE STYLE — ${mSpec.nameEn}: ${mSpec.descEn}`);
+  } else if (specs.peca === "Vestido" || specs.peca === "Blusa" || specs.peca === "Macacão") {
+    parts.push(`SLEEVE STYLE — Sleeveless: The garment is completely sleeveless with no sleeves, leaving the arms fully bare`);
+  }
 
   const sSpec = getElementSpecs(specs.saia);
   if (sSpec) parts.push(`SKIRT/BOTTOM STYLE — ${sSpec.nameEn}: ${sSpec.descEn}`);
@@ -118,6 +123,14 @@ function isTopGarment(pecaEn: string, pecaPt: string): boolean {
   return _TOP_KEYWORDS.some(kw => combined.includes(kw));
 }
 
+// Necklines that are inherently sleeveless — no sleeves should ever appear
+const SLEEVELESS_DECOTES = ["Frente Única", "Coração (Sweetheart)", "Tomara que Caia"];
+function buildSleevelessInstruction(decote: string | null | undefined, manga: string | null | undefined): string {
+  if (manga) return ''; // user explicitly chose a sleeve — respect that
+  if (!decote || !SLEEVELESS_DECOTES.includes(decote)) return '';
+  return `CRITICAL — SLEEVELESS GARMENT: This design is completely and absolutely sleeveless. Do NOT draw, render, or imply any sleeves, shoulder straps, arm coverage, or any fabric on the arms or shoulders (other than the neckline itself). The arms and shoulders must be completely bare. Adding sleeves would be a critical error that ruins the design.\n`;
+}
+
 export const generateCroquiFn = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
     const { peca, biotipo, comprimento, decote, manga, saia, renda, comentario } = data;
@@ -130,10 +143,11 @@ export const generateCroquiFn = createServerFn({ method: 'POST' })
     const pecaEn = PECA_EN[peca as keyof typeof PECA_EN] || peca || 'garment';
     const comprimentoEn = comprimento ? (COMPRIMENTO_EN[comprimento as keyof typeof COMPRIMENTO_EN] || comprimento) : '';
 
-    const elementFragment = buildElementPromptFragment({ decote, manga, saia, renda });
+    const elementFragment = buildElementPromptFragment({ decote, manga, saia, renda, peca });
     const isBottom = isBottomGarment(pecaEn, peca || '');
     const isTop = isTopGarment(pecaEn, peca || '');
     const hemInstruction = comprimento ? (COMPRIMENTO_HEM[comprimento as keyof typeof COMPRIMENTO_HEM] || '') : '';
+    const sleevelessInstruction = buildSleevelessInstruction(decote, manga);
 
     // Build the leading instruction block — garment type + length come FIRST
     let leadingInstructions = '';
@@ -152,7 +166,7 @@ export const generateCroquiFn = createServerFn({ method: 'POST' })
         ? `The back view must show closure details and seam lines ONLY on the garment itself (above the waist/hips). The mannequin lower body below the hem of the ${pecaEn} must remain completely bare.`
         : 'The back view must show closure details (zippers, buttons), back seam lines, darts, and how the garment looks from behind — from neckline to hem.';
 
-    const prompt = `${leadingInstructions}
+    const prompt = `${sleevelessInstruction}${leadingInstructions}
 Professional fashion design croqui of a ${comprimentoEn} ${pecaEn}.${elementFragment}${bodyContext}
 ${comentario ? `Extra design instructions: ${comentario}\n` : ''}
 CRITICAL: Show BOTH front view AND back view of the garment side by side in a single composition — front view on the left, back view on the right, as in professional fashion croquis.
@@ -232,10 +246,11 @@ No illustrations, no sketches, no cartoons.`;
       }
 
       const comprimentoEn = comprimento ? (COMPRIMENTO_EN[comprimento as keyof typeof COMPRIMENTO_EN] || comprimento) : '';
-      const elementFragment = buildElementPromptFragment({ decote, manga, saia, renda });
+      const elementFragment = buildElementPromptFragment({ decote, manga, saia, renda, peca });
       const isBottom = isBottomGarment(pecaEn, peca || '');
       const isTop = isTopGarment(pecaEn, peca || '');
       const hemInstruction = comprimento ? (COMPRIMENTO_HEM[comprimento as keyof typeof COMPRIMENTO_HEM] || '') : '';
+      const sleevelessInstruction = buildSleevelessInstruction(decote, manga);
 
       let garmentTypeInstruction = '';
       if (isBottom) {
@@ -247,7 +262,7 @@ No illustrations, no sketches, no cartoons.`;
       }
 
       const lengthPrefix = comprimentoEn ? `${comprimentoEn} ` : '';
-      const prompt = `${garmentTypeInstruction}
+      const prompt = `${sleevelessInstruction}${garmentTypeInstruction}
 CRITICAL: The reference image is a hand-drawn fashion design croqui sketch of a ${lengthPrefix}${pecaEn}.${elementFragment}
 Convert this flat sketch into a photorealistic, ready-to-wear finished garment in ${corEn} color, worn on a headless featureless dress mannequin.
 Maintain high fidelity to the cut, shape, style and construction shown in the reference sketch.
