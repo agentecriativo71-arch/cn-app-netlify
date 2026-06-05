@@ -46,13 +46,13 @@ export function LoadingScreen({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white p-6 animate-in fade-in duration-300">
-      <div className="w-full max-w-[480px] flex flex-col items-center text-center">
+      <div className="w-full max-w-[640px] flex flex-col items-center text-center">
         {/* Floating & Breathing logo container */}
         <div className="logo-float mb-12">
           <img 
             src={crispimLogo} 
             alt="Lojas Crispim" 
-            className="w-full max-w-[380px] h-auto object-contain" 
+            className="w-full max-w-[480px] sm:max-w-[540px] h-auto object-contain" 
           />
         </div>
 
