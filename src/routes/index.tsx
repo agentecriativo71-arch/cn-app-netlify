@@ -36,7 +36,7 @@ function Home() {
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-bold text-primary leading-tight">
-          Olá! Sou a Camila ✨
+          Sistema criativo de geração de Croqui - Crispim
         </h1>
         <p className="mt-3 text-[15px] sm:text-base text-muted-foreground leading-relaxed max-w-sm">
           Nossa IA transforma sua ideia em um croqui em segundos.
