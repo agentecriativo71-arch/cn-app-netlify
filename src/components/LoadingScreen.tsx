@@ -85,8 +85,35 @@ export function LoadingScreen({
             transform: translateY(-10px) scale(1.02);
           }
         }
+        @keyframes shiny {
+          0% {
+            left: -100%;
+          }
+          35%, 100% {
+            left: 150%;
+          }
+        }
         .logo-float {
+          position: relative;
+          overflow: hidden;
           animation: logoFloat 4s ease-in-out infinite;
+        }
+        .logo-float::after {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 50%;
+          height: 100%;
+          background: linear-gradient(
+            to right,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.8) 50%,
+            rgba(255, 255, 255, 0) 100%
+          );
+          transform: skewX(-25deg);
+          animation: shiny 3s ease-in-out infinite;
+          pointer-events: none;
         }
       `}</style>
     </div>
