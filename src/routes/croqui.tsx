@@ -16,7 +16,7 @@ export const Route = createFileRoute("/croqui")({
 
 const MSGS = [
   "Desenhando seu croqui...",
-  "Camila está dando vida à sua ideia ✨",
+  "A Crispim está dando vida à sua ideia ✨",
   "Quase lá!",
 ];
 

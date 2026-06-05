@@ -7,7 +7,7 @@ export const Route = createFileRoute("/")(  {
   head: () => ({
     meta: [
       { title: "C&N Tecidos — Agente Criativo" },
-      { name: "description", content: "Crie seu look com a Camila, a IA da C&N Tecidos. Croqui e foto realista em segundos." },
+      { name: "description", content: "Crie seu look com o Crispim, a IA da C&N Tecidos. Croqui e foto realista em segundos." },
     ],
   }),
 });
