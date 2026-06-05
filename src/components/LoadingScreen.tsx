@@ -87,9 +87,9 @@ export function LoadingScreen({
         }
         @keyframes shiny {
           0% {
-            left: -100%;
+            left: -150%;
           }
-          35%, 100% {
+          40%, 100% {
             left: 150%;
           }
         }
@@ -102,17 +102,17 @@ export function LoadingScreen({
           content: "";
           position: absolute;
           top: 0;
-          left: -100%;
-          width: 50%;
+          left: -150%;
+          width: 70%;
           height: 100%;
           background: linear-gradient(
             to right,
             rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0.8) 50%,
+            rgba(255, 255, 255, 0.45) 50%,
             rgba(255, 255, 255, 0) 100%
           );
           transform: skewX(-25deg);
-          animation: shiny 3s ease-in-out infinite;
+          animation: shiny 6s ease-in-out infinite;
           pointer-events: none;
         }
       `}</style>
