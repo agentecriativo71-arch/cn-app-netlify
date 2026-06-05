@@ -87,7 +87,7 @@ function Croqui() {
   const handlePrint = () => window.print();
 
   if (loading) {
-    return <LoadingScreen initialStatus="Desenhando seu croqui..." statuses={MSGS} estimatedDuration={9000} />;
+    return <LoadingScreen initialStatus="Desenhando seu croqui..." statuses={MSGS} estimatedDuration={12000} />;
   }
 
   const summary = [

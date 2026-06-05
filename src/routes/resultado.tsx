@@ -83,7 +83,7 @@ function Resultado() {
   }, [loading]);
 
   if (loading) {
-    return <LoadingScreen initialStatus="Renderizando sua peça..." statuses={MSGS} estimatedDuration={12000} />;
+    return <LoadingScreen initialStatus="Renderizando sua peça..." statuses={MSGS} estimatedDuration={15000} />;
   }
 
   const reset = () => {
