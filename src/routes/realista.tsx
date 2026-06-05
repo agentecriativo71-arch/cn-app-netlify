@@ -2,9 +2,6 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
 import { Stepper } from "@/components/Stepper";
 import { useLook } from "@/lib/store";
-import { useState, useRef } from "react";
-import { User, Camera, Upload } from "lucide-react";
-import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/realista")({
   component: Realista,
@@ -43,42 +40,16 @@ function Section({ title, children, hint }: {
 function Realista() {
   const router = useRouter();
   const s = useLook();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-
-  const [selectedModo, setSelectedModo] = useState<"manequim" | "foto" | null>(s.modo);
-
-  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const fileName = `${Date.now()}-${file.name}`;
-      const { data, error } = await supabase.storage
-        .from("fotos_usuarios")
-        .upload(fileName, file);
-      if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage
-        .from("fotos_usuarios")
-        .getPublicUrl(data.path);
-      s.set({ fotoUrl: publicUrl });
-    } catch (err) {
-      console.error("Erro ao subir foto:", err);
-      alert("Erro ao subir foto. Verifique se o bucket 'fotos_usuarios' existe e é público.");
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const handleGenerate = () => {
-    if (!s.cor || !selectedModo) return;
-    if (selectedModo === "foto" && !s.fotoUrl) return;
+    if (!s.cor) return;
 
-    s.set({ modo: selectedModo, realistaUrl: null });
+    // Define implicitamente como "manequim"
+    s.set({ modo: "manequim", realistaUrl: null });
     router.navigate({ to: "/resultado" });
   };
 
-  const isValid = s.cor && selectedModo && (selectedModo !== "foto" || s.fotoUrl);
+  const isValid = !!s.cor;
 
   return (
     <>
@@ -86,7 +57,7 @@ function Realista() {
       <Stepper current="realista" />
       <main className="container-app px-5 py-6 space-y-8 pb-32 fade-in">
         <p className="text-[15px] text-muted-foreground text-center">
-          Configure as opções para gerar a visualização realista da sua peça.
+          Selecione a cor ou tecido para gerar a visualização realista da sua peça em um manequim virtual.
         </p>
 
         {/* Seção 1: Cor ou Tecido */}
@@ -137,70 +108,13 @@ function Realista() {
             </p>
           )}
         </Section>
-
-        {/* Seção 2: Modelo de Visualização */}
-        <Section title="Como quer ver?" hint="Obrigatório">
-          <div className="mode-grid">
-            <button
-              onClick={() => setSelectedModo("manequim")}
-              className="mode-card"
-              data-selected={selectedModo === "manequim"}
-            >
-              <div className="w-14 h-14 rounded-xl bg-surface flex items-center justify-center text-primary shrink-0">
-                <User size={28} />
-              </div>
-              <div>
-                <p className="font-semibold text-foreground">No manequim</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Modelo 3D realista</p>
-              </div>
-            </button>
-
-            <button
-              onClick={() => setSelectedModo("foto")}
-              className="mode-card"
-              data-selected={selectedModo === "foto"}
-            >
-              <div className="w-14 h-14 rounded-xl bg-accent flex items-center justify-center text-primary shrink-0">
-                <Camera size={28} />
-              </div>
-              <div>
-                <p className="font-semibold text-foreground">Na minha foto</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Vista digitalmente</p>
-              </div>
-            </button>
-          </div>
-        </Section>
-
-        {/* Seção 3: Upload de Foto (Se selecionou Foto) */}
-        {selectedModo === "foto" && (
-          <Section title="Sua foto" hint="Obrigatório">
-            <div className="card-soft bg-muted/30 flex flex-col items-center gap-4 p-6">
-              <p className="text-xs text-muted-foreground text-center max-w-[280px]">
-                Envie uma foto de corpo inteiro, de frente, com boa iluminação e roupas justas para melhor resultado.
-              </p>
-              <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickFile} />
-              <button
-                className="btn-secondary w-full max-w-[200px] flex items-center justify-center gap-2"
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
-              >
-                <Upload size={16} /> {uploading ? "Enviando..." : s.fotoUrl ? "Trocar foto" : "Enviar foto"}
-              </button>
-              {s.fotoUrl && (
-                <div className="relative mt-2 border rounded-xl overflow-hidden aspect-[3/4] w-32 shadow-sm">
-                  <img src={s.fotoUrl} alt="Sua foto" className="w-full h-full object-cover" />
-                </div>
-              )}
-            </div>
-          </Section>
-        )}
       </main>
 
       <div className="bottom-bar">
         <div className="bottom-bar-inner">
           <button
             className="btn-primary w-full"
-            disabled={!isValid || uploading}
+            disabled={!isValid}
             onClick={handleGenerate}
           >
             ✨ Gerar foto realista

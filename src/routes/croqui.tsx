@@ -24,6 +24,7 @@ function Croqui() {
   const [loading, setLoading] = useState(!s.croquiUrl);
   const [msg, setMsg] = useState(0);
   const [showLeadModal, setShowLeadModal] = useState(false);
+  const [showAdjust, setShowAdjust] = useState(false);
 
   useEffect(() => {
     if (!loading) return;
@@ -142,12 +143,39 @@ function Croqui() {
                 <MessageCircle size={18} /> Enviar por WhatsApp
               </button>
               <div className="flex gap-3">
-                <Link to="/criar" className="btn-secondary flex items-center justify-center gap-2 flex-1">
+                <button 
+                  onClick={() => setShowAdjust((prev) => !prev)} 
+                  className={`btn-secondary flex items-center justify-center gap-2 flex-1 transition-all ${showAdjust ? 'bg-primary/10 border-primary text-primary' : ''}`}
+                >
                   <Pencil size={14} /> Ajustar
-                </Link>
+                </button>
                 <button onClick={handlePrint} className="btn-secondary flex items-center justify-center gap-2 flex-1">
                   <Printer size={16} /> Imprimir
                 </button>
+              </div>
+
+              {/* Seção de Ajuste integrada e fluida */}
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showAdjust ? 'max-h-[300px] opacity-100 border-t pt-4 mt-2' : 'max-h-0 opacity-0 pointer-events-none'}`}>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ajustar Detalhes</span>
+                  </div>
+                  <textarea
+                    className="w-full min-h-[80px] p-3 border rounded-xl bg-card text-foreground placeholder:text-muted-foreground text-[13px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none transition-all"
+                    placeholder="Descreva as alterações. Ex: Adicionar um laço grande nas costas..."
+                    value={s.comentario || ""}
+                    onChange={(e) => s.set({ comentario: e.target.value || null })}
+                  />
+                  <button 
+                    onClick={() => {
+                      s.set({ croquiUrl: null, realistaUrl: null, dbId: null });
+                      setLoading(true);
+                    }} 
+                    className="btn-primary w-full flex items-center justify-center gap-2"
+                  >
+                    <Pencil size={14} /> Reenviar Croqui
+                  </button>
+                </div>
               </div>
             </div>
           </div>
