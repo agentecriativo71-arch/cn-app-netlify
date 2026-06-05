@@ -8,6 +8,8 @@ import { MessageCircle, RotateCcw, Palette } from "lucide-react";
 
 import { generateRealistaFn, updateLookDbFn } from "@/server/api";
 
+import { LoadingScreen } from "@/components/LoadingScreen";
+
 export const Route = createFileRoute("/resultado")({
   component: Resultado,
   head: () => ({ meta: [{ title: "Sua peça — C&N Tecidos" }] }),
@@ -19,12 +21,10 @@ function Resultado() {
   const router = useRouter();
   const s = useLook();
   const [loading, setLoading] = useState(!s.realistaUrl);
-  const [msg, setMsg] = useState(0);
   const [showLeadModal, setShowLeadModal] = useState(false);
 
   useEffect(() => {
     if (!loading) return;
-    const i = setInterval(() => setMsg((m) => (m + 1) % MSGS.length), 1500);
     
     let active = true;
 
@@ -79,21 +79,11 @@ function Resultado() {
     doGeneration();
     return () => {
       active = false;
-      clearInterval(i);
     };
   }, [loading]);
 
   if (loading) {
-    return (
-      <>
-        <Header title="Gerando foto" back="/realista" />
-        <Stepper current="resultado" />
-        <main className="container-app px-6 py-16 flex flex-col items-center fade-in">
-          <div className="spinner-brand" />
-          <p className="mt-6 text-[15px] text-muted-foreground">{MSGS[msg]}</p>
-        </main>
-      </>
-    );
+    return <LoadingScreen initialStatus="Renderizando sua peça..." statuses={MSGS} estimatedDuration={12000} />;
   }
 
   const reset = () => {

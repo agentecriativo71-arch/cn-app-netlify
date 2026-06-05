@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import { MessageCircle, Printer, Camera, Pencil } from "lucide-react";
 import { generateCroquiFn, saveLookDbFn } from "@/server/api";
 
+import { LoadingScreen } from "@/components/LoadingScreen";
+
 export const Route = createFileRoute("/croqui")({
   component: Croqui,
   head: () => ({ meta: [{ title: "Seu croqui — C&N Tecidos" }] }),
@@ -22,13 +24,11 @@ function Croqui() {
   const router = useRouter();
   const s = useLook();
   const [loading, setLoading] = useState(!s.croquiUrl);
-  const [msg, setMsg] = useState(0);
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [showAdjust, setShowAdjust] = useState(false);
 
   useEffect(() => {
     if (!loading) return;
-    const i = setInterval(() => setMsg((m) => (m + 1) % MSGS.length), 1500);
     
     let active = true;
 
@@ -81,23 +81,13 @@ function Croqui() {
     doGeneration();
     return () => {
       active = false;
-      clearInterval(i);
     };
   }, [loading]);
 
   const handlePrint = () => window.print();
 
   if (loading) {
-    return (
-      <>
-        <Header title="Gerando croqui" back="/criar" />
-        <Stepper current="croqui" />
-        <main className="container-app px-6 py-16 flex flex-col items-center fade-in">
-          <div className="spinner-brand" />
-          <p className="mt-6 text-[15px] text-muted-foreground transition-opacity">{MSGS[msg]}</p>
-        </main>
-      </>
-    );
+    return <LoadingScreen initialStatus="Desenhando seu croqui..." statuses={MSGS} estimatedDuration={9000} />;
   }
 
   const summary = [
