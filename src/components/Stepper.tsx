@@ -1,10 +1,10 @@
-import { Check } from "lucide-react";
+import { Check, Pencil, Image, Palette, Sparkles } from "lucide-react";
 
 const STEPS = [
-  { key: "criar", label: "Criar" },
-  { key: "croqui", label: "Croqui" },
-  { key: "realista", label: "Realista" },
-  { key: "resultado", label: "Resultado" },
+  { key: "criar", label: "Criar", icon: Pencil },
+  { key: "croqui", label: "Croqui", icon: Image },
+  { key: "realista", label: "Realista", icon: Palette },
+  { key: "resultado", label: "Resultado", icon: Sparkles },
 ] as const;
 
 export type StepKey = (typeof STEPS)[number]["key"];
@@ -18,11 +18,16 @@ export function Stepper({ current }: { current: StepKey }) {
         {STEPS.map((step, i) => {
           const state =
             i < currentIdx ? "complete" : i === currentIdx ? "current" : "upcoming";
+          const Icon = step.icon;
           return (
             <div key={step.key} className="contents">
               <div className="stepper-step" data-state={state}>
                 <span className="stepper-dot">
-                  {state === "complete" ? <Check size={12} strokeWidth={3} /> : i + 1}
+                  {state === "complete" ? (
+                    <Check size={13} strokeWidth={3} />
+                  ) : (
+                    <Icon size={13} strokeWidth={2.5} />
+                  )}
                 </span>
                 <span className="hidden sm:inline">{step.label}</span>
               </div>

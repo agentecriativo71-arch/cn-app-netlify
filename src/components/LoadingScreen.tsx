@@ -45,8 +45,37 @@ export function LoadingScreen({
   }, [estimatedDuration, statuses]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white p-6 animate-in fade-in duration-300">
-      <div className="w-full max-w-[640px] flex flex-col items-center text-center">
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center p-6 animate-in fade-in duration-300"
+      style={{
+        background: "linear-gradient(180deg, oklch(0.99 0.005 160), oklch(0.96 0.01 160))",
+      }}
+    >
+      {/* Decorative blobs */}
+      <div style={{
+        position: "absolute",
+        top: "-10%",
+        right: "-5%",
+        width: "300px",
+        height: "300px",
+        borderRadius: "50%",
+        background: "radial-gradient(circle, oklch(0.90 0.05 160 / 0.2), transparent 70%)",
+        filter: "blur(40px)",
+        pointerEvents: "none",
+      }} />
+      <div style={{
+        position: "absolute",
+        bottom: "-10%",
+        left: "-5%",
+        width: "250px",
+        height: "250px",
+        borderRadius: "50%",
+        background: "radial-gradient(circle, oklch(0.92 0.05 75 / 0.15), transparent 70%)",
+        filter: "blur(40px)",
+        pointerEvents: "none",
+      }} />
+
+      <div className="w-full max-w-[640px] flex flex-col items-center text-center relative z-10">
         {/* Floating & Breathing logo container */}
         <div className="logo-float mb-12">
           <img 
@@ -58,19 +87,28 @@ export function LoadingScreen({
 
         {/* Progress Display */}
         <div className="w-full max-w-[280px] space-y-4">
-          <div className="font-mono text-3xl font-bold text-primary tracking-wider">
+          <div className="font-bold tracking-wider" style={{
+            fontFamily: "var(--font-display)",
+            fontSize: "36px",
+            background: "linear-gradient(135deg, oklch(0.42 0.12 160), oklch(0.72 0.13 75))",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+          }}>
             {Math.floor(progress)}%
           </div>
 
           {/* Progress track */}
-          <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "oklch(0.93 0.02 160)" }}>
             <div 
-              className="h-full bg-primary rounded-full transition-all duration-75"
-              style={{ width: `${progress}%` }}
+              className="h-full rounded-full transition-all duration-75"
+              style={{
+                width: `${progress}%`,
+                background: "linear-gradient(90deg, oklch(0.42 0.12 160), oklch(0.52 0.11 160))",
+              }}
             />
           </div>
 
-          <p className="text-[14px] text-muted-foreground font-medium tracking-wide">
+          <p className="text-[14px] font-medium tracking-wide" style={{ color: "var(--color-muted-foreground)" }}>
             {statusText}
           </p>
         </div>

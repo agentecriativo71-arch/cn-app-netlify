@@ -112,13 +112,13 @@ function Croqui() {
           </div>
 
           {/* Right — Summary + Actions */}
-          <div className="split-aside space-y-5">
-            <div className="card-soft bg-muted/50">
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Resumo</p>
-              <ul className="divide-y">
+          <div className="split-aside space-y-5 stagger-children">
+            <div className="card-soft" style={{ background: "oklch(0.98 0.008 160 / 0.7)" }}>
+              <p className="text-[11px] uppercase tracking-wider font-semibold mb-2" style={{ color: "var(--color-muted-foreground)" }}>Resumo</p>
+              <ul className="divide-y" style={{ borderColor: "oklch(0.42 0.12 160 / 0.06)" }}>
                 {summary.map(([k, v]) => (
                   <li key={k} className="flex justify-between py-2.5 text-sm">
-                    <span className="text-muted-foreground">{k}</span>
+                    <span style={{ color: "var(--color-muted-foreground)" }}>{k}</span>
                     <span className="font-medium">{v}</span>
                   </li>
                 ))}
@@ -135,7 +135,8 @@ function Croqui() {
               <div className="flex gap-3">
                 <button 
                   onClick={() => setShowAdjust((prev) => !prev)} 
-                  className={`btn-secondary flex items-center justify-center gap-2 flex-1 transition-all ${showAdjust ? 'bg-primary/10 border-primary text-primary' : ''}`}
+                  className="btn-secondary flex items-center justify-center gap-2 flex-1 transition-all"
+                  style={showAdjust ? { background: "oklch(0.96 0.03 160 / 0.8)", borderColor: "var(--color-primary)", color: "var(--color-primary)" } : {}}
                 >
                   <Pencil size={14} /> Ajustar
                 </button>
@@ -145,13 +146,21 @@ function Croqui() {
               </div>
 
               {/* Seção de Ajuste integrada e fluida */}
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showAdjust ? 'max-h-[300px] opacity-100 border-t pt-4 mt-2' : 'max-h-0 opacity-0 pointer-events-none'}`}>
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showAdjust ? 'max-h-[300px] opacity-100 border-t pt-4 mt-2' : 'max-h-0 opacity-0 pointer-events-none'}`}
+                style={{ borderColor: "oklch(0.42 0.12 160 / 0.08)" }}
+              >
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ajustar Detalhes</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: "var(--font-display)", color: "var(--color-muted-foreground)" }}>Ajustar Detalhes</span>
                   </div>
                   <textarea
-                    className="w-full min-h-[80px] p-3 border rounded-xl bg-card text-foreground placeholder:text-muted-foreground text-[13px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none transition-all"
+                    className="w-full min-h-[80px] p-3 rounded-xl text-[13px] leading-relaxed resize-none transition-all"
+                    style={{
+                      border: "1.5px solid oklch(0.42 0.12 160 / 0.1)",
+                      background: "oklch(1 0 0 / 0.6)",
+                      color: "var(--color-foreground)",
+                      outline: "none",
+                    }}
                     placeholder="Descreva as alterações. Ex: Adicionar um laço grande nas costas..."
                     value={s.comentario || ""}
                     onChange={(e) => s.set({ comentario: e.target.value || null })}

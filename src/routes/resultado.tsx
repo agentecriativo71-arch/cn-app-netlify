@@ -4,7 +4,7 @@ import { Stepper } from "@/components/Stepper";
 import { WhatsAppModal } from "@/components/WhatsAppModal";
 import { useLook } from "@/lib/store";
 import { useEffect, useState } from "react";
-import { MessageCircle, RotateCcw, Palette } from "lucide-react";
+import { MessageCircle, RotateCcw, Palette, Sparkles } from "lucide-react";
 
 import { generateRealistaFn, updateLookDbFn } from "@/server/api";
 
@@ -97,23 +97,25 @@ function Resultado() {
       <Stepper current="resultado" />
       <main className="container-wide px-5 py-5 pb-8 fade-in">
         <div className="split-layout">
-          {/* Left — Image */}
-          <div className="split-main">
+          {/* Left — Image with celebration effect */}
+          <div className="split-main result-celebrate">
             <div className="image-frame">
               <img src={s.realistaUrl!} alt="Look final" />
             </div>
           </div>
 
           {/* Right — Info + Actions */}
-          <div className="split-aside space-y-5">
+          <div className="split-aside space-y-5 stagger-children">
             <div className="card-soft">
               <div className="flex items-center gap-3 mb-1">
-                <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center text-primary">
-                  <Palette size={16} />
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                  style={{ background: "linear-gradient(135deg, oklch(0.94 0.04 160), oklch(0.90 0.06 160))", color: "var(--color-primary)" }}
+                >
+                  <Sparkles size={18} />
                 </div>
                 <div>
-                  <p className="font-semibold text-foreground">{s.peca ?? "Sua peça"}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="font-semibold" style={{ fontFamily: "var(--font-display)", color: "var(--color-foreground)" }}>{s.peca ?? "Sua peça"}</p>
+                  <p className="text-xs" style={{ color: "var(--color-muted-foreground)" }}>
                     {s.cor && `Cor: ${s.cor} · `}{new Date().toLocaleDateString("pt-BR")}
                   </p>
                 </div>
