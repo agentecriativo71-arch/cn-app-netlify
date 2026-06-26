@@ -8,6 +8,7 @@ import { MessageCircle, Printer, Camera, Pencil } from "lucide-react";
 import { generateCroquiFn, saveLookDbFn } from "@/server/api";
 
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { ErrorModal } from "@/components/ErrorModal";
 
 export const Route = createFileRoute("/croqui")({
   component: Croqui,
@@ -24,6 +25,13 @@ function Croqui() {
   const router = useRouter();
   const s = useLook();
   const [loading, setLoading] = useState(!s.croquiUrl);
+  const [error, setError] = useState<string | null>(null);
+
+  const dynamicMsgs = [
+    `Desenhando seu croqui, ${s.nome || "..."}...`,
+    "A Crispim está dando vida à sua ideia ✨",
+    `Falta pouco, ${s.nome || "..."}!`,
+  ];
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [showAdjust, setShowAdjust] = useState(false);
 
@@ -50,27 +58,35 @@ function Croqui() {
         if (!active) return;
         s.set({ croquiUrl: res.url });
         
-        const dbRes = await saveLookDbFn({
-          data: {
-            ocasiao: s.ocasiao,
-            biotipo: s.biotipo,
-            peca: s.peca,
-            comprimento: s.comprimento,
-            decote: s.decote,
-            manga: s.manga,
-            cor: s.cor,
-            croqui_url: res.url,
-            foto_usuario_url: s.fotoUrl
-          }
-        });
+        let dbId: string | null = null;
+        try {
+          const dbRes = await saveLookDbFn({
+            data: {
+              ocasiao: s.ocasiao,
+              biotipo: s.biotipo,
+              peca: s.peca,
+              comprimento: s.comprimento,
+              decote: s.decote,
+              manga: s.manga,
+              cor: s.cor,
+              croqui_url: res.url,
+              foto_usuario_url: s.fotoUrl,
+              nome_cliente: s.nome || undefined,
+            }
+          });
+          dbId = dbRes.id;
+        } catch (dbErr) {
+          console.warn("[DB] Erro ao salvar look:", dbErr);
+        }
         
         if (!active) return;
-        s.set({ dbId: dbRes.id }); 
+        if (dbId) {
+          s.set({ dbId });
+        }
       } catch (err) {
         if (!active) return;
         console.error(err);
-        alert("Erro ao gerar croqui. Tente novamente.");
-        router.history.back();
+        setError("Não conseguimos desenhar seu croqui devido a uma falha de conexão ou processamento. Por favor, tente novamente.");
       } finally {
         if (active) {
           setLoading(false);
@@ -87,7 +103,7 @@ function Croqui() {
   const handlePrint = () => window.print();
 
   if (loading) {
-    return <LoadingScreen initialStatus="Desenhando seu croqui..." statuses={MSGS} estimatedDuration={12000} />;
+    return <LoadingScreen initialStatus="Desenhando seu croqui..." statuses={dynamicMsgs} estimatedDuration={12000} />;
   }
 
   const summary = [
@@ -114,7 +130,9 @@ function Croqui() {
           {/* Right — Summary + Actions */}
           <div className="split-aside space-y-5 stagger-children">
             <div className="card-soft" style={{ background: "oklch(0.98 0.008 160 / 0.7)" }}>
-              <p className="text-[11px] uppercase tracking-wider font-semibold mb-2" style={{ color: "var(--color-muted-foreground)" }}>Resumo</p>
+              <p className="text-[11px] uppercase tracking-wider font-semibold mb-2" style={{ color: "var(--color-muted-foreground)" }}>
+                {s.nome ? `Croqui de ${s.nome}` : "Resumo"}
+              </p>
               <ul className="divide-y" style={{ borderColor: "oklch(0.42 0.12 160 / 0.06)" }}>
                 {summary.map(([k, v]) => (
                   <li key={k} className="flex justify-between py-2.5 text-sm">
@@ -187,6 +205,15 @@ function Croqui() {
         croquiUrl={s.croquiUrl!}
         realistaUrl={null}
         dbId={s.dbId}
+      />
+
+      <ErrorModal
+        open={!!error}
+        message={error || undefined}
+        onRetry={() => {
+          setError(null);
+          router.navigate({ to: "/criar" });
+        }}
       />
     </>
   );

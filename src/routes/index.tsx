@@ -1,6 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Sparkles, QrCode, Pencil, Image, Palette, Zap, Shield, Wand2 } from "lucide-react";
 import logo from "@/assets/logo.jpg";
+import { useState } from "react";
+import { useLook } from "@/lib/store";
+import { NomeModal } from "@/components/NomeModal";
 
 export const Route = createFileRoute("/")(  {
   component: Home,
@@ -13,6 +16,24 @@ export const Route = createFileRoute("/")(  {
 });
 
 function Home() {
+  const router = useRouter();
+  const s = useLook();
+  const [showNomeModal, setShowNomeModal] = useState(false);
+
+  const handleCriarClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (s.nome) {
+      router.navigate({ to: "/criar" });
+    } else {
+      setShowNomeModal(true);
+    }
+  };
+
+  const handleConfirmNome = (nome: string) => {
+    s.set({ nome });
+    setShowNomeModal(false);
+    router.navigate({ to: "/criar" });
+  };
   return (
     <main className="min-h-screen flex flex-col items-center px-6 py-10 relative overflow-hidden">
       {/* Hero gradient overlay */}
@@ -61,9 +82,9 @@ function Home() {
 
         {/* CTAs */}
         <div className="w-full mt-8 space-y-3 max-w-sm">
-          <Link to="/criar" className="btn-primary text-[17px]">
+          <button onClick={handleCriarClick} className="btn-primary text-[17px]">
             <Sparkles size={18} /> Criar meu look
-          </Link>
+          </button>
           <Link to="/qr" className="btn-secondary inline-flex items-center justify-center gap-2">
             <QrCode size={18} /> QR para abrir no celular
           </Link>
@@ -110,6 +131,12 @@ function Home() {
       <p className="text-[11px] mt-4 relative z-10" style={{ color: "oklch(0.6 0.02 160 / 0.6)" }}>
         Powered by C&amp;N Tecidos · IA Generativa
       </p>
+
+      <NomeModal
+        open={showNomeModal}
+        onClose={() => setShowNomeModal(false)}
+        onConfirm={handleConfirmNome}
+      />
     </main>
   );
 }

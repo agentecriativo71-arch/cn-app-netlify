@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 export type LookState = {
+  nome: string | null;
   ocasiao: string | null;
   biotipo: string | null;
   peca: string | null;
@@ -21,6 +22,7 @@ export type LookState = {
 };
 
 const initial = {
+  nome: null,
   ocasiao: null, biotipo: null, peca: null, comprimento: null,
   decote: null, manga: null, saia: null, renda: null, cor: null,
   comentario: null, modo: null, fotoUrl: null, croquiUrl: null,

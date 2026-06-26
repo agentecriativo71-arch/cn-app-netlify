@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { sendWhatsAppLookFn, updateLookDbFn } from "@/server/api";
+import { useLook } from "@/lib/store";
 
 interface WhatsAppModalProps {
   open: boolean;
@@ -11,7 +12,8 @@ interface WhatsAppModalProps {
 }
 
 export function WhatsAppModal({ open, onClose, croquiUrl, realistaUrl, dbId }: WhatsAppModalProps) {
-  const [nome, setNome] = useState("");
+  const s = useLook();
+  const nome = s.nome || "";
   const [telefone, setTelefone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -37,14 +39,26 @@ export function WhatsAppModal({ open, onClose, croquiUrl, realistaUrl, dbId }: W
       }
 
       await sendWhatsAppLookFn({
-        data: { nome, telefone, croquiUrl, realistaUrl },
+        data: {
+          nome,
+          telefone,
+          croquiUrl,
+          realistaUrl,
+          peca: s.peca,
+          ocasiao: s.ocasiao,
+          biotipo: s.biotipo,
+          comprimento: s.comprimento,
+          decote: s.decote,
+          manga: s.manga,
+          cor: s.cor,
+          comentario: s.comentario
+        },
       });
 
       setSaved(true);
       setTimeout(() => {
         onClose();
         setSaved(false);
-        setNome("");
         setTelefone("");
       }, 3000);
     } catch (err) {
@@ -79,19 +93,6 @@ export function WhatsAppModal({ open, onClose, croquiUrl, realistaUrl, dbId }: W
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Nome completo
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Ex: Ana Maria Silva"
-                value={nome}
-                onChange={(e) => setNome(e.target.value)}
-                className="w-full p-3.5 border rounded-xl bg-muted/50 text-foreground placeholder:text-muted-foreground text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-              />
-            </div>
             <div className="space-y-1.5">
               <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 WhatsApp (com DDD)

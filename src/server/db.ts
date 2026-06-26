@@ -2,8 +2,8 @@ import pg from 'pg';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
-const supabaseFallback = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseKey = process.env.VITE_SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseFallback = createClient(supabaseUrl, supabaseKey);
 
 let pool: pg.Pool | null = null;
 const dbUrl = process.env.DATABASE_URL;

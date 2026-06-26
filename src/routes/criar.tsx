@@ -4,6 +4,7 @@ import { Stepper } from "@/components/Stepper";
 import { useLook, LookState } from "@/lib/store";
 import { ImageOff, Check, PartyPopper, Shirt, Ruler, MessageSquare } from "lucide-react";
 import elementosData from "@/lib/elementos_vestuario.json";
+import { useEffect } from "react";
 
 export const Route = createFileRoute("/criar")({
   component: Criar,
@@ -119,7 +120,13 @@ function Criar() {
   const router = useRouter();
   const s = useLook();
 
-  const valid = s.peca && s.biotipo;
+  useEffect(() => {
+    if (!s.nome) {
+      router.navigate({ to: "/" });
+    }
+  }, [s.nome, router]);
+
+  const valid = s.nome && s.peca && s.biotipo;
 
   // Condicionais de exibição baseadas na peça principal selecionada
   const showComprimento = s.peca === "Vestido" || s.peca === "Saia";
@@ -141,6 +148,11 @@ function Criar() {
       <Stepper current="criar" />
       <main className="container-app px-5 py-6 pb-32 fade-in">
         <div className="space-y-6 stagger-children">
+          {s.nome && (
+            <p className="text-[17px] font-medium text-center leading-relaxed" style={{ color: "var(--color-foreground)" }}>
+              Olá, <span className="text-[26px] font-extrabold" style={{ color: "var(--color-primary)", background: "linear-gradient(135deg, oklch(0.42 0.12 160), oklch(0.72 0.13 75))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{s.nome}</span>! Vamos criar o seu look perfeito.
+            </p>
+          )}
           <Section title="Ocasião">
             <ChipRow items={OCASIOES} selected={s.ocasiao} onSelect={(v) => s.set({ ocasiao: v })} />
           </Section>

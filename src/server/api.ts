@@ -57,11 +57,10 @@ function buildElementPromptFragment(specs: {
   return ` GARMENT ELEMENT SPECIFICATIONS (follow these descriptions precisely): ${parts.join(". ")}.`;
 }
 
-// Setup Supabase Client for the server
-const supabaseUrl = process.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseKey = process.env.VITE_SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY || import.meta.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const _BODY_CHARS = {
   "Ampulheta": "shoulders and hips equally wide, waist dramatically narrower — clear X-shaped silhouette with balanced curves",
@@ -321,8 +320,21 @@ export const updateLookDbFn = createServerFn({ method: 'POST' })
   });
 
 export const sendWhatsAppLookFn = createServerFn({ method: 'POST' })
-  .handler(async ({ data }: { data: { nome: string; telefone: string; croquiUrl: string; realistaUrl?: string | null } }) => {
-    const { nome, telefone, croquiUrl, realistaUrl } = data;
+  .handler(async ({ data }: { data: {
+    nome: string;
+    telefone: string;
+    croquiUrl: string;
+    realistaUrl?: string | null;
+    peca?: string | null;
+    ocasiao?: string | null;
+    biotipo?: string | null;
+    comprimento?: string | null;
+    decote?: string | null;
+    manga?: string | null;
+    cor?: string | null;
+    comentario?: string | null;
+  } }) => {
+    const { nome, telefone, croquiUrl, realistaUrl, peca, ocasiao, biotipo, comprimento, decote, manga, cor, comentario } = data;
 
     const evolutionUrl = process.env.EVOLUTION_API_URL || import.meta.env.EVOLUTION_API_URL || "";
     const evolutionInstance = process.env.EVOLUTION_INSTANCE || import.meta.env.EVOLUTION_INSTANCE || "";
@@ -384,6 +396,180 @@ export const sendWhatsAppLookFn = createServerFn({ method: 'POST' })
             media: realistaUrl
           })
         });
+      }
+
+      // Integração do CRM Supabase (Projeto zynk)
+      try {
+        const orgId = process.env.CN_ORGANIZATION_ID || "00000000-0000-0000-0000-000000000001";
+        const phone = targetNumber;
+
+        // 1. Garantir contato na tabela crm_contacts
+        let contactId: string | null = null;
+        const resCont = await supabase
+          .from("crm_contacts")
+          .select("id, name")
+          .eq("organization_id", orgId)
+          .eq("phone", phone);
+
+        if (resCont.error) {
+          console.error("[CRM] Erro ao buscar contato:", resCont.error);
+        }
+
+        if (resCont.data && resCont.data.length > 0) {
+          contactId = resCont.data[0].id;
+          if (resCont.data[0].name.startsWith("Paciente") || !resCont.data[0].name) {
+            const upRes = await supabase
+              .from("crm_contacts")
+              .update({ name: nome })
+              .eq("id", contactId);
+            if (upRes.error) {
+              console.error("[CRM] Erro ao atualizar nome do contato:", upRes.error);
+            }
+          }
+        } else {
+          const insCont = await supabase
+            .from("crm_contacts")
+            .insert({
+              organization_id: orgId,
+              phone: phone,
+              name: nome,
+              status: "lead"
+            })
+            .select("id")
+            .single();
+          if (insCont.error) {
+            console.error("[CRM] Erro ao criar contato:", insCont.error);
+          }
+          if (insCont.data) {
+            contactId = insCont.data.id;
+          }
+        }
+
+        if (contactId) {
+          // 2. Garantir estágio crm_stages "Criador de Looks"
+          const stageName = "Criador de Looks";
+          let stageId: string | null = null;
+          
+          const resStages = await supabase
+            .from("crm_stages")
+            .select("id, name, position")
+            .eq("organization_id", orgId);
+          
+          if (resStages.error) {
+            console.error("[CRM] Erro ao buscar estágios:", resStages.error);
+          }
+
+          const stages = resStages.data || [];
+          const targetStage = stages.find(s => s.name.toLowerCase() === stageName.toLowerCase());
+
+          if (targetStage) {
+            stageId = targetStage.id;
+          } else {
+            const maxPos = Math.max(...stages.map(s => s.position || 0), 0);
+            const insStage = await supabase
+              .from("crm_stages")
+              .insert({
+                organization_id: orgId,
+                name: stageName,
+                color: "#10b981", // Verde esmeralda
+                position: maxPos + 1,
+                probability: 80
+              })
+              .select("id")
+              .single();
+            if (insStage.error) {
+              console.error("[CRM] Erro ao criar estágio 'Criador de Looks':", insStage.error);
+            }
+            if (insStage.data) {
+              stageId = insStage.data.id;
+            }
+          }
+
+          if (stageId) {
+            // 3. Verificar duplicidade de Deal no mesmo estágio
+            const resDupDeals = await supabase
+              .from("crm_deals")
+              .select("id")
+              .eq("contact_id", contactId)
+              .eq("stage_id", stageId)
+              .eq("status", "open");
+
+            if (resDupDeals.error) {
+              console.error("[CRM] Erro ao buscar duplicidade de deals:", resDupDeals.error);
+            }
+
+            const dealExists = resDupDeals.data && resDupDeals.data.length > 0;
+            let dealId: string | null = null;
+
+            if (!dealExists) {
+              const dealTitle = `Look Criativo - ${peca || "Personalizado"}`;
+              const insDeal = await supabase
+                .from("crm_deals")
+                .insert({
+                  organization_id: orgId,
+                  contact_id: contactId,
+                  stage_id: stageId,
+                  title: dealTitle,
+                  value: 0.00,
+                  status: "open",
+                  position: 0,
+                  score: 0
+                })
+                .select("id")
+                .single();
+              if (insDeal.error) {
+                console.error("[CRM] Erro ao criar deal:", insDeal.error);
+              }
+              if (insDeal.data) {
+                dealId = insDeal.data.id;
+                
+                const insAct = await supabase
+                  .from("crm_activity")
+                  .insert({
+                    deal_id: dealId,
+                    type: "deal_created",
+                    payload: { title: dealTitle }
+                  });
+                if (insAct.error) {
+                  console.error("[CRM] Erro ao registrar crm_activity:", insAct.error);
+                }
+              }
+            } else {
+              dealId = resDupDeals.data[0].id;
+            }
+
+            if (dealId) {
+              // 4. Inserir nota com os detalhes da peça gerada (histórico de look)
+              const detailsList = [
+                peca ? `Peça: ${peca}` : "",
+                ocasiao ? `Ocasião: ${ocasiao}` : "",
+                biotipo ? `Biotipo: ${biotipo}` : "",
+                comprimento ? `Comprimento: ${comprimento}` : "",
+                decote ? `Decote: ${decote}` : "",
+                manga ? `Manga: ${manga}` : "",
+                cor ? `Cor: ${cor}` : "",
+                comentario ? `Comentários: ${comentario}` : ""
+              ].filter(Boolean).join("\n");
+
+              const noteContent = `Look gerado pela IA:\n${detailsList}\n\nCroqui: ${croquiUrl}${realistaUrl ? `\nFoto Realista: ${realistaUrl}` : ""}`;
+
+              const insNote = await supabase
+                .from("crm_notes")
+                .insert({
+                  organization_id: orgId,
+                  deal_id: dealId,
+                  contact_id: contactId,
+                  content: noteContent,
+                  author_type: "ai"
+                });
+              if (insNote.error) {
+                console.error("[CRM] Erro ao criar nota do deal:", insNote.error);
+              }
+            }
+          }
+        }
+      } catch (crmErr) {
+        console.warn("[CRM] Erro ao registrar contato/negócio no CRM:", crmErr);
       }
 
       return { success: true };

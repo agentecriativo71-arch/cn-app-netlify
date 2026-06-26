@@ -9,6 +9,7 @@ import { MessageCircle, RotateCcw, Palette, Sparkles } from "lucide-react";
 import { generateRealistaFn, updateLookDbFn } from "@/server/api";
 
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { ErrorModal } from "@/components/ErrorModal";
 
 export const Route = createFileRoute("/resultado")({
   component: Resultado,
@@ -22,6 +23,13 @@ function Resultado() {
   const s = useLook();
   const [loading, setLoading] = useState(!s.realistaUrl);
   const [showLeadModal, setShowLeadModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const dynamicMsgs = [
+    `Renderizando sua peça, ${s.nome || "..."}...`,
+    "Aplicando o tecido...",
+    `Seu look está pronto, ${s.nome || "..."}!`,
+  ];
 
   useEffect(() => {
     if (!loading) return;
@@ -55,20 +63,23 @@ function Resultado() {
         s.set({ realistaUrl: res.url });
         
         if (s.dbId) {
-          await updateLookDbFn({
-            data: {
-              id: s.dbId,
-              update: {
-                realista_url: res.url
+          try {
+            await updateLookDbFn({
+              data: {
+                id: s.dbId,
+                update: {
+                  realista_url: res.url
+                }
               }
-            }
-          });
+            });
+          } catch (dbErr) {
+            console.warn("[DB] Erro ao atualizar look:", dbErr);
+          }
         }
       } catch (err) {
         if (!active) return;
         console.error(err);
-        alert("Erro ao gerar a foto realista. Tente novamente.");
-        router.history.back();
+        setError("Não conseguimos gerar a visualização realista devido a uma falha de conexão ou processamento. Por favor, tente novamente.");
       } finally {
         if (active) {
           setLoading(false);
@@ -83,11 +94,13 @@ function Resultado() {
   }, [loading]);
 
   if (loading) {
-    return <LoadingScreen initialStatus="Renderizando sua peça..." statuses={MSGS} estimatedDuration={15000} />;
+    return <LoadingScreen initialStatus="Renderizando sua peça..." statuses={dynamicMsgs} estimatedDuration={15000} />;
   }
 
   const reset = () => {
+    const nome = s.nome;
     s.reset();
+    s.set({ nome });
     router.navigate({ to: "/criar" });
   };
 
@@ -114,7 +127,15 @@ function Resultado() {
                   <Sparkles size={18} />
                 </div>
                 <div>
-                  <p className="font-semibold" style={{ fontFamily: "var(--font-display)", color: "var(--color-foreground)" }}>{s.peca ?? "Sua peça"}</p>
+                  <p className="font-semibold" style={{ fontFamily: "var(--font-display)", color: "var(--color-foreground)" }}>
+                    {s.nome ? (
+                      <>
+                        <span className="font-bold text-primary">{s.nome}</span>, aqui está seu {s.peca?.toLowerCase() || "look"}
+                      </>
+                    ) : (
+                      s.peca ?? "Sua peça"
+                    )}
+                  </p>
                   <p className="text-xs" style={{ color: "var(--color-muted-foreground)" }}>
                     {s.cor && `Cor: ${s.cor} · `}{new Date().toLocaleDateString("pt-BR")}
                   </p>
@@ -141,6 +162,15 @@ function Resultado() {
         croquiUrl={s.croquiUrl!}
         realistaUrl={s.realistaUrl}
         dbId={s.dbId}
+      />
+
+      <ErrorModal
+        open={!!error}
+        message={error || undefined}
+        onRetry={() => {
+          setError(null);
+          router.navigate({ to: "/criar" });
+        }}
       />
     </>
   );
