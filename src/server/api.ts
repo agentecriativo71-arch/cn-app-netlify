@@ -500,7 +500,10 @@ export const sendWhatsAppLookFn = createServerFn({ method: 'POST' })
 
       // Integração do CRM Supabase (Projeto zynk)
       try {
-        const orgId = process.env.CN_ORGANIZATION_ID || "00000000-0000-0000-0000-000000000001";
+        const orgId = process.env.CN_ORGANIZATION_ID;
+        if (!orgId) {
+          throw new Error("CN_ORGANIZATION_ID não configurado no ambiente.");
+        }
         const phone = targetNumber;
 
         // 1. Garantir contato na tabela crm_contacts
