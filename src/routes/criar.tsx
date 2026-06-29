@@ -4,7 +4,49 @@ import { Stepper } from "@/components/Stepper";
 import { useLook, LookState } from "@/lib/store";
 import { ImageOff, Check, PartyPopper, Shirt, Ruler, MessageSquare } from "lucide-react";
 import elementosData from "@/lib/elementos_vestuario.json";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+
+import ocasiaoCasamento from "@/assets/ocasiao-casamento.png";
+import ocasiaoFesta from "@/assets/ocasiao-festa.png";
+import ocasiaoTrabalho from "@/assets/ocasiao-trabalho.png";
+import ocasiaoCasual from "@/assets/ocasiao-casual.png";
+import ocasiaoGala from "@/assets/ocasiao-gala.png";
+
+const OCASIOES_ITEMS = [
+  { id: "casamento", nome: "Casamento", image_url: ocasiaoCasamento },
+  { id: "festa", nome: "Festa", image_url: ocasiaoFesta },
+  { id: "trabalho", nome: "Trabalho", image_url: ocasiaoTrabalho },
+  { id: "casual", nome: "Casual", image_url: ocasiaoCasual },
+  { id: "gala", nome: "Gala", image_url: ocasiaoGala },
+];
+
+import pecaVestido from "@/assets/peca-vestido.png";
+import pecaSaia from "@/assets/peca-saia.png";
+import pecaBlusa from "@/assets/peca-blusa.png";
+import pecaCalca from "@/assets/peca-calca.png";
+import pecaMacacao from "@/assets/peca-macacao.png";
+
+const PECAS_ITEMS = [
+  { id: "vestido", nome: "Vestido", image_url: pecaVestido },
+  { id: "saia", nome: "Saia", image_url: pecaSaia },
+  { id: "blusa", nome: "Blusa", image_url: pecaBlusa },
+  { id: "calca", nome: "Calça", image_url: pecaCalca },
+  { id: "macacao", nome: "Macacão", image_url: pecaMacacao },
+];
+
+import biotipoAmpulheta from "@/assets/biotipo-ampulheta.png";
+import biotipoTriangulo from "@/assets/biotipo-triangulo.png";
+import biotipoTrianguloInvertido from "@/assets/biotipo-triangulo-invertido.png";
+import biotipoRetangulo from "@/assets/biotipo-retangulo.png";
+import biotipoOval from "@/assets/biotipo-oval.png";
+
+const BIOTIPOS_ITEMS = [
+  { id: "ampulheta", nome: "Ampulheta", image_url: biotipoAmpulheta },
+  { id: "triangulo", nome: "Triângulo", image_url: biotipoTriangulo },
+  { id: "triangulo_invertido", nome: "Triângulo Invertido", image_url: biotipoTrianguloInvertido },
+  { id: "retangulo", nome: "Retângulo", image_url: biotipoRetangulo },
+  { id: "oval", nome: "Oval", image_url: biotipoOval },
+];
 
 export const Route = createFileRoute("/criar")({
   component: Criar,
@@ -77,7 +119,7 @@ function ChipRow({ items, selected, onSelect }: {
 
 /** Grid de cards com imagem + label */
 function ElementGrid({ items, selected, onSelect }: {
-  items: typeof MANGAS;
+  items: { id: number | string; nome: string; image_url?: string | null }[];
   selected: string | null;
   onSelect: (nome: string) => void;
 }) {
@@ -119,6 +161,7 @@ function ElementGrid({ items, selected, onSelect }: {
 function Criar() {
   const router = useRouter();
   const s = useLook();
+  const [stepIndex, setStepIndex] = useState(0);
 
   useEffect(() => {
     if (!s.nome) {
@@ -136,6 +179,161 @@ function Criar() {
   const showSaia = s.peca === "Vestido" || s.peca === "Saia";
   const showRenda = RENDAS.length > 0 && (s.peca === "Vestido" || s.peca === "Saia" || s.peca === "Blusa");
 
+  // Definindo as etapas ativas dinamicamente
+  const steps = [
+    { 
+      id: "ocasiao", 
+      title: "Escolha a Ocasião", 
+      hint: "Opcional", 
+      valid: true,
+      render: () => (
+        <ElementGrid
+          items={OCASIOES_ITEMS}
+          selected={s.ocasiao}
+          onSelect={(nome) => s.set({ ocasiao: nome || null })}
+        />
+      )
+    },
+    { 
+      id: "peca", 
+      title: "Peça Principal", 
+      hint: "Obrigatório", 
+      valid: !!s.peca,
+      render: () => (
+        <ElementGrid
+          items={PECAS_ITEMS}
+          selected={s.peca}
+          onSelect={(nome) => {
+            const v = nome || null;
+            const patch: Partial<LookState> = { peca: v };
+            if (v === "Saia") {
+              patch.decote = null;
+              patch.manga = null;
+            } else if (v === "Blusa" || v === "Macacão") {
+              patch.saia = null;
+              patch.comprimento = null;
+            } else if (v === "Calça") {
+              patch.decote = null;
+              patch.manga = null;
+              patch.saia = null;
+              patch.comprimento = null;
+            }
+            s.set(patch);
+          }}
+        />
+      )
+    },
+    { 
+      id: "biotipo", 
+      title: "Seu Biotipo", 
+      hint: "Obrigatório", 
+      valid: !!s.biotipo,
+      render: () => (
+        <ElementGrid
+          items={BIOTIPOS_ITEMS}
+          selected={s.biotipo}
+          onSelect={(nome) => s.set({ biotipo: nome || null })}
+        />
+      )
+    },
+    ...(showComprimento ? [{ 
+      id: "comprimento", 
+      title: "Escolha o Comprimento", 
+      hint: "Opcional", 
+      valid: true,
+      render: () => (
+        <div className="flex justify-center flex-wrap gap-2.5 max-w-md mx-auto">
+          <ChipRow items={COMPRIMENTOS} selected={s.comprimento} onSelect={(v) => s.set({ comprimento: v })} />
+        </div>
+      )
+    }] : []),
+    ...(showDecote && DECOTES.length > 0 ? [{ 
+      id: "decote", 
+      title: "Escolha seu Decote", 
+      hint: "Toque para escolher", 
+      valid: true,
+      render: () => (
+        <ElementGrid
+          items={DECOTES}
+          selected={s.decote}
+          onSelect={(nome) => {
+            const isSleeveless = nome === "Frente Única" || nome === "Coração (Sweetheart)" || nome === "Tomara que Caia";
+            s.set({
+              decote: nome || null,
+              ...(isSleeveless ? { manga: null } : {})
+            });
+          }}
+        />
+      )
+    }] : []),
+    ...(showManga && MANGAS.length > 0 ? [{ 
+      id: "manga", 
+      title: "Escolha a Manga", 
+      hint: "Toque para escolher", 
+      valid: true,
+      render: () => (
+        <ElementGrid
+          items={MANGAS}
+          selected={s.manga}
+          onSelect={(nome) => s.set({ manga: nome || null })}
+        />
+      )
+    }] : []),
+    ...(showSaia && SAIAS.length > 0 ? [{ 
+      id: "saia", 
+      title: "Modelo de Saia", 
+      hint: "Toque para escolher", 
+      valid: true,
+      render: () => (
+        <ElementGrid
+          items={SAIAS}
+          selected={s.saia}
+          onSelect={(nome) => s.set({ saia: nome || null })}
+        />
+      )
+    }] : []),
+    ...(showRenda && RENDAS.length > 0 ? [{ 
+      id: "renda", 
+      title: "Detalhes em Renda", 
+      hint: "Opcional", 
+      valid: true,
+      render: () => (
+        <ElementGrid
+          items={RENDAS}
+          selected={s.renda}
+          onSelect={(nome) => s.set({ renda: nome || null })}
+        />
+      )
+    }] : []),
+    { 
+      id: "comentario", 
+      title: "Detalhes Extras", 
+      hint: "Opcional", 
+      valid: true,
+      render: () => (
+        <div className="w-full max-w-md mx-auto">
+          <textarea
+            className="w-full min-h-[120px] p-4 rounded-xl text-[14px] leading-relaxed resize-none transition-all"
+            style={{
+              border: "1.5px solid rgba(255, 255, 255, 0.2)",
+              background: "rgba(255, 255, 255, 0.08)",
+              color: "white",
+              outline: "none",
+            }}
+            placeholder="Ex: Gostaria de um laço grande nas costas, caimento esvoaçante ou cinto fino..."
+            value={s.comentario || ""}
+            onChange={(e) => s.set({ comentario: e.target.value || null })}
+          />
+        </div>
+      )
+    }
+  ];
+
+  // Garantir que o index esteja dentro dos limites atuais das etapas dinâmicas
+  const currentStepIndex = Math.min(stepIndex, steps.length - 1);
+  const currentStep = steps[currentStepIndex];
+  const isLastStep = currentStepIndex === steps.length - 1;
+
   const submit = () => {
     if (!valid) return;
     s.set({ croquiUrl: null, realistaUrl: null, dbId: null });
@@ -146,143 +344,72 @@ function Criar() {
     <>
       <Header title="Nova Criação" back="/" />
       <Stepper current="criar" />
-      <main className="container-app px-5 py-6 pb-32 fade-in">
-        <div className="space-y-6 stagger-children">
-          {s.nome && (
-            <p className="text-[17px] font-medium text-center leading-relaxed" style={{ color: "var(--color-foreground)" }}>
-              Olá, <span className="text-[26px] font-extrabold" style={{ color: "var(--color-primary)", background: "linear-gradient(135deg, oklch(0.42 0.12 160), oklch(0.72 0.13 75))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{s.nome}</span>! Vamos criar o seu look perfeito.
+      <main className="container-app px-5 py-8 pb-36 fade-in flex flex-col justify-center flex-1">
+        <div className="space-y-6">
+          {s.nome && currentStepIndex === 0 && (
+            <p className="text-[16px] font-medium text-center leading-relaxed text-white/80">
+              Olá, <span className="text-[20px] font-extrabold text-[#E5D3A2]">{s.nome}</span>! Vamos criar o seu look perfeito.
             </p>
           )}
-          <Section title="Ocasião">
-            <ChipRow items={OCASIOES} selected={s.ocasiao} onSelect={(v) => s.set({ ocasiao: v })} />
-          </Section>
 
-          <div className="section-divider" />
+          <div className="flex flex-col items-center justify-center text-center my-4 gap-4 fade-in">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-[#E6DEC9] tracking-tight uppercase" style={{ fontFamily: "var(--font-display)" }}>
+              {currentStep.title}
+            </h2>
+            {currentStep.hint && (
+              <p className="text-[10px] sm:text-xs uppercase tracking-widest text-[#E5D3A2]/80 font-bold">
+                {currentStep.hint}
+              </p>
+            )}
+            
+            {/* Step indicator */}
+            <p className="text-[11px] uppercase tracking-wider text-white/50 font-medium">
+              Etapa {currentStepIndex + 1} de {steps.length}
+            </p>
 
-          <Section title="Peça principal" hint="Obrigatório">
-            <ChipRow items={PECAS} selected={s.peca} onSelect={(v) => {
-              // Limpa as escolhas que não fazem sentido ao trocar de peça
-              const patch: Partial<LookState> = { peca: v };
-              if (v === "Saia") {
-                patch.decote = null;
-                patch.manga = null;
-              } else if (v === "Blusa" || v === "Macacão") {
-                patch.saia = null;
-                patch.comprimento = null;
-              } else if (v === "Calça") {
-                patch.decote = null;
-                patch.manga = null;
-                patch.saia = null;
-                patch.comprimento = null;
-              }
-              s.set(patch);
-            }} />
-          </Section>
-
-          <Section title="Seu biotipo" hint="Obrigatório">
-            <ChipRow items={BIOTIPOS} selected={s.biotipo} onSelect={(v) => s.set({ biotipo: v })} />
-          </Section>
-
-          {showComprimento && (
-            <>
-              <div className="section-divider" />
-              <Section title="Comprimento">
-                <ChipRow items={COMPRIMENTOS} selected={s.comprimento} onSelect={(v) => s.set({ comprimento: v })} />
-              </Section>
-            </>
-          )}
-
-          {showDecote && DECOTES.length > 0 && (
-            <>
-              <div className="section-divider" />
-              <Section title="Decote" hint="Toque para escolher">
-                <ElementGrid
-                  items={DECOTES}
-                  selected={s.decote}
-                  onSelect={(nome) => {
-                    const isSleeveless = nome === "Frente Única" || nome === "Coração (Sweetheart)" || nome === "Tomara que Caia";
-                    s.set({
-                      decote: nome || null,
-                      ...(isSleeveless ? { manga: null } : {})
-                    });
-                  }}
-                />
-              </Section>
-            </>
-          )}
-
-          {showManga && MANGAS.length > 0 && (
-            <>
-              <div className="section-divider" />
-              <Section title="Manga" hint="Toque para escolher">
-                <ElementGrid
-                  items={MANGAS}
-                  selected={s.manga}
-                  onSelect={(nome) => s.set({ manga: nome || null })}
-                />
-              </Section>
-            </>
-          )}
-
-          {showSaia && SAIAS.length > 0 && (
-            <>
-              <div className="section-divider" />
-              <Section title="Modelo de Saia" hint="Toque para escolher">
-                <ElementGrid
-                  items={SAIAS}
-                  selected={s.saia}
-                  onSelect={(nome) => s.set({ saia: nome || null })}
-                />
-              </Section>
-            </>
-          )}
-
-          {showRenda && RENDAS.length > 0 && (
-            <>
-              <div className="section-divider" />
-              <Section title="Detalhes em Renda" hint="Opcional">
-                <ElementGrid
-                  items={RENDAS}
-                  selected={s.renda}
-                  onSelect={(nome) => s.set({ renda: nome || null })}
-                />
-              </Section>
-            </>
-          )}
-
-          <div className="section-divider" />
-
-          <Section title="Observações ou detalhes extras" hint="Opcional">
-            <textarea
-              className="w-full min-h-[90px] p-3.5 rounded-xl text-[14px] leading-relaxed resize-none transition-all"
-              style={{
-                border: "1.5px solid oklch(0.42 0.12 160 / 0.1)",
-                background: "oklch(1 0 0 / 0.6)",
-                backdropFilter: "blur(8px)",
-                color: "var(--color-foreground)",
-                outline: "none",
-              }}
-              placeholder="Ex: Gostaria de um laço grande nas costas, caimento esvoaçante ou cinto fino..."
-              value={s.comentario || ""}
-              onChange={(e) => s.set({ comentario: e.target.value || null })}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = "oklch(0.42 0.12 160 / 0.3)";
-                e.currentTarget.style.boxShadow = "0 0 0 3px oklch(0.42 0.12 160 / 0.08)";
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = "oklch(0.42 0.12 160 / 0.1)";
-                e.currentTarget.style.boxShadow = "none";
-              }}
-            />
-          </Section>
+            <div className="w-full mt-6">
+              {currentStep.render()}
+            </div>
+          </div>
         </div>
       </main>
 
       <div className="bottom-bar">
-        <div className="bottom-bar-inner">
-          <button className="btn-primary" disabled={!valid} onClick={submit}>
-            ✨ Gerar croqui
+        <div className="bottom-bar-inner flex gap-3 items-center">
+          <button 
+            onClick={() => {
+              if (currentStepIndex > 0) {
+                setStepIndex(currentStepIndex - 1);
+              } else {
+                router.navigate({ to: "/" });
+              }
+            }} 
+            className="btn-secondary flex-1"
+          >
+            Voltar
           </button>
+          
+          <div className="flex-1">
+            {isLastStep ? (
+              <div className="btn-double-border-container">
+                <button 
+                  className="btn-double-border" 
+                  disabled={!valid} 
+                  onClick={submit}
+                >
+                  Gerar croqui
+                </button>
+              </div>
+            ) : (
+              <button 
+                className="btn-primary" 
+                disabled={!currentStep.valid} 
+                onClick={() => setStepIndex(currentStepIndex + 1)}
+              >
+                Avançar
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </>

@@ -129,15 +129,15 @@ function Croqui() {
 
           {/* Right — Summary + Actions */}
           <div className="split-aside space-y-5 stagger-children">
-            <div className="card-soft" style={{ background: "oklch(0.98 0.008 160 / 0.7)" }}>
-              <p className="text-[11px] uppercase tracking-wider font-semibold mb-2" style={{ color: "var(--color-muted-foreground)" }}>
+            <div className="card-soft">
+              <p className="text-[11px] uppercase tracking-wider font-bold mb-2 text-[#E6DEC9]">
                 {s.nome ? `Croqui de ${s.nome}` : "Resumo"}
               </p>
-              <ul className="divide-y" style={{ borderColor: "oklch(0.42 0.12 160 / 0.06)" }}>
+              <ul className="divide-y" style={{ borderColor: "rgba(255, 255, 255, 0.15)" }}>
                 {summary.map(([k, v]) => (
                   <li key={k} className="flex justify-between py-2.5 text-sm">
-                    <span style={{ color: "var(--color-muted-foreground)" }}>{k}</span>
-                    <span className="font-medium">{v}</span>
+                    <span className="text-white/70 font-medium">{k}</span>
+                    <span className="text-white font-bold">{v}</span>
                   </li>
                 ))}
               </ul>
@@ -165,18 +165,18 @@ function Croqui() {
 
               {/* Seção de Ajuste integrada e fluida */}
               <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showAdjust ? 'max-h-[300px] opacity-100 border-t pt-4 mt-2' : 'max-h-0 opacity-0 pointer-events-none'}`}
-                style={{ borderColor: "oklch(0.42 0.12 160 / 0.08)" }}
+                style={{ borderColor: "rgba(255, 255, 255, 0.15)" }}
               >
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: "var(--font-display)", color: "var(--color-muted-foreground)" }}>Ajustar Detalhes</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: "var(--font-display)", color: "rgba(255, 255, 255, 0.7)" }}>Ajustar Detalhes</span>
                   </div>
                   <textarea
-                    className="w-full min-h-[80px] p-3 rounded-xl text-[13px] leading-relaxed resize-none transition-all"
+                    className="w-full min-h-[80px] p-3 rounded-xl text-[13px] leading-relaxed resize-none transition-all placeholder:text-white/35"
                     style={{
-                      border: "1.5px solid oklch(0.42 0.12 160 / 0.1)",
-                      background: "oklch(1 0 0 / 0.6)",
-                      color: "var(--color-foreground)",
+                      border: "1.5px solid rgba(255, 255, 255, 0.2)",
+                      background: "rgba(255, 255, 255, 0.08)",
+                      color: "white",
                       outline: "none",
                     }}
                     placeholder="Descreva as alterações. Ex: Adicionar um laço grande nas costas..."

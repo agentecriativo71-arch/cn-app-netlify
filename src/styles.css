@@ -41,28 +41,28 @@
 }
 
 :root {
-  /* C&N Tecidos — Refined Emerald + Gold */
-  --background: oklch(0.985 0.005 145);            /* Off-white com toque verde */
-  --foreground: oklch(0.18 0.01 145);              /* Quase preto esverdeado */
-  --primary: oklch(0.42 0.12 160);                 /* Esmeralda profundo */
-  --primary-dark: oklch(0.35 0.12 160);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.52 0.11 160);               /* Esmeralda médio */
-  --secondary-foreground: oklch(0.99 0 0);
-  --accent: oklch(0.93 0.03 75);                   /* Dourado/âmbar suave */
-  --accent-foreground: oklch(0.35 0.12 160);
-  --muted: oklch(0.97 0.003 145);                  /* Cinza-verde suave */
-  --muted-foreground: oklch(0.55 0.02 160);
-  --surface: oklch(0.94 0.04 160);                 /* Verde claro sofisticado */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.01 145);
-  --border: oklch(0.93 0.01 160);
-  --input: oklch(0.93 0.01 160);
-  --ring: oklch(0.42 0.12 160);
-  --chip: oklch(0.98 0.005 160);
-  --chip-foreground: oklch(0.25 0.01 160);
-  --gold: oklch(0.72 0.13 75);                     /* Dourado accent */
-  --gold-foreground: oklch(0.99 0 0);
+  /* C&N Tecidos — Vibrant Emerald & Gold theme */
+  --background: #036635;
+  --foreground: oklch(0.99 0 0);
+  --primary: #E6DEC9;                              /* Creme / Dourado pálido do botão */
+  --primary-dark: #d1c295;
+  --primary-foreground: #036635;
+  --secondary: #E5D3A2;                             /* Dourado suave */
+  --secondary-foreground: #036635;
+  --accent: #E5D3A2;
+  --accent-foreground: #036635;
+  --muted: rgba(255, 255, 255, 0.1);
+  --muted-foreground: rgba(255, 255, 255, 0.65);
+  --surface: rgba(255, 255, 255, 0.12);
+  --card: rgba(255, 255, 255, 0.1);
+  --card-foreground: oklch(0.99 0 0);
+  --border: rgba(255, 255, 255, 0.15);
+  --input: rgba(255, 255, 255, 0.15);
+  --ring: #E6DEC9;
+  --chip: rgba(255, 255, 255, 0.1);
+  --chip-foreground: oklch(0.99 0 0);
+  --gold: #E5D3A2;
+  --gold-foreground: #036635;
 }
 
 /* ── Reduced Motion ────────────────────────────── */
@@ -104,9 +104,7 @@
     inset: 0;
     pointer-events: none;
     z-index: 0;
-    background:
-      radial-gradient(ellipse at 20% 0%, oklch(0.92 0.05 160 / 0.25), transparent 55%),
-      radial-gradient(ellipse at 80% 100%, oklch(0.93 0.04 75 / 0.15), transparent 50%);
+    background: linear-gradient(135deg, #7FA225 0%, #036635 45%, #009384 100%);
   }
 
   /* Decorative blob */
@@ -235,11 +233,11 @@
   .btn-primary:disabled::after { animation: none; }
 
   .btn-secondary {
-    background: oklch(1 0 0 / 0.6);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    color: var(--color-primary);
-    border: 1.5px solid oklch(0.42 0.12 160 / 0.2);
+    background: rgba(255, 255, 255, 0.06) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #ffffff !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
     border-radius: 24px;
     padding: 14px 20px;
     font-weight: 600;
@@ -250,10 +248,10 @@
     cursor: pointer;
   }
   .btn-secondary:hover {
-    background: oklch(0.96 0.02 160 / 0.8);
-    border-color: oklch(0.42 0.12 160 / 0.4);
+    background: rgba(255, 255, 255, 0.12) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
     transform: translateY(-1px);
-    box-shadow: var(--shadow-card);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
   }
   .btn-secondary:active { transform: scale(0.97); }
 
@@ -290,17 +288,19 @@
 
   /* ── Cards ─────────────────────────────────────── */
   .card-soft {
-    background: oklch(1 0 0 / 0.75);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(255, 255, 255, 0.07) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
     border-radius: 16px;
-    border: 1px solid oklch(0.42 0.12 160 / 0.08);
+    border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
     box-shadow: var(--shadow-card);
     padding: 16px;
     transition: all 300ms ease;
+    color: white !important;
   }
   .card-soft:hover {
     box-shadow: var(--shadow-card-hover);
+    background: rgba(255, 255, 255, 0.11) !important;
   }
 
   .card-element {
@@ -560,17 +560,52 @@
   }
 
   .modal-card {
-    background: oklch(1 0 0 / 0.92);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: rgba(12, 36, 24, 0.96);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     width: 100%;
     max-width: 420px;
     border-radius: 24px;
-    border: 1px solid oklch(0.42 0.12 160 / 0.1);
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
     box-shadow: var(--shadow-elevated);
     overflow: hidden;
     padding: 28px;
     animation: slideUp 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    color: white;
+  }
+  .modal-card h3 {
+    color: #E6DEC9 !important;
+  }
+  .modal-card p {
+    color: rgba(255, 255, 255, 0.7) !important;
+  }
+  .modal-card label {
+    color: rgba(255, 255, 255, 0.6) !important;
+  }
+  .modal-card input {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.18) !important;
+    color: white !important;
+  }
+  .modal-card input::placeholder {
+    color: rgba(255, 255, 255, 0.3) !important;
+  }
+  .modal-card .btn-secondary {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    color: white !important;
+  }
+  .modal-card .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+  }
+  .modal-card .btn-primary {
+    background: linear-gradient(135deg, #E6DEC9, #E5D3A2) !important;
+    color: #036635 !important;
+    border: none !important;
+  }
+  .modal-card .btn-primary:disabled {
+    opacity: 0.4 !important;
   }
   @keyframes slideUp {
     from { opacity: 0; transform: translateY(24px) scale(0.96); }
@@ -620,10 +655,10 @@
 
   /* ── Color Swatch ──────────────────────────────── */
   .color-swatch {
-    width: 42px;
-    height: 42px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
-    border: 2px solid oklch(0.42 0.12 160 / 0.1);
+    border: 2.5px solid rgba(255, 255, 255, 0.25);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -632,21 +667,22 @@
     position: relative;
   }
   .color-swatch:hover {
-    transform: scale(1.15);
-    box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+    transform: scale(1.12);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
   }
   .color-swatch:active {
     transform: scale(0.95);
   }
   .color-swatch[data-selected="true"] {
-    box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-primary);
-    transform: scale(1.15);
+    box-shadow: 0 0 0 3px #036635, 0 0 0 5px var(--color-primary);
+    transform: scale(1.12);
   }
 
   @media (min-width: 768px) {
     .color-swatch {
-      width: 48px;
-      height: 48px;
+      width: 64px;
+      height: 64px;
     }
   }
 
@@ -836,5 +872,149 @@
   @keyframes celebratePulse {
     from { opacity: 0.5; transform: translateX(-50%) scale(0.9); }
     to { opacity: 1; transform: translateX(-50%) scale(1.1); }
+  }
+
+  /* ── Botão com Borda Dupla do Croqui ──────────── */
+  .btn-double-border-container {
+    padding: 6px;
+    border: 2px solid rgba(230, 222, 201, 0.6);
+    border-radius: 26px;
+    display: inline-block;
+    width: 100%;
+    transition: transform 200ms ease;
+  }
+  .btn-double-border-container:hover {
+    transform: scale(1.02);
+  }
+  .btn-double-border {
+    background: #E6DEC9;
+    color: #036635;
+    font-weight: 700;
+    font-size: 19px;
+    font-family: var(--font-display);
+    padding: 16px 24px;
+    border-radius: 20px;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  }
+
+  /* ── Customizações Dark Glassmorphism ─────────── */
+  .card-element {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.12) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .card-element .card-element-label {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+  }
+  .card-element[data-selected="true"] {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border-color: #E6DEC9 !important;
+    box-shadow: 0 0 0 2px #E6DEC9, var(--shadow-card-hover) !important;
+  }
+  .card-element[data-selected="true"] .card-element-label {
+    color: #E6DEC9 !important;
+  }
+  .card-element[data-selected="true"]::after {
+    background: #E6DEC9 !important;
+    color: #036635 !important;
+  }
+  .chip {
+    background: rgba(255, 255, 255, 0.07) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.12) !important;
+    color: #ffffff !important;
+  }
+  .chip[data-selected="true"] {
+    background: linear-gradient(135deg, #E6DEC9, #E5D3A2) !important;
+    color: #036635 !important;
+    border-color: transparent !important;
+  }
+
+  /* ── Custom Color Picker Modal ──────────────────── */
+  .picker-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+  .picker-modal-card {
+    width: 100%;
+    max-width: 440px;
+    background: rgba(10, 40, 25, 0.65) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    border: 2px solid rgba(255, 255, 255, 0.18) !important;
+    border-radius: 28px;
+    padding: 24px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .picker-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+    justify-items: center;
+  }
+  .picker-swatch {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    border: 2.5px solid rgba(255, 255, 255, 0.25);
+    cursor: pointer;
+    transition: transform 200ms ease, border-color 200ms ease;
+  }
+  .picker-swatch:hover {
+    transform: scale(1.12);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+  .picker-swatch[data-selected="true"] {
+    box-shadow: 0 0 0 3px #036635, 0 0 0 5px var(--color-primary);
+    transform: scale(1.12);
+  }
+  
+  /* Touch range styling */
+  .picker-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 24px;
+    border-radius: 12px;
+    outline: none;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .picker-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 2.5px solid #036635;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    cursor: pointer;
+    transition: transform 150ms ease;
+  }
+  .picker-range::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
   }
 }

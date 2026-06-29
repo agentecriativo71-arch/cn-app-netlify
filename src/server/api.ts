@@ -202,12 +202,112 @@ No text, no labels, no annotations, no watermarks, no faces, no facial features.
     }
   });
 
+function hexToColorDescription(hex: string): string {
+  const cleanHex = hex.replace("#", "");
+  if (cleanHex.length !== 6) return hex;
+
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+
+  const rNormal = r / 255;
+  const gNormal = g / 255;
+  const bNormal = b / 255;
+
+  const max = Math.max(rNormal, gNormal, bNormal);
+  const min = Math.min(rNormal, gNormal, bNormal);
+  const delta = max - min;
+
+  let h = 0;
+  if (delta > 0) {
+    if (max === rNormal) {
+      h = ((gNormal - bNormal) / delta) % 6;
+    } else if (max === gNormal) {
+      h = (bNormal - rNormal) / delta + 2;
+    } else {
+      h = (rNormal - gNormal) / delta + 4;
+    }
+    h = Math.round(h * 60);
+    if (h < 0) h += 360;
+  }
+
+  const l = (max + min) / 2;
+  const s = delta === 0 ? 0 : delta / (1 - Math.abs(2 * l - 1));
+
+  let prefix = "";
+  if (l < 0.3) prefix = "dark ";
+  else if (l > 0.7) prefix = "light ";
+
+  if (s < 0.08) {
+    if (l < 0.12) return "matte black";
+    if (l > 0.88) return "clean white";
+    return "muted gray";
+  }
+
+  if (l < 0.08) return "deep charcoal black";
+  if (l > 0.93) return "soft off-white";
+
+  let colorName = "color";
+
+  // Classificação rica baseada em Matiz (Hue), Saturação e Luminosidade
+  if ((h >= 0 && h < 15) || (h >= 330 && h <= 360)) {
+    if (l < 0.15) { prefix = ""; colorName = "deep burgundy / wine-red"; }
+    else if (l < 0.35) { prefix = ""; colorName = "rich maroon / bordeaux red"; }
+    else if (s > 0.7) colorName = "crimson red";
+    else colorName = "rose red";
+  }
+  else if (h >= 15 && h < 45) {
+    if (l < 0.15) { prefix = ""; colorName = "deep espresso chocolate brown"; }
+    else if (l < 0.35) { prefix = ""; colorName = "rich dark golden-brown (ochre / olive-gold)"; }
+    else if (s > 0.7) colorName = "terracotta orange";
+    else colorName = "warm beige / tan";
+  }
+  else if (h >= 45 && h < 70) {
+    if (l < 0.15) { prefix = ""; colorName = "dark olive-bronze"; }
+    else if (l < 0.35) { prefix = ""; colorName = "mustard gold / dark olive-gold"; }
+    else if (s > 0.7) colorName = "warm yellow / mustard yellow";
+    else colorName = "creamy sand beige";
+  }
+  else if (h >= 70 && h < 150) {
+    if (l < 0.15) { prefix = ""; colorName = "deep forest green"; }
+    else if (l < 0.35) { prefix = ""; colorName = "olive green"; }
+    else if (s > 0.7) colorName = "emerald green";
+    else colorName = "sage green / pastel mint green";
+  }
+  else if (h >= 150 && h < 200) {
+    if (l < 0.15) { prefix = ""; colorName = "dark slate teal"; }
+    else if (l < 0.35) { prefix = ""; colorName = "deep petrol teal"; }
+    else if (s > 0.7) colorName = "cyan blue / turquoise";
+    else colorName = "pale aqua teal";
+  }
+  else if (h >= 200 && h < 255) {
+    if (l < 0.15) { prefix = ""; colorName = "deep midnight navy blue"; }
+    else if (l < 0.35) { prefix = ""; colorName = "navy blue"; }
+    else if (s > 0.7) colorName = "royal blue";
+    else colorName = "soft pastel blue";
+  }
+  else if (h >= 255 && h < 290) {
+    if (l < 0.15) { prefix = ""; colorName = "deep plum / eggplant purple"; }
+    else if (l < 0.35) { prefix = ""; colorName = "grape purple / violet"; }
+    else if (s > 0.7) colorName = "vivid purple";
+    else colorName = "soft lavender lilac";
+  }
+  else if (h >= 290 && h < 330) {
+    if (l < 0.15) { prefix = ""; colorName = "deep mulberry"; }
+    else if (l < 0.35) { prefix = ""; colorName = "rich magenta"; }
+    else if (s > 0.7) colorName = "hot pink / fuchsia";
+    else colorName = "soft blush pink";
+  }
+
+  return `${prefix}${colorName}`;
+}
+
 export const generateRealistaFn = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
     const { peca, cor, userImageUrl, croquiUrl, modo, biotipo, comprimento, decote, manga, saia, renda, comentario } = data;
 
     const pecaEn = PECA_EN[peca as keyof typeof PECA_EN] || peca || 'garment';
-    const corEn = cor ? (cor.startsWith('#') ? `hex color ${cor}` : (CORES_EN[cor as keyof typeof CORES_EN] || cor)) : 'a beautiful';
+    const corEn = cor ? (cor.startsWith('#') ? `${hexToColorDescription(cor)} color (hex: ${cor})` : (CORES_EN[cor as keyof typeof CORES_EN] || cor)) : 'a beautiful';
 
     let result: any;
 

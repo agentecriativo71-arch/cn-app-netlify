@@ -122,7 +122,7 @@ function Resultado() {
             <div className="card-soft">
               <div className="flex items-center gap-3 mb-1">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                  style={{ background: "linear-gradient(135deg, oklch(0.94 0.04 160), oklch(0.90 0.06 160))", color: "var(--color-primary)" }}
+                  style={{ background: "linear-gradient(135deg, rgba(230, 222, 201, 0.2), rgba(229, 211, 162, 0.1))", color: "#E6DEC9" }}
                 >
                   <Sparkles size={18} />
                 </div>

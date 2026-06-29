@@ -6,10 +6,10 @@ export function Header({ title, back = "/" }: { title: string; back?: string }) 
   const router = useRouter();
   return (
     <header className="sticky top-0 z-20" style={{
-      background: "oklch(1 0 0 / 0.8)",
+      background: "rgba(3, 102, 53, 0.35)",
       backdropFilter: "blur(20px) saturate(1.4)",
       WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-      borderBottom: "1px solid oklch(0.42 0.12 160 / 0.06)"
+      borderBottom: "1px solid rgba(255, 255, 255, 0.1)"
     }}>
       <div className="container-wide flex items-center h-14 px-4 sm:h-16">
         <button
@@ -47,7 +47,7 @@ export function Header({ title, back = "/" }: { title: string; back?: string }) 
         </Link>
       </div>
       {/* Gradient accent line */}
-      <div className="h-[2px]" style={{ background: "linear-gradient(90deg, transparent, oklch(0.42 0.12 160 / 0.2), oklch(0.72 0.13 75 / 0.15), transparent)" }} />
+      <div className="h-[2px]" style={{ background: "linear-gradient(90deg, transparent, rgba(230, 222, 201, 0.25), rgba(229, 211, 162, 0.15), transparent)" }} />
     </header>
   );
 }
