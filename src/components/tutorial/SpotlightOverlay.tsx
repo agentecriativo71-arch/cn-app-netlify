@@ -132,7 +132,9 @@ export function SpotlightOverlay() {
         data-testid="spotlight-tooltip"
       >
         <div className="spotlight-tooltip-header">
-          <span className="spotlight-tooltip-icon">💡</span>
+          <div className="p-1.5 rounded-lg bg-[#FFE600]/20 text-[#FFE600] flex items-center justify-center shrink-0">
+            <span className="text-lg">✨</span>
+          </div>
           <h4 className="spotlight-tooltip-title">{step.title}</h4>
           {totalSteps > 1 && (
             <span className="spotlight-tooltip-counter">

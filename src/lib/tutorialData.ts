@@ -24,114 +24,113 @@ export const TUTORIAL_DATA: Record<string, ScreenTutorial> = {
   home: {
     screenKey: "home",
     bubbleText:
-      "Toque em 'Aperte para iniciar' pra criar seu look exclusivo. Você vai escolher peça, biotipo, cor e mais! ✨",
+      "Olá! 👋 Pronta para dar vida ao seu look dos sonhos? Toque no botão 'Aperte para iniciar' e vamos começar juntos! ✨",
     steps: [
       {
         targetSelector: '[data-tutorial="cta-button"]',
-        title: "Comece aqui!",
-        text: "Toque neste botão pra começar a criar seu look exclusivo. Você vai escolher peça, biotipo, cor e mais! ✨",
+        title: "Comece Sua Criação ✨",
+        text: "Bem-vinda ao seu ateliê digital! Toque aqui para iniciar a criação do seu look exclusivo. Vamos definir peça, biotipo, caimento e tecidos juntos! 💃",
         tooltipPosition: "top",
       },
     ],
   },
 
-  // Criar: um step por seção — usado de forma dinâmica
   criar_ocasiao: {
     screenKey: "criar_ocasiao",
-    bubbleText: "Escolha a ocasião do seu look. Este passo é opcional 😉",
+    bubbleText: "Qual é o grande dia? Escolha a ocasião para adaptarmos o estilo do seu look! 🥂",
     steps: [
       {
         targetSelector: '[data-tutorial="step-content"]',
-        title: "Escolha a ocasião",
-        text: "Toque no card que mais combina com o evento. Este passo é opcional 😉",
+        title: "Para Qual Ocasião? 🥂",
+        text: "Casamento, festa, trabalho ou dia a dia? Selecione o evento para ajudarmos a inteligência artificial a captar o caimento ideal da peça. Se preferir, pode pular esta etapa! 😉",
       },
     ],
   },
   criar_peca: {
     screenKey: "criar_peca",
-    bubbleText: "Selecione a peça principal que deseja criar 👗",
+    bubbleText: "Escolha o modelo principal da sua roupa (Vestido, Saia, Blusa...) 👗",
     steps: [
       {
         targetSelector: '[data-tutorial="step-content"]',
-        title: "Peça principal",
-        text: "Selecione a peça principal que deseja criar. Vestido, saia, blusa… qual será? 👗",
+        title: "A Peça Principal 👗",
+        text: "O que vamos desenhar hoje? Escolha a peça base da sua criação — um vestido deslumbrante, uma saia elegante ou uma blusa versátil!",
       },
     ],
   },
   criar_biotipo: {
     screenKey: "criar_biotipo",
-    bubbleText: "Escolha o biotipo mais próximo do seu corpo 🧍‍♀️",
+    bubbleText: "Selecione seu biotipo para um caimento sob medida perfeito no desenho! 🧍‍♀️",
     steps: [
       {
         targetSelector: '[data-tutorial="step-content"]',
-        title: "Seu biotipo",
-        text: "Escolha o biotipo mais próximo do seu corpo. Isso ajuda a IA criar algo que valorize você! 🧍‍♀️",
+        title: "Modelagem Proporcional 🧍‍♀️",
+        text: "Selecione o silhueta/biotipo mais próximo do seu corpo. Isso nos permite desenhar um croqui valorizando suas curvas e proporções exatas!",
       },
     ],
   },
   criar_comprimento: {
     screenKey: "criar_comprimento",
-    bubbleText: "Defina o comprimento ideal da peça",
+    bubbleText: "Curto, midi ou longo? Defina a extensão da sua peça! 📏",
     steps: [
       {
         targetSelector: '[data-tutorial="step-content"]',
-        title: "Comprimento",
-        text: "Defina o comprimento ideal. Opcional, mas ajuda no resultado!",
+        title: "Comprimento da Peça 📏",
+        text: "Prefere um visual mais ousado com comprimento curto, elegante com midi ou sofisticado com longo de gala? Escolha seu estilo preferido!",
       },
     ],
   },
   criar_decote: {
     screenKey: "criar_decote",
-    bubbleText: "Escolha o estilo de decote ✂️",
+    bubbleText: "Defina o formato do decote que mais valoriza seu colo ✂️",
     steps: [
       {
         targetSelector: '[data-tutorial="step-content"]',
-        title: "Decote",
-        text: "Escolha o estilo de decote. Toque pra selecionar ✂️",
+        title: "Estilo do Decote ✂️",
+        text: "V, coração, tomara que caia ou ombro a ombro? O decote dá toda a personalidade e charme ao busto da sua peça!",
       },
     ],
   },
   criar_manga: {
     screenKey: "criar_manga",
-    bubbleText: "Selecione o tipo de manga 💪",
+    bubbleText: "Manga bufante, longa, curta ou sem manga? Você decide! 💪",
     steps: [
       {
         targetSelector: '[data-tutorial="step-content"]',
-        title: "Manga",
-        text: "Selecione o tipo de manga 💪",
+        title: "Desenho das Mangas 💪",
+        text: "Escolha o acabamento dos braços: manguinhas delicadas, estilo princesa bufante ou mangas sofisticadas longas!",
       },
     ],
   },
   criar_saia: {
     screenKey: "criar_saia",
-    bubbleText: "Escolha o modelo de saia 👗",
+    bubbleText: "Fluida, evasê, justa ou pregada? Escolha o movimento da saia 👗",
     steps: [
       {
         targetSelector: '[data-tutorial="step-content"]',
-        title: "Modelo de Saia",
-        text: "Escolha o modelo de saia 👗",
+        title: "Caimento da Saia 👗",
+        text: "Como você quer o balanço da saia? Selecione o corte que dará a fluidez e o volume desejados no croqui final!",
       },
     ],
   },
   criar_renda: {
     screenKey: "criar_renda",
-    bubbleText: "Adicione detalhes em renda 🪡",
+    bubbleText: "Adicione textura e detalhes delicados de renda 🪡",
     steps: [
       {
         targetSelector: '[data-tutorial="step-content"]',
-        title: "Detalhes em Renda",
-        text: "Adicione detalhes em renda se quiser um toque especial 🪡",
+        title: "Rendas & Bordados 🪡",
+        text: "Quer um toque romântico ou sofisticado? Adicione aplicação de rendas no corpo, barrado ou mangas da sua peça!",
       },
     ],
   },
   criar_comentario: {
     screenKey: "criar_comentario",
-    bubbleText: "Escreva qualquer detalhe extra 💬",
+    bubbleText: "Tem algum detalhe especial em mente? Conte para o Crispim! 💬",
     steps: [
       {
         targetSelector: '[data-tutorial="step-content"]',
-        title: "Detalhes Extras",
-        text: "Escreva qualquer detalhe extra que deseja no seu look. Laço, cinto, caimento… vale tudo! 💬",
+        title: "Detalhes Exclusivos 💬",
+        text: "Quer fenda lateral, laço grande nas costas, cinto drapeado ou botões forrados? Escreva com suas palavras e o Crispim aplicará na sua ilustração!",
       },
     ],
   },
@@ -139,18 +138,18 @@ export const TUTORIAL_DATA: Record<string, ScreenTutorial> = {
   croqui: {
     screenKey: "croqui",
     bubbleText:
-      "Aqui está seu croqui! Você pode ajustar detalhes, enviar por WhatsApp ou gerar uma foto realista 👗",
+      "Seu croqui ficou pronto! Você pode ajustar detalhes, simular o tecido realista ou enviar pelo WhatsApp 🎨",
     steps: [
       {
         targetSelector: '[data-tutorial="croqui-image"]',
-        title: "Seu croqui",
-        text: "Aqui está seu croqui gerado pela IA! Analise os detalhes da peça 🎨",
+        title: "Sua Ilustração Exclusiva 🎨",
+        text: "Veja que incrível! A IA desenhou seu modelo exclusivo em um croqui de moda de alta costura com todas as opções selecionadas.",
         tooltipPosition: "bottom",
       },
       {
         targetSelector: '[data-tutorial="croqui-actions"]',
-        title: "Próximos passos",
-        text: "Agora você pode: gerar foto realista, enviar por WhatsApp, ajustar detalhes ou imprimir 📱",
+        title: "Próximos Passos 🚀",
+        text: "Gostou? Você pode simular as cores reais do tecido em foto realista, fazer ajustes finos no desenho ou mandar o projeto direto para os consultores da C&N no WhatsApp!",
         tooltipPosition: "top",
       },
     ],
@@ -159,17 +158,17 @@ export const TUTORIAL_DATA: Record<string, ScreenTutorial> = {
   realista: {
     screenKey: "realista",
     bubbleText:
-      "Toque na cor desejada pro tecido. Use o + pra criar uma cor personalizada 🎨",
+      "Escolha a cor ou crie uma personalizada com o botão + para vestirmos o manequim 🎨",
     steps: [
       {
         targetSelector: '[data-tutorial="color-grid"]',
-        title: "Escolha a cor",
-        text: "Toque na cor desejada pro tecido. Use o botão + pra criar uma cor personalizada 🎨",
+        title: "Paleta de Cores e Tecidos 🎨",
+        text: "Selecione uma das cores vibrantes da C&N Tecidos ou toque no botão coloridinho '+' para ajustar o tom exato do tecido em um seletor avançado!",
       },
       {
         targetSelector: '[data-tutorial="generate-button"]',
-        title: "Gerar visualização",
-        text: "Quando estiver satisfeita com a cor, toque aqui pra ver sua peça em um manequim virtual ✨",
+        title: "Renderizar Manequim Real 🌟",
+        text: "Tudo pronto! Toque aqui para vestir nosso manequim virtual 3D com o tecido escolhido e ver como fica a peça real!",
         tooltipPosition: "top",
       },
     ],
@@ -178,18 +177,18 @@ export const TUTORIAL_DATA: Record<string, ScreenTutorial> = {
   resultado: {
     screenKey: "resultado",
     bubbleText:
-      "Sua peça está pronta! Envie pelo WhatsApp ou crie outro look 🎉",
+      "Sua simulação final ficou pronta! Salve ou fale com nossa equipe no WhatsApp 💚",
     steps: [
       {
         targetSelector: '[data-tutorial="result-image"]',
-        title: "Seu look pronto!",
-        text: "Sua peça está pronta! Essa é a visualização realista do seu look 🎉",
+        title: "Seu Look em Foto Realista! 🎉",
+        text: "Confira o resultado final da peça renderizada com textura, luz e drapeado realista no manequim!",
         tooltipPosition: "bottom",
       },
       {
         targetSelector: '[data-tutorial="whatsapp-button"]',
-        title: "Compartilhe",
-        text: "Envie pelo WhatsApp pra salvar ou compartilhar com quem quiser 💚",
+        title: "Orçamento no WhatsApp 💬",
+        text: "Toque aqui para enviar este projeto completo (croqui + foto + especificações) para nossas vendedoras no WhatsApp e consultar a disponibilidade de tecidos na loja!",
         tooltipPosition: "top",
       },
     ],

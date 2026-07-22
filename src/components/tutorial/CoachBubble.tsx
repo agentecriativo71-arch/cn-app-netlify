@@ -1,3 +1,4 @@
+import { Lightbulb, RotateCcw, X } from "lucide-react";
 import { useTutorial } from "./TutorialProvider";
 
 export function CoachBubble() {
@@ -29,26 +30,28 @@ export function CoachBubble() {
       {bubbleOpen && (
         <div className="coach-card" data-testid="coach-card">
           <div className="coach-card-header">
-            <span className="coach-card-icon">💡</span>
-            <h4 className="coach-card-title">Dica</h4>
+            <div className="p-1.5 rounded-lg bg-[#FFE600]/20 text-[#FFE600] flex items-center justify-center">
+              <Lightbulb size={18} className="animate-pulse" />
+            </div>
+            <h4 className="coach-card-title">Dica Rápida</h4>
             <button
               className="coach-card-close"
               onClick={closeBubble}
               type="button"
               aria-label="Fechar dica"
             >
-              ×
+              <X size={16} />
             </button>
           </div>
 
           <p className="coach-card-text">{currentTutorial.bubbleText}</p>
 
           <button
-            className="coach-card-review"
+            className="coach-card-review flex items-center justify-center gap-1.5"
             onClick={reviewTutorial}
             type="button"
           >
-            🔄 Rever tutorial completo
+            <RotateCcw size={13} /> Rever tutorial completo
           </button>
         </div>
       )}
@@ -62,7 +65,9 @@ export function CoachBubble() {
         data-testid="coach-bubble"
         data-open={bubbleOpen || undefined}
       >
-        <span className="coach-bubble-icon">💡</span>
+        <span className="coach-bubble-icon">
+          <Lightbulb size={24} className="text-[#FFE866] drop-shadow-[0_0_10px_rgba(255,232,102,0.8)] fill-[#FFE866]/30 animate-pulse" />
+        </span>
       </button>
     </>
   );
