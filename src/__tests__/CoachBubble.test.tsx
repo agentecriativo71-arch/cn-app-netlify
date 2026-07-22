@@ -17,10 +17,10 @@ function TestWrapper({ screenKey, preComplete }: { screenKey: string; preComplet
 function ScreenRegistrar({ screenKey, preComplete }: { screenKey: string; preComplete?: boolean }) {
   const ctx = useTutorial();
   React.useEffect(() => {
-    if (preComplete) {
-      localStorage.setItem(`tutorial_completed_${screenKey}`, "true");
-    }
     ctx.registerScreen(screenKey);
+    if (preComplete) {
+      ctx.skipSpotlight();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return null;

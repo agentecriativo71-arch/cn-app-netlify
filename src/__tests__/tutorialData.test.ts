@@ -53,7 +53,7 @@ describe("tutorialData", () => {
     });
   });
 
-  describe("localStorage helpers", () => {
+  describe("localStorage helpers (Modo Totem)", () => {
     it("getTutorialStorageKey retorna chave correta", () => {
       expect(getTutorialStorageKey("home")).toBe("tutorial_completed_home");
       expect(getTutorialStorageKey("criar_peca")).toBe(
@@ -61,26 +61,10 @@ describe("tutorialData", () => {
       );
     });
 
-    it("isTutorialCompleted retorna false quando não completado", () => {
+    it("isTutorialCompleted sempre retorna false no Modo Totem", () => {
       expect(isTutorialCompleted("home")).toBe(false);
-    });
-
-    it("markTutorialCompleted marca como completado", () => {
       markTutorialCompleted("home");
-      expect(isTutorialCompleted("home")).toBe(true);
-    });
-
-    it("resetTutorialCompleted reseta o estado", () => {
-      markTutorialCompleted("home");
-      expect(isTutorialCompleted("home")).toBe(true);
-      resetTutorialCompleted("home");
       expect(isTutorialCompleted("home")).toBe(false);
-    });
-
-    it("telas diferentes são independentes", () => {
-      markTutorialCompleted("home");
-      expect(isTutorialCompleted("home")).toBe(true);
-      expect(isTutorialCompleted("croqui")).toBe(false);
     });
   });
 });

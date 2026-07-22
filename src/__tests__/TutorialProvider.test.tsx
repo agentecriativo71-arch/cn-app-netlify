@@ -67,12 +67,12 @@ describe("TutorialProvider", () => {
     expect(screen.getByTestId("spotlightStepIndex").textContent).toBe("0");
   });
 
-  it("registerScreen não ativa spotlight se já completado", () => {
+  it("registerScreen sempre ativa spotlight no Modo Totem mesmo se já completado anteriormente", () => {
     localStorage.setItem("tutorial_completed_home", "true");
     renderWithProvider("home");
     fireEvent.click(screen.getByTestId("register"));
     expect(screen.getByTestId("activeScreen").textContent).toBe("home");
-    expect(screen.getByTestId("spotlightActive").textContent).toBe("false");
+    expect(screen.getByTestId("spotlightActive").textContent).toBe("true");
   });
 
   it("nextStep avança o step index", () => {
@@ -116,14 +116,11 @@ describe("TutorialProvider", () => {
     expect(screen.getByTestId("bubbleOpen").textContent).toBe("false");
   });
 
-  it("reviewTutorial reseta flag e ativa spotlight", () => {
-    localStorage.setItem("tutorial_completed_home", "true");
+  it("reviewTutorial ativa spotlight no Modo Totem", () => {
     renderWithProvider("home");
     fireEvent.click(screen.getByTestId("register"));
-    expect(screen.getByTestId("spotlightActive").textContent).toBe("false");
     fireEvent.click(screen.getByTestId("review"));
     expect(screen.getByTestId("spotlightActive").textContent).toBe("true");
-    expect(localStorage.getItem("tutorial_completed_home")).toBeNull();
   });
 
   it("unregisterScreen limpa o estado", () => {

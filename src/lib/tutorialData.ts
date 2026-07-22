@@ -200,10 +200,9 @@ export function getTutorialStorageKey(screenKey: string): string {
   return `tutorial_completed_${screenKey}`;
 }
 
-/** Verifica se tutorial de uma tela já foi completado */
+/** Verifica se tutorial de uma tela já foi completado (Modo Totem/Kiosk: sempre retorna false para exibir a cada novo cliente) */
 export function isTutorialCompleted(screenKey: string): boolean {
-  if (typeof window === "undefined") return true;
-  return localStorage.getItem(getTutorialStorageKey(screenKey)) === "true";
+  return false;
 }
 
 /** Marca tutorial de uma tela como completado */
