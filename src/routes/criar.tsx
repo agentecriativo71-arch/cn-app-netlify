@@ -5,6 +5,7 @@ import { useLook, LookState } from "@/lib/store";
 import { ImageOff, Check, PartyPopper, Shirt, Ruler, MessageSquare } from "lucide-react";
 import elementosData from "@/lib/elementos_vestuario.json";
 import { useEffect, useState } from "react";
+import { useTutorialScreen } from "@/components/tutorial/TutorialProvider";
 
 import ocasiaoCasamento from "@/assets/ocasiao-casamento.png";
 import ocasiaoFesta from "@/assets/ocasiao-festa.png";
@@ -171,6 +172,19 @@ function Criar() {
 
   const valid = s.nome && s.peca && s.biotipo;
 
+  // Tutorial dinâmico por step
+  const stepIdMap: Record<string, string> = {
+    ocasiao: "criar_ocasiao",
+    peca: "criar_peca",
+    biotipo: "criar_biotipo",
+    comprimento: "criar_comprimento",
+    decote: "criar_decote",
+    manga: "criar_manga",
+    saia: "criar_saia",
+    renda: "criar_renda",
+    comentario: "criar_comentario",
+  };
+
   // Condicionais de exibição baseadas na peça principal selecionada
   const showComprimento = s.peca === "Vestido" || s.peca === "Saia";
   const showDecote = s.peca === "Vestido" || s.peca === "Blusa" || s.peca === "Macacão";
@@ -334,6 +348,10 @@ function Criar() {
   const currentStep = steps[currentStepIndex];
   const isLastStep = currentStepIndex === steps.length - 1;
 
+  // Tutorial dinâmico — muda conforme o step ativo
+  const tutorialKey = stepIdMap[currentStep?.id] || "criar_ocasiao";
+  useTutorialScreen(tutorialKey);
+
   const submit = () => {
     if (!valid) return;
     s.set({ croquiUrl: null, realistaUrl: null, dbId: null });
@@ -367,7 +385,7 @@ function Criar() {
               Etapa {currentStepIndex + 1} de {steps.length}
             </p>
 
-            <div className="w-full mt-6">
+            <div className="w-full mt-6" data-tutorial="step-content">
               {currentStep.render()}
             </div>
           </div>
