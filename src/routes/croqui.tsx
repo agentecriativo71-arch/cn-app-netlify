@@ -9,7 +9,6 @@ import { generateCroquiFn, saveLookDbFn } from "@/server/api";
 
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorModal } from "@/components/ErrorModal";
-import { useTutorialScreen } from "@/components/tutorial/TutorialProvider";
 
 export const Route = createFileRoute("/croqui")({
   component: Croqui,
@@ -35,7 +34,6 @@ function Croqui() {
   ];
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [showAdjust, setShowAdjust] = useState(false);
-  useTutorialScreen("croqui");
 
   useEffect(() => {
     if (!loading) return;
@@ -124,7 +122,7 @@ function Croqui() {
         <div className="split-layout">
           {/* Left — Image */}
           <div className="split-main">
-            <div className="image-frame" data-tutorial="croqui-image">
+            <div className="image-frame">
               <img src={s.croquiUrl!} alt="Croqui gerado" />
             </div>
           </div>
@@ -145,7 +143,7 @@ function Croqui() {
               </ul>
             </div>
 
-            <div className="space-y-3" data-tutorial="croqui-actions">
+            <div className="space-y-3">
               <button className="btn-primary" onClick={() => router.navigate({ to: "/realista" })}>
                 <Camera size={18} /> Gerar foto realista
               </button>

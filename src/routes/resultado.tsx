@@ -10,7 +10,6 @@ import { generateRealistaFn, updateLookDbFn } from "@/server/api";
 
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorModal } from "@/components/ErrorModal";
-import { useTutorialScreen } from "@/components/tutorial/TutorialProvider";
 
 export const Route = createFileRoute("/resultado")({
   component: Resultado,
@@ -25,7 +24,6 @@ function Resultado() {
   const [loading, setLoading] = useState(!s.realistaUrl);
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useTutorialScreen("resultado");
 
   const dynamicMsgs = [
     `Renderizando sua peça, ${s.nome || "..."}...`,
@@ -114,7 +112,7 @@ function Resultado() {
         <div className="split-layout">
           {/* Left — Image with celebration effect */}
           <div className="split-main result-celebrate">
-            <div className="image-frame" data-tutorial="result-image">
+            <div className="image-frame">
               <img src={s.realistaUrl!} alt="Look final" />
             </div>
           </div>
@@ -146,7 +144,7 @@ function Resultado() {
             </div>
 
             <div className="space-y-3">
-              <button onClick={() => setShowLeadModal(true)} className="btn-primary flex items-center justify-center gap-2 w-full" data-tutorial="whatsapp-button">
+              <button onClick={() => setShowLeadModal(true)} className="btn-primary flex items-center justify-center gap-2 w-full">
                 <MessageCircle size={18} /> Enviar por WhatsApp
               </button>
               

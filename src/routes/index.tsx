@@ -4,7 +4,6 @@ import logo from "@/assets/logo.jpg";
 import { useState, useEffect } from "react";
 import { useLook } from "@/lib/store";
 import { NomeModal } from "@/components/NomeModal";
-import { useTutorialScreen } from "@/components/tutorial/TutorialProvider";
 
 export const Route = createFileRoute("/")(  {
   component: Home,
@@ -20,7 +19,6 @@ function Home() {
   const router = useRouter();
   const s = useLook();
   const [showNomeModal, setShowNomeModal] = useState(false);
-  useTutorialScreen("home");
 
   useEffect(() => {
     s.reset();
@@ -72,7 +70,7 @@ function Home() {
 
         {/* CTA Button with double outline container */}
         <div className="w-full max-w-sm px-4 mt-2">
-          <div className="btn-double-border-container shadow-2xl" data-tutorial="cta-button">
+          <div className="btn-double-border-container shadow-2xl">
             <button onClick={handleCriarClick} className="btn-double-border hover:bg-[#d1c295] active:scale-98 transition-all">
               Aperte para iniciar
             </button>

@@ -3,7 +3,6 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
 import { Stepper } from "@/components/Stepper";
 import { useLook } from "@/lib/store";
-import { useTutorialScreen } from "@/components/tutorial/TutorialProvider";
 
 export const Route = createFileRoute("/realista")({
   component: Realista,
@@ -109,7 +108,6 @@ function Realista() {
 
   const isValid = !!s.cor;
   const isCustomSelected = s.cor && !CORES.some(c => c.nome === s.cor || c.hex === s.cor);
-  useTutorialScreen("realista");
 
   const openCustomPicker = () => {
     if (isCustomSelected && s.cor?.startsWith("#")) {
@@ -136,7 +134,7 @@ function Realista() {
 
         {/* Seção 1: Cor ou Tecido */}
         <Section title="Cor ou tecido" hint="Obrigatório">
-          <div className="flex flex-wrap gap-4 items-center justify-center sm:justify-start" data-tutorial="color-grid">
+          <div className="flex flex-wrap gap-4 items-center justify-center sm:justify-start">
             {CORES.map(c => {
               const isSelected = s.cor === c.nome || s.cor === c.hex;
               return (
@@ -192,7 +190,6 @@ function Realista() {
             className="btn-primary w-full"
             disabled={!isValid}
             onClick={handleGenerate}
-            data-tutorial="generate-button"
           >
             ✨ Gerar foto realista
           </button>

@@ -5,7 +5,8 @@ import { useLook, LookState } from "@/lib/store";
 import { ImageOff, Check, PartyPopper, Shirt, Ruler, MessageSquare } from "lucide-react";
 import elementosData from "@/lib/elementos_vestuario.json";
 import { useEffect, useState } from "react";
-import { useTutorialScreen } from "@/components/tutorial/TutorialProvider";
+import { TransitionScreen } from "@/components/TransitionScreen";
+import { getTransitionMessage, type TransitionMessage } from "@/lib/transitionMessages";
 
 import ocasiaoCasamento from "@/assets/ocasiao-casamento.png";
 import ocasiaoFesta from "@/assets/ocasiao-festa.png";
@@ -163,6 +164,15 @@ function Criar() {
   const router = useRouter();
   const s = useLook();
   const [stepIndex, setStepIndex] = useState(0);
+  const [transitionState, setTransitionState] = useState<{
+    active: boolean;
+    targetStepIndex: number;
+    message: TransitionMessage | null;
+  }>({
+    active: false,
+    targetStepIndex: 0,
+    message: null,
+  });
 
   useEffect(() => {
     if (!s.nome) {
@@ -171,19 +181,6 @@ function Criar() {
   }, [s.nome, router]);
 
   const valid = s.nome && s.peca && s.biotipo;
-
-  // Tutorial dinâmico por step
-  const stepIdMap: Record<string, string> = {
-    ocasiao: "criar_ocasiao",
-    peca: "criar_peca",
-    biotipo: "criar_biotipo",
-    comprimento: "criar_comprimento",
-    decote: "criar_decote",
-    manga: "criar_manga",
-    saia: "criar_saia",
-    renda: "criar_renda",
-    comentario: "criar_comentario",
-  };
 
   // Condicionais de exibição baseadas na peça principal selecionada
   const showComprimento = s.peca === "Vestido" || s.peca === "Saia";
@@ -348,9 +345,30 @@ function Criar() {
   const currentStep = steps[currentStepIndex];
   const isLastStep = currentStepIndex === steps.length - 1;
 
-  // Tutorial dinâmico — muda conforme o step ativo
-  const tutorialKey = stepIdMap[currentStep?.id] || "criar_ocasiao";
-  useTutorialScreen(tutorialKey);
+  const handleAdvance = () => {
+    const nextIndex = currentStepIndex + 1;
+    const nextStep = steps[nextIndex];
+    if (nextStep && currentStep) {
+      const msg = getTransitionMessage(currentStep.id, nextStep.id, {
+        nome: s.nome,
+        ocasiao: s.ocasiao,
+        peca: s.peca,
+        biotipo: s.biotipo,
+      });
+      setTransitionState({
+        active: true,
+        targetStepIndex: nextIndex,
+        message: msg,
+      });
+    } else {
+      setStepIndex(nextIndex);
+    }
+  };
+
+  const handleTransitionComplete = () => {
+    setStepIndex(transitionState.targetStepIndex);
+    setTransitionState({ active: false, targetStepIndex: 0, message: null });
+  };
 
   const submit = () => {
     if (!valid) return;
@@ -360,6 +378,12 @@ function Criar() {
 
   return (
     <>
+      {transitionState.active && transitionState.message && (
+        <TransitionScreen
+          message={transitionState.message}
+          onComplete={handleTransitionComplete}
+        />
+      )}
       <Header title="Nova Criação" back="/" />
       <Stepper current="criar" />
       <main className="container-app px-5 py-8 pb-36 fade-in flex flex-col justify-center flex-1">
@@ -385,7 +409,7 @@ function Criar() {
               Etapa {currentStepIndex + 1} de {steps.length}
             </p>
 
-            <div className="w-full mt-6" data-tutorial="step-content">
+            <div className="w-full mt-6">
               {currentStep.render()}
             </div>
           </div>
@@ -422,7 +446,7 @@ function Criar() {
               <button 
                 className="btn-primary" 
                 disabled={!currentStep.valid} 
-                onClick={() => setStepIndex(currentStepIndex + 1)}
+                onClick={handleAdvance}
               >
                 Avançar
               </button>
