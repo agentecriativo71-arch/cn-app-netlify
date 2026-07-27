@@ -2,7 +2,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useLook } from "@/lib/store";
 import { NomeModal } from "@/components/NomeModal";
-import { useVideoStore, VIDEO_CHECKPOINTS } from "@/lib/videoStore";
+import { useVideoStore } from "@/lib/videoStore";
 
 export const Route = createFileRoute("/")(  {
   component: Home,
@@ -17,22 +17,31 @@ export const Route = createFileRoute("/")(  {
 function Home() {
   const router = useRouter();
   const s = useLook();
-  const { advance, reset: resetVideo } = useVideoStore();
+  const { triggerTransition, transitionPhase, reset: resetVideo } = useVideoStore();
   const [showNomeModal, setShowNomeModal] = useState(false);
-  const [contentVisible, setContentVisible] = useState(true);
+  const [isMobileLoading, setIsMobileLoading] = useState(false);
 
   useEffect(() => {
     s.reset();
-    resetVideo(); // Garante que o vídeo reinicia ao voltar para home
+    resetVideo();
+
+    // Apenas no mobile (largura < 768px), exibe tela de carregamento de 4s com o manequim caminhando
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setIsMobileLoading(true);
+      triggerTransition(undefined, 4000); // 4s total de intro com vídeo
+      // O conteúdo começa a surgir suavemente em 2.2s, antes da intro de 4s terminar
+      const timer = setTimeout(() => {
+        setIsMobileLoading(false);
+      }, 2200);
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   const goToCriar = () => {
-    advance(VIDEO_CHECKPOINTS["criar-1"]);
-    // Fade out da Home enquanto o vídeo roda
-    setContentVisible(false);
-    setTimeout(() => {
+    // Transição lenta e fluida de 4s
+    triggerTransition(() => {
       router.navigate({ to: "/criar" });
-    }, 1500);
+    }, 4000);
   };
 
   const handleCriarClick = (e: React.MouseEvent) => {
@@ -50,77 +59,101 @@ function Home() {
     goToCriar();
   };
 
+  const isExiting = transitionPhase === "exit";
+  const hideContent = isExiting || isMobileLoading;
+
   return (
-    <main
-      className="min-h-screen flex flex-col items-center justify-between px-6 py-12 relative z-10 text-center select-none"
-      style={{
-        opacity: contentVisible ? 1 : 0,
-        transition: "opacity 0.5s ease-in-out",
-      }}
-    >
-      {/* Top Header */}
-      <header className="w-full mt-4 flex flex-col items-center gap-1.5">
-        <span className="text-[12px] tracking-[0.3em] font-medium text-white/90 uppercase" style={{ fontFamily: "var(--font-display)" }}>
-          CN TECIDOS
-        </span>
-      </header>
-
-      {/* Main Title & Action */}
-      <div className="flex-1 flex flex-col items-center justify-center max-w-md w-full my-6 gap-8 sm:gap-10">
-        {/* Sparkles / Stars decorative (mockup has small gold stars around title) */}
-        <div className="relative">
-          {/* Left Star */}
-          <div className="absolute -top-6 -left-8 text-[#E5D3A2] opacity-80 animate-pulse text-lg">✦</div>
-          {/* Right Star */}
-          <div className="absolute top-2 -right-8 text-[#E5D3A2] opacity-80 animate-pulse text-sm">✦</div>
-          {/* Left Lower Star */}
-          <div className="absolute bottom-2 -left-10 text-[#E5D3A2] opacity-80 animate-pulse text-sm">✦</div>
-
-          <h1 className="text-4.5xl sm:text-6xl font-extrabold leading-[1.1] text-[#E6DEC9] tracking-tight uppercase" style={{ fontFamily: "var(--font-display)" }}>
-            Gerador<br />
-            de Croqui
-          </h1>
-        </div>
-
-        <p className="text-[11px] sm:text-[13px] tracking-[0.18em] font-semibold text-white/90 max-w-xs uppercase leading-relaxed" style={{ fontFamily: "var(--font-display)" }}>
-          Faça agora seu modelo na CN Tecidos!
-        </p>
-
-        {/* CTA Button with double outline container */}
-        <div className="w-full max-w-sm px-4 mt-2">
-          <div className="btn-double-border-container shadow-2xl">
-            <button onClick={handleCriarClick} className="btn-double-border hover:bg-[#d1c295] active:scale-98 transition-all">
-              Aperte para iniciar
-            </button>
-          </div>
-        </div>
-
-        {/* Sub-text: Receba pelo WhatsApp */}
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-[13px] sm:text-[14px] tracking-[0.2em] font-semibold text-white/95 uppercase" style={{ fontFamily: "var(--font-display)" }}>
-            Receba pelo WhatsApp
+    <>
+      {isMobileLoading && (
+        <div className="fixed inset-0 z-20 flex flex-col items-center justify-center p-6 text-center select-none pointer-events-none transition-opacity duration-1000 ease-out">
+          <span
+            className="text-[11px] tracking-[0.35em] font-semibold text-[#E5D3A2] uppercase animate-pulse mb-3"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            CN TECIDOS
           </span>
+          <h2
+            className="text-2xl font-extrabold text-[#E6DEC9] tracking-tight uppercase drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            Carregando...
+          </h2>
+        </div>
+      )}
+      <main className="min-h-screen max-md:min-h-[calc(100vh-1rem)] flex flex-col items-center justify-between max-md:justify-end px-5 pt-6 pb-4 max-md:pb-3 relative z-10 text-center select-none">
+        {/* Main Title & Action — Card Glass colado na borda inferior no Mobile */}
+        <div
+          className="w-full max-w-md my-auto max-md:my-0 max-md:mt-auto max-md:mb-0 flex flex-col items-center justify-center gap-7 sm:gap-10 max-md:bg-black/35 max-md:backdrop-blur-md max-md:p-6 max-md:rounded-3xl max-md:border max-md:border-white/15 max-md:shadow-2xl"
+          style={{
+            opacity: hideContent ? 0 : 1,
+            transform: hideContent ? "translateY(24px) scale(0.96)" : "translateY(0) scale(1)",
+            transition: "opacity 2s cubic-bezier(0.22, 1, 0.36, 1), transform 2s cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+        >
+          <div className="relative">
+            <div className="absolute -top-6 -left-8 text-[#E5D3A2] opacity-80 animate-pulse text-lg">✦</div>
+            <div className="absolute top-2 -right-8 text-[#E5D3A2] opacity-80 animate-pulse text-sm">✦</div>
+            <div className="absolute bottom-2 -left-10 text-[#E5D3A2] opacity-80 animate-pulse text-sm">✦</div>
+
+            <h1
+              className="text-4.5xl sm:text-6xl font-extrabold leading-[1.1] text-[#E6DEC9] tracking-tight uppercase drop-shadow-[0_4px_12px_rgba(0,0,0,0.9)]"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Gerador<br />
+              de Croqui
+            </h1>
+          </div>
+
+          <p
+            className="text-[11px] sm:text-[13px] tracking-[0.18em] font-semibold text-white/95 max-w-xs uppercase leading-relaxed drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            Faça agora seu modelo na<br />
+            <strong className="font-extrabold text-[#E6DEC9] text-[12px] sm:text-[14px]">CN TECIDOS!</strong>
+          </p>
+
+          {/* CTA Button with double outline container */}
+          <div className="w-full max-w-sm px-4 mt-1">
+            <div className="btn-double-border-container shadow-2xl">
+              <button onClick={handleCriarClick} className="btn-double-border hover:bg-[#d1c295] active:scale-98 transition-all">
+                Aperte para iniciar
+              </button>
+            </div>
+          </div>
+
+          {/* Sub-text: Receba pelo WhatsApp */}
+          <div className="flex flex-col items-center gap-1">
+            <span
+              className="text-[13px] sm:text-[14px] tracking-[0.2em] font-semibold text-white uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Receba pelo WhatsApp
+            </span>
+          </div>
+
+          {/* QR Code link — mantido apenas no Desktop */}
+          <Link
+            to="/qr"
+            className="hidden md:inline-block text-[11px] sm:text-xs text-white/70 hover:text-white underline tracking-wider uppercase transition-colors drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
+          >
+            Abrir QR para celular
+          </Link>
         </div>
 
-        {/* QR Code link preserved visually as elegant text link */}
-        <Link to="/qr" className="text-[11px] sm:text-xs text-white/60 hover:text-white underline tracking-wider uppercase transition-colors">
-          Abrir QR para celular
-        </Link>
-      </div>
+        <NomeModal
+          open={showNomeModal}
+          onClose={() => setShowNomeModal(false)}
+          onConfirm={handleConfirmNome}
+        />
+      </main>
 
-      {/* Footer Info */}
-      <footer className="w-full mt-auto flex flex-col items-center gap-1.5 text-white/70 text-[11px] sm:text-xs tracking-widest uppercase">
+      {/* Footer Info — Posicionado abaixo da dobra inicial do mobile */}
+      <footer className="w-full pt-14 pb-6 flex flex-col items-center gap-1.5 text-white/70 text-[11px] sm:text-xs tracking-widest uppercase relative z-10">
         <span className="font-medium text-white/80">Rua Juiz Acrísio Noves, 16</span>
         <a href="https://www.lojascrispim.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
           www.lojascrispim.com.br
         </a>
       </footer>
-
-      <NomeModal
-        open={showNomeModal}
-        onClose={() => setShowNomeModal(false)}
-        onConfirm={handleConfirmNome}
-      />
-    </main>
+    </>
   );
 }

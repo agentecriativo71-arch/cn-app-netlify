@@ -1,55 +1,50 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { useVideoStore, VIDEO_CHECKPOINTS } from "@/lib/videoStore";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { useVideoStore } from "@/lib/videoStore";
 
 describe("useVideoStore", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     useVideoStore.getState().reset();
   });
 
-  it("inicia com currentTime=0, targetTime=0 e isPlaying=false", () => {
+  it("inicia em repouso (isTransitioning=false, transitionPhase='idle')", () => {
     const state = useVideoStore.getState();
-    expect(state.currentTime).toBe(0);
-    expect(state.targetTime).toBe(0);
-    expect(state.isPlaying).toBe(false);
+    expect(state.isTransitioning).toBe(false);
+    expect(state.transitionPhase).toBe("idle");
   });
 
-  it("advance() define targetTime e isPlaying=true", () => {
-    useVideoStore.getState().advance(1.5);
+  it("triggerTransition ativa a fase 'exit' e isTransitioning=true", () => {
+    useVideoStore.getState().triggerTransition();
     const state = useVideoStore.getState();
-    expect(state.targetTime).toBe(1.5);
-    expect(state.isPlaying).toBe(true);
+    expect(state.isTransitioning).toBe(true);
+    expect(state.transitionPhase).toBe("exit");
   });
 
-  it("pause() define isPlaying=false e atualiza currentTime", () => {
-    useVideoStore.getState().advance(2.5);
-    useVideoStore.setState({ currentTime: 2.5 });
-    useVideoStore.getState().pause();
-    const state = useVideoStore.getState();
-    expect(state.isPlaying).toBe(false);
-    expect(state.currentTime).toBe(2.5);
+  it("executa onMidpoint e entra na fase 'enter' no meio do tempo", () => {
+    const onMidpoint = vi.fn();
+    useVideoStore.getState().triggerTransition(onMidpoint, 4000);
+
+    vi.advanceTimersByTime(1800);
+
+    expect(onMidpoint).toHaveBeenCalledTimes(1);
+    expect(useVideoStore.getState().transitionPhase).toBe("enter");
+    expect(useVideoStore.getState().isTransitioning).toBe(true);
   });
 
-  it("reset() volta todos os valores ao estado inicial", () => {
-    useVideoStore.getState().advance(5.0);
+  it("finaliza a transição após os 4000ms", () => {
+    useVideoStore.getState().triggerTransition(undefined, 4000);
+
+    vi.advanceTimersByTime(4000);
+
+    expect(useVideoStore.getState().isTransitioning).toBe(false);
+    expect(useVideoStore.getState().transitionPhase).toBe("idle");
+  });
+
+  it("reset limpa qualquer transição ativa", () => {
+    useVideoStore.getState().triggerTransition(undefined, 3000);
     useVideoStore.getState().reset();
-    const state = useVideoStore.getState();
-    expect(state.currentTime).toBe(0);
-    expect(state.targetTime).toBe(0);
-    expect(state.isPlaying).toBe(false);
-  });
 
-  it("VIDEO_CHECKPOINTS contém todos os pontos de navegação", () => {
-    expect(VIDEO_CHECKPOINTS.home).toBe(0);
-    expect(VIDEO_CHECKPOINTS["criar-1"]).toBe(1.5);
-    expect(VIDEO_CHECKPOINTS.resultado).toBe(9.0);
-  });
-
-  it("cada checkpoint avança em relação ao anterior", () => {
-    const keys = Object.keys(VIDEO_CHECKPOINTS) as (keyof typeof VIDEO_CHECKPOINTS)[];
-    for (let i = 1; i < keys.length; i++) {
-      expect(VIDEO_CHECKPOINTS[keys[i]]).toBeGreaterThan(
-        VIDEO_CHECKPOINTS[keys[i - 1]]
-      );
-    }
+    expect(useVideoStore.getState().isTransitioning).toBe(false);
+    expect(useVideoStore.getState().transitionPhase).toBe("idle");
   });
 });

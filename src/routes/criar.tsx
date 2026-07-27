@@ -5,7 +5,7 @@ import { useLook, LookState } from "@/lib/store";
 import { ImageOff, Check, PartyPopper, Shirt, Ruler, MessageSquare } from "lucide-react";
 import elementosData from "@/lib/elementos_vestuario.json";
 import { useEffect, useState } from "react";
-import { useVideoStore, VIDEO_CHECKPOINTS } from "@/lib/videoStore";
+import { useVideoStore } from "@/lib/videoStore";
 
 import ocasiaoCasamento from "@/assets/ocasiao-casamento.png";
 import ocasiaoFesta from "@/assets/ocasiao-festa.png";
@@ -159,26 +159,11 @@ function ElementGrid({ items, selected, onSelect }: {
 
 // ── Página principal ─────────────────────────────────────────────
 
-// Mapa de steps para checkpoints de vídeo (índice do step → checkpoint)
-const STEP_VIDEO_CHECKPOINTS = [
-  VIDEO_CHECKPOINTS["criar-1"], // step 0 (ocasiao)
-  VIDEO_CHECKPOINTS["criar-2"], // step 1 (peca)
-  VIDEO_CHECKPOINTS["criar-3"], // step 2 (biotipo)
-  VIDEO_CHECKPOINTS["criar-4"], // step 3 (comprimento)
-  VIDEO_CHECKPOINTS["criar-5"], // step 4 (decote)
-  VIDEO_CHECKPOINTS["criar-6"], // step 5 (manga)
-  VIDEO_CHECKPOINTS["criar-7"], // step 6 (saia)
-  VIDEO_CHECKPOINTS["criar-8"], // step 7 (renda)
-  VIDEO_CHECKPOINTS["criar-9"], // step 8 (comentario)
-];
-
 function Criar() {
   const router = useRouter();
   const s = useLook();
-  const { advance } = useVideoStore();
+  const { triggerTransition, transitionPhase } = useVideoStore();
   const [stepIndex, setStepIndex] = useState(0);
-  // Controla a visibilidade do conteúdo durante a transição (fade out/in)
-  const [contentVisible, setContentVisible] = useState(true);
 
   useEffect(() => {
     if (!s.nome) {
@@ -355,16 +340,10 @@ function Criar() {
     const nextIndex = currentStepIndex + 1;
     const nextStep = steps[nextIndex];
     if (nextStep && currentStep) {
-      // Avança o vídeo para o checkpoint do próximo step
-      const nextCheckpoint = STEP_VIDEO_CHECKPOINTS[nextIndex] ?? STEP_VIDEO_CHECKPOINTS[STEP_VIDEO_CHECKPOINTS.length - 1];
-      advance(nextCheckpoint);
-
-      // Fade out do conteúdo, troca de step no meio do vídeo, fade in suave
-      setContentVisible(false);
-      setTimeout(() => {
+      // Dispara a transição lenta e elegante de 4 segundos com o vídeo de fundo
+      triggerTransition(() => {
         setStepIndex(nextIndex);
-        setContentVisible(true);
-      }, 900); // Troca no centro da transição do vídeo (~1s)
+      }, 4000);
     } else {
       setStepIndex(nextIndex);
     }
@@ -373,13 +352,13 @@ function Criar() {
   const submit = () => {
     if (!valid) return;
     s.set({ croquiUrl: null, realistaUrl: null, dbId: null });
-    // Avança o vídeo para o checkpoint de /croqui antes de navegar
-    advance(VIDEO_CHECKPOINTS["croqui"]);
-    setContentVisible(false);
-    setTimeout(() => {
+    // Transição de 4s para o croqui
+    triggerTransition(() => {
       router.navigate({ to: "/croqui" });
-    }, 800);
+    }, 4000);
   };
+
+  const isExiting = transitionPhase === "exit";
 
   return (
     <>
@@ -388,8 +367,9 @@ function Criar() {
       <main
         className="container-app px-5 py-8 pb-36 flex flex-col justify-center flex-1"
         style={{
-          opacity: contentVisible ? 1 : 0,
-          transition: "opacity 0.45s ease-in-out",
+          opacity: isExiting ? 0 : 1,
+          transform: isExiting ? "translateY(-16px) scale(0.97)" : "translateY(0) scale(1)",
+          transition: "opacity 2s cubic-bezier(0.22, 1, 0.36, 1), transform 2s cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
         <div className="space-y-6">

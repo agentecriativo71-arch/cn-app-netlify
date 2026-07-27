@@ -1,51 +1,48 @@
 import { create } from "zustand";
 
-// ── Checkpoint de tempo por rota/step ─────────────────────────────
-// Mapa que define em qual segundo do vídeo cada tela "para"
-export const VIDEO_CHECKPOINTS = {
-  home: 0,
-  "criar-1": 1.5,
-  "criar-2": 2.5,
-  "criar-3": 3.5,
-  "criar-4": 4.2,
-  "criar-5": 4.8,
-  "criar-6": 5.3,
-  "criar-7": 5.8,
-  "criar-8": 6.2,
-  "criar-9": 6.5,
-  croqui: 7.2,
-  realista: 8.0,
-  resultado: 9.0,
-} as const;
-
-export type VideoCheckpointKey = keyof typeof VIDEO_CHECKPOINTS;
+export type TransitionPhase = "idle" | "exit" | "enter";
 
 export type VideoStore = {
-  /** Posição atual pausada do vídeo (em segundos) */
-  currentTime: number;
-  /** Posição alvo para avançar até (em segundos) */
-  targetTime: number;
-  /** Se o vídeo está em movimento */
-  isPlaying: boolean;
-  /** Avança o vídeo até um novo checkpoint */
-  advance: (target: number) => void;
-  /** Pausa no tempo atual */
-  pause: () => void;
-  /** Reseta para o início */
+  /** Se uma transição entre telas/steps está em andamento */
+  isTransitioning: boolean;
+  /** Fase atual da transição */
+  transitionPhase: TransitionPhase;
+  /** Dispara a transição de 3 segundos com callback no meio (para troca de tela) */
+  triggerTransition: (onMidpoint?: () => void, durationMs?: number) => void;
+  /** Reseta o estado do store */
   reset: () => void;
 };
 
+let transitionTimer: ReturnType<typeof setTimeout> | null = null;
+let midpointTimer: ReturnType<typeof setTimeout> | null = null;
+
 export const useVideoStore = create<VideoStore>((set) => ({
-  currentTime: 0,
-  targetTime: 0,
-  isPlaying: false,
+  isTransitioning: false,
+  transitionPhase: "idle",
 
-  advance: (target: number) =>
-    set({ targetTime: target, isPlaying: true }),
+  triggerTransition: (onMidpoint, durationMs = 4000) => {
+    // Limpa timers anteriores se houver
+    if (transitionTimer) clearTimeout(transitionTimer);
+    if (midpointTimer) clearTimeout(midpointTimer);
 
-  pause: () =>
-    set((state) => ({ isPlaying: false, currentTime: state.targetTime })),
+    // Início: ativa vídeo e inicia fade out dos elementos atuais
+    set({ isTransitioning: true, transitionPhase: "exit" });
 
-  reset: () =>
-    set({ currentTime: 0, targetTime: 0, isPlaying: false }),
+    const midpointMs = Math.floor(durationMs * 0.45); // ~1.8s para troca suave do conteúdo
+
+    midpointTimer = setTimeout(() => {
+      if (onMidpoint) onMidpoint();
+      set({ transitionPhase: "enter" });
+    }, midpointMs);
+
+    transitionTimer = setTimeout(() => {
+      set({ isTransitioning: false, transitionPhase: "idle" });
+    }, durationMs);
+  },
+
+  reset: () => {
+    if (transitionTimer) clearTimeout(transitionTimer);
+    if (midpointTimer) clearTimeout(midpointTimer);
+    set({ isTransitioning: false, transitionPhase: "idle" });
+  },
 }));
