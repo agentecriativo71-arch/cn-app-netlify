@@ -1,9 +1,8 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { Sparkles, QrCode, Pencil, Image, Palette, Zap, Shield, Wand2 } from "lucide-react";
-import logo from "@/assets/logo.jpg";
 import { useState, useEffect } from "react";
 import { useLook } from "@/lib/store";
 import { NomeModal } from "@/components/NomeModal";
+import { useVideoStore, VIDEO_CHECKPOINTS } from "@/lib/videoStore";
 
 export const Route = createFileRoute("/")(  {
   component: Home,
@@ -18,16 +17,28 @@ export const Route = createFileRoute("/")(  {
 function Home() {
   const router = useRouter();
   const s = useLook();
+  const { advance, reset: resetVideo } = useVideoStore();
   const [showNomeModal, setShowNomeModal] = useState(false);
+  const [contentVisible, setContentVisible] = useState(true);
 
   useEffect(() => {
     s.reset();
+    resetVideo(); // Garante que o vídeo reinicia ao voltar para home
   }, []);
+
+  const goToCriar = () => {
+    advance(VIDEO_CHECKPOINTS["criar-1"]);
+    // Fade out da Home enquanto o vídeo roda
+    setContentVisible(false);
+    setTimeout(() => {
+      router.navigate({ to: "/criar" });
+    }, 1500);
+  };
 
   const handleCriarClick = (e: React.MouseEvent) => {
     e.preventDefault();
     if (s.nome) {
-      router.navigate({ to: "/criar" });
+      goToCriar();
     } else {
       setShowNomeModal(true);
     }
@@ -36,10 +47,17 @@ function Home() {
   const handleConfirmNome = (nome: string) => {
     s.set({ nome });
     setShowNomeModal(false);
-    router.navigate({ to: "/criar" });
+    goToCriar();
   };
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-between px-6 py-12 relative z-10 text-center select-none">
+    <main
+      className="min-h-screen flex flex-col items-center justify-between px-6 py-12 relative z-10 text-center select-none"
+      style={{
+        opacity: contentVisible ? 1 : 0,
+        transition: "opacity 0.5s ease-in-out",
+      }}
+    >
       {/* Top Header */}
       <header className="w-full mt-4 flex flex-col items-center gap-1.5">
         <span className="text-[12px] tracking-[0.3em] font-medium text-white/90 uppercase" style={{ fontFamily: "var(--font-display)" }}>

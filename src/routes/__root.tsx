@@ -10,6 +10,7 @@ import {
 
 import appCss from "../styles.css?url";
 import logoUrl from "../assets/logo.jpg?url";
+import { VideoBackground } from "@/components/VideoBackground";
 
 function NotFoundComponent() {
   return (
@@ -117,6 +118,9 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="app-bg overflow-x-hidden min-h-screen relative">
+        {/* ── Vídeo background sincronizado com o fluxo ── */}
+        <VideoBackground />
+
         {/* Animated Particles/Orbs layer */}
         <div className="blob-decor blob-decor--top" />
         <div className="blob-decor blob-decor--bottom" />
