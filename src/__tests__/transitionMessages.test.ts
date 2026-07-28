@@ -7,7 +7,7 @@ describe("transitionMessages", () => {
       nome: "Maria",
       ocasiao: "Casamento",
     });
-    expect(msg.title).toContain("Ocasião definida");
+    expect(msg.title).toContain("Ocasião registrada");
   });
 
   it("retorna mensagem de transição para biotipo", () => {
@@ -15,13 +15,13 @@ describe("transitionMessages", () => {
       nome: "Ana",
       peca: "Vestido",
     });
-    expect(msg.title).toContain("Peça confirmada");
+    expect(msg.title).toContain("Ótima escolha");
   });
 
-  it("retorna mensagem para comentário com o nome da pessoa", () => {
+  it("retorna mensagem para comentário", () => {
     const msg = getTransitionMessage("renda", "comentario", {
       nome: "Juliana Silva",
     });
-    expect(msg.title).toContain("Etapas concluídas");
+    expect(msg.title).toContain("Últimos ajustes");
   });
 });
