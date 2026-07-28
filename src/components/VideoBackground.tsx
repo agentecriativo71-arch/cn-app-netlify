@@ -43,7 +43,7 @@ export function VideoBackground() {
         playsInline
         loop
         preload="auto"
-        className="absolute top-0 right-0 h-full w-auto max-w-none opacity-35 translate-x-[45%] md:opacity-100 md:translate-x-1/4"
+        className="absolute top-0 right-0 h-full w-auto max-w-none opacity-25 translate-x-[45%] md:opacity-100 md:translate-x-1/4"
         style={{
           mixBlendMode: "screen",
           maskImage: "linear-gradient(to right, transparent 0%, black 25%, black 100%)",

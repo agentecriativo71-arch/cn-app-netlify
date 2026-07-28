@@ -374,23 +374,23 @@ function Criar() {
       >
         <div className="space-y-6">
           {s.nome && currentStepIndex === 0 && (
-            <p className="text-[16px] font-medium text-center leading-relaxed text-white/80">
+            <p className="text-[16px] font-medium text-center leading-relaxed text-white/90 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
               Olá, <span className="text-[20px] font-extrabold text-[#E5D3A2]">{s.nome}</span>! Vamos criar o seu look perfeito.
             </p>
           )}
 
           <div className="flex flex-col items-center justify-center text-center my-4 gap-4 fade-in">
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-[#E6DEC9] tracking-tight uppercase" style={{ fontFamily: "var(--font-display)" }}>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-[#E6DEC9] tracking-tight uppercase drop-shadow-[0_4px_12px_rgba(0,0,0,0.95)]" style={{ fontFamily: "var(--font-display)" }}>
               {currentStep.title}
             </h2>
             {currentStep.hint && (
-              <p className="text-[10px] sm:text-xs uppercase tracking-widest text-[#E5D3A2]/80 font-bold">
+              <p className="text-[10px] sm:text-xs uppercase tracking-widest text-[#E5D3A2]/90 font-bold drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
                 {currentStep.hint}
               </p>
             )}
             
             {/* Step indicator */}
-            <p className="text-[11px] uppercase tracking-wider text-white/50 font-medium">
+            <p className="text-[11px] uppercase tracking-wider text-white/80 font-medium drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
               Etapa {currentStepIndex + 1} de {steps.length}
             </p>
 
