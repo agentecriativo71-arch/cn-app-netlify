@@ -74,7 +74,6 @@ export function VideoBackground() {
       >
         {transitionMessage && (
           <div className="flex flex-col items-center justify-center gap-4 max-w-md bg-black/40 backdrop-blur-md p-8 rounded-3xl border border-white/10 shadow-2xl">
-            <span className="text-4xl">{transitionMessage.emoji}</span>
             <h2
               className="text-2xl sm:text-3xl font-bold text-[#E6DEC9] tracking-tight"
               style={{ fontFamily: "var(--font-display)" }}

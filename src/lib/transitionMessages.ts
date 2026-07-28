@@ -8,7 +8,6 @@ export type TransitionContext = {
 export type TransitionMessage = {
   title: string;
   subtitle: string;
-  emoji: string;
 };
 
 export function getTransitionMessage(
@@ -16,79 +15,65 @@ export function getTransitionMessage(
   toStepId: string,
   ctx: TransitionContext
 ): TransitionMessage {
-  const nome = ctx.nome ? ctx.nome.split(" ")[0] : "Você";
-  const peca = ctx.peca ? ctx.peca.toLowerCase() : "peça";
-  const ocasiao = ctx.ocasiao ? ctx.ocasiao.toLowerCase() : "evento";
-
   switch (toStepId) {
     case "peca":
       if (ctx.ocasiao) {
         return {
-          title: `Perfeito para ${ocasiao}! ✨`,
-          subtitle: "Agora escolha qual peça vamos desenhar.",
-          emoji: "✨",
+          title: "Ocasião definida.",
+          subtitle: "Selecione a peça principal da criação.",
         };
       }
       return {
-        title: "Excelente escolha! 💫",
-        subtitle: "Vamos escolher a peça principal do seu look.",
-        emoji: "👗",
+        title: "Iniciando criação.",
+        subtitle: "Selecione a peça principal.",
       };
 
     case "biotipo":
       return {
-        title: `${ctx.peca || "Peça"} escolhida com sucesso! 👗`,
-        subtitle: "Agora selecione a silhueta ideal para o caimento perfeito.",
-        emoji: "🧍‍♀️",
+        title: "Peça confirmada.",
+        subtitle: "Defina a silhueta para garantir um caimento preciso.",
       };
 
     case "comprimento":
       return {
-        title: "Silhueta definida! 💃",
-        subtitle: `Vamos ajustar o comprimento ideal da sua ${peca}.`,
-        emoji: "📏",
+        title: "Silhueta registrada.",
+        subtitle: "Ajuste o comprimento ideal da peça.",
       };
 
     case "decote":
       return {
-        title: "Modelagem impecável! ✨",
-        subtitle: "Escolha o decote para valorizar ainda mais o visual.",
-        emoji: "✂️",
+        title: "Estrutura definida.",
+        subtitle: "Selecione o estilo do decote.",
       };
 
     case "manga":
       return {
-        title: "Lindo estilo! 💖",
-        subtitle: "Vamos escolher o acabamento perfeito para as mangas.",
-        emoji: "💪",
+        title: "Modelagem atualizada.",
+        subtitle: "Defina o acabamento das mangas.",
       };
 
     case "saia":
       return {
-        title: "Ótimo caimento! 🌟",
-        subtitle: "Escolha o movimento e volume da saia.",
-        emoji: "👗",
+        title: "Corte selecionado.",
+        subtitle: "Defina a estrutura e o volume da saia.",
       };
 
     case "renda":
       return {
-        title: "Design incrível! 🪡",
-        subtitle: "Quer adicionar textura e detalhes em renda?",
-        emoji: "🪡",
+        title: "Detalhes em andamento.",
+        subtitle: "Selecione o estilo de renda desejado.",
       };
 
     case "comentario":
       return {
-        title: "Quase lá, " + nome + "! 💬",
-        subtitle: "Algum detalhe especial ou preferência exclusiva?",
-        emoji: "💬",
+        title: "Etapas concluídas.",
+        subtitle: "Adicione observações ou preferências técnicas.",
       };
 
     default:
       return {
-        title: "Tudo pronto! ✨",
-        subtitle: "Preparando a criação do seu look...",
-        emoji: "🎨",
+        title: "Finalizando.",
+        subtitle: "Processando os parâmetros da criação...",
       };
   }
 }

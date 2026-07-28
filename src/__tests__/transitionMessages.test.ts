@@ -7,8 +7,7 @@ describe("transitionMessages", () => {
       nome: "Maria",
       ocasiao: "Casamento",
     });
-    expect(msg.title).toContain("casamento");
-    expect(msg.emoji).toBe("✨");
+    expect(msg.title).toContain("Ocasião definida");
   });
 
   it("retorna mensagem de transição para biotipo", () => {
@@ -16,15 +15,13 @@ describe("transitionMessages", () => {
       nome: "Ana",
       peca: "Vestido",
     });
-    expect(msg.title).toContain("Vestido");
-    expect(msg.emoji).toBe("🧍‍♀️");
+    expect(msg.title).toContain("Peça confirmada");
   });
 
   it("retorna mensagem para comentário com o nome da pessoa", () => {
     const msg = getTransitionMessage("renda", "comentario", {
       nome: "Juliana Silva",
     });
-    expect(msg.title).toContain("Juliana");
-    expect(msg.emoji).toBe("💬");
+    expect(msg.title).toContain("Etapas concluídas");
   });
 });
