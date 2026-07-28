@@ -8,6 +8,8 @@ export type VideoStore = {
   isTransitioning: boolean;
   /** Se o carregamento inicial no mobile está ativo */
   isInitialLoading: boolean;
+  /** Se está na tela inicial aguardando interação (vídeo sempre visível, sem véu) */
+  isHomeIdle: boolean;
   /** Fase atual da transição */
   transitionPhase: TransitionPhase;
   /** Mensagem exibida durante a transição */
@@ -16,6 +18,8 @@ export type VideoStore = {
   triggerTransition: (onMidpoint?: () => void, durationMs?: number, customMidpointMs?: number, message?: TransitionMessage) => void;
   /** Define se o carregamento inicial está ativo */
   setInitialLoading: (loading: boolean) => void;
+  /** Define se está na tela inicial aguardando interação */
+  setHomeIdle: (idle: boolean) => void;
   /** Reseta o estado do store */
   reset: () => void;
 };
@@ -26,6 +30,7 @@ let midpointTimer: ReturnType<typeof setTimeout> | null = null;
 export const useVideoStore = create<VideoStore>((set) => ({
   isTransitioning: false,
   isInitialLoading: false,
+  isHomeIdle: false,
   transitionPhase: "idle",
   transitionMessage: null,
 
@@ -51,9 +56,11 @@ export const useVideoStore = create<VideoStore>((set) => ({
 
   setInitialLoading: (loading: boolean) => set({ isInitialLoading: loading }),
 
+  setHomeIdle: (idle: boolean) => set({ isHomeIdle: idle }),
+
   reset: () => {
     if (transitionTimer) clearTimeout(transitionTimer);
     if (midpointTimer) clearTimeout(midpointTimer);
-    set({ isTransitioning: false, isInitialLoading: false, transitionPhase: "idle", transitionMessage: null });
+    set({ isTransitioning: false, isInitialLoading: false, isHomeIdle: false, transitionPhase: "idle", transitionMessage: null });
   },
 }));

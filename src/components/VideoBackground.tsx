@@ -5,23 +5,31 @@ import videoSrc from "@/assets/video.mp4";
 /**
  * VideoBackground
  *
- * Vídeo background ativo APENAS durante as transições de 3 segundos entre telas.
- * Em repouso (idle), o vídeo fica oculto (opacity 0) e pausado.
- * Durante a transição, surge com fade suave, roda em movimento e desvanece elegantemente.
+ * Na tela inicial (isHomeIdle), o vídeo do manequim roda continuamente em
+ * opacidade cheia, sem véu — pensado para totem, atraindo atenção enquanto
+ * ninguém interagiu ainda. Nas transições internas (entre etapas do
+ * formulário), o vídeo também aparece em opacidade cheia, mas recebe um véu
+ * escuro por cima para não quebrar o contraste do design daquelas telas.
+ * Em repouso fora da home (idle dentro do fluxo), o vídeo fica oculto.
  */
 export function VideoBackground() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const isTransitioning = useVideoStore((s) => s.isTransitioning);
   const isInitialLoading = useVideoStore((s) => s.isInitialLoading);
+  const isHomeIdle = useVideoStore((s) => s.isHomeIdle);
 
   const transitionPhase = useVideoStore((s) => s.transitionPhase);
   const transitionMessage = useVideoStore((s) => s.transitionMessage);
+
+  const isVideoActive = isTransitioning || isInitialLoading || isHomeIdle;
+  // Véu escuro aplicado apenas nas transições internas (não na home idle).
+  const showDarkVeil = isTransitioning && !isHomeIdle;
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    if (isTransitioning || isInitialLoading) {
+    if (isVideoActive) {
       const playPromise = video.play();
       if (playPromise && typeof playPromise.catch === "function") {
         playPromise.catch(() => {});
@@ -31,7 +39,7 @@ export function VideoBackground() {
         video.pause();
       } catch (_) {}
     }
-  }, [isTransitioning, isInitialLoading]);
+  }, [isVideoActive]);
 
   // Se a fase for 'enter' ou 'idle', queremos que a mensagem desapareça.
   const showMessage = transitionMessage !== null && transitionPhase === "exit";
@@ -52,12 +60,20 @@ export function VideoBackground() {
           loop
           preload="auto"
           className={`absolute top-0 right-0 h-full w-auto max-w-none translate-x-[45%] md:translate-x-1/4 transition-opacity duration-700 ease-in-out ${
-            isInitialLoading || isTransitioning ? "opacity-100" : "opacity-0"
+            isVideoActive ? "opacity-100" : "opacity-0"
           }`}
           style={{
             mixBlendMode: "screen",
             maskImage: "linear-gradient(to right, transparent 0%, black 25%, black 100%)",
             WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 25%, black 100%)",
+          }}
+        />
+        {/* Véu escuro sobre o vídeo, apenas nas transições internas */}
+        <div
+          className="absolute inset-0 transition-opacity duration-700 ease-in-out"
+          style={{
+            background: "#000000",
+            opacity: showDarkVeil ? 0.3 : 0,
           }}
         />
       </div>
