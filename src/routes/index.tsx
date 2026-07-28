@@ -38,11 +38,11 @@ function Home() {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
       setInitialLoading(true);
       triggerTransition(undefined, 4000); // 4s total de intro com vídeo
-      // O conteúdo começa a surgir suavemente em 2.2s, antes da intro de 4s terminar
+      // Antecipado para 1.5s, permitindo que o fade lento de 3s ocorra gradualmente durante o vídeo
       const timer = setTimeout(() => {
         setIsMobileLoading(false);
         setInitialLoading(false);
-      }, 2200);
+      }, 1500);
       return () => {
         clearTimeout(timer);
         setInitialLoading(false);
@@ -100,7 +100,7 @@ function Home() {
           style={{
             opacity: hideContent ? 0 : 1,
             transform: hideContent ? "translateY(24px) scale(0.96)" : "translateY(0) scale(1)",
-            transition: "opacity 2s cubic-bezier(0.22, 1, 0.36, 1), transform 2s cubic-bezier(0.22, 1, 0.36, 1)",
+            transition: "opacity 3s ease-in-out, transform 3s ease-in-out",
           }}
         >
           <div className="relative">

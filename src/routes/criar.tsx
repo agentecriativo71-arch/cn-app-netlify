@@ -369,7 +369,7 @@ function Criar() {
         style={{
           opacity: isExiting ? 0 : 1,
           transform: isExiting ? "translateY(-16px) scale(0.97)" : "translateY(0) scale(1)",
-          transition: "opacity 2s cubic-bezier(0.22, 1, 0.36, 1), transform 2s cubic-bezier(0.22, 1, 0.36, 1)",
+          transition: "opacity 3s ease-in-out, transform 3s ease-in-out",
         }}
       >
         <div className="space-y-6">
