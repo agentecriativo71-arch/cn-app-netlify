@@ -5,10 +5,14 @@ export type TransitionPhase = "idle" | "exit" | "enter";
 export type VideoStore = {
   /** Se uma transição entre telas/steps está em andamento */
   isTransitioning: boolean;
+  /** Se o carregamento inicial no mobile está ativo */
+  isInitialLoading: boolean;
   /** Fase atual da transição */
   transitionPhase: TransitionPhase;
   /** Dispara a transição de 3 segundos com callback no meio (para troca de tela) */
   triggerTransition: (onMidpoint?: () => void, durationMs?: number) => void;
+  /** Define se o carregamento inicial está ativo */
+  setInitialLoading: (loading: boolean) => void;
   /** Reseta o estado do store */
   reset: () => void;
 };
@@ -18,6 +22,7 @@ let midpointTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const useVideoStore = create<VideoStore>((set) => ({
   isTransitioning: false,
+  isInitialLoading: false,
   transitionPhase: "idle",
 
   triggerTransition: (onMidpoint, durationMs = 4000) => {
@@ -40,9 +45,11 @@ export const useVideoStore = create<VideoStore>((set) => ({
     }, durationMs);
   },
 
+  setInitialLoading: (loading: boolean) => set({ isInitialLoading: loading }),
+
   reset: () => {
     if (transitionTimer) clearTimeout(transitionTimer);
     if (midpointTimer) clearTimeout(midpointTimer);
-    set({ isTransitioning: false, transitionPhase: "idle" });
+    set({ isTransitioning: false, isInitialLoading: false, transitionPhase: "idle" });
   },
 }));

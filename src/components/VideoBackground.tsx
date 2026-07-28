@@ -12,12 +12,13 @@ import videoSrc from "@/assets/video.mp4";
 export function VideoBackground() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const isTransitioning = useVideoStore((s) => s.isTransitioning);
+  const isInitialLoading = useVideoStore((s) => s.isInitialLoading);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    if (isTransitioning) {
+    if (isTransitioning || isInitialLoading) {
       const playPromise = video.play();
       if (playPromise && typeof playPromise.catch === "function") {
         playPromise.catch(() => {});
@@ -27,7 +28,7 @@ export function VideoBackground() {
         video.pause();
       } catch (_) {}
     }
-  }, [isTransitioning]);
+  }, [isTransitioning, isInitialLoading]);
 
   return (
     <div
@@ -44,7 +45,7 @@ export function VideoBackground() {
         loop
         preload="auto"
         className={`absolute top-0 right-0 h-full w-auto max-w-none translate-x-[45%] md:translate-x-1/4 transition-opacity duration-700 ease-in-out ${
-          isTransitioning ? "opacity-100" : "opacity-25 md:opacity-100"
+          isInitialLoading ? "opacity-100" : "opacity-35 md:opacity-100"
         }`}
         style={{
           mixBlendMode: "screen",

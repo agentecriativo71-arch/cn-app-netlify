@@ -17,7 +17,7 @@ export const Route = createFileRoute("/")(  {
 function Home() {
   const router = useRouter();
   const s = useLook();
-  const { triggerTransition, transitionPhase, reset: resetVideo } = useVideoStore();
+  const { triggerTransition, transitionPhase, reset: resetVideo, setInitialLoading } = useVideoStore();
   const [showNomeModal, setShowNomeModal] = useState(false);
   // Sempre inicia como true (oculto). useLayoutEffect revela imediatamente no desktop
   // antes do 1º paint, evitando qualquer flash em produção (SSR/hidratação/code-split).
@@ -34,14 +34,19 @@ function Home() {
     s.reset();
     resetVideo();
 
-    // Apenas no mobile (largura < 768px), exibe tela de carregamento de 4s com o manequim caminhando
+    // Apenas no mobile (largura < 768px), exibe tela de carregamento de 4s com o manequim caminhando em 100% qualidade
     if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setInitialLoading(true);
       triggerTransition(undefined, 4000); // 4s total de intro com vídeo
       // O conteúdo começa a surgir suavemente em 2.2s, antes da intro de 4s terminar
       const timer = setTimeout(() => {
         setIsMobileLoading(false);
+        setInitialLoading(false);
       }, 2200);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        setInitialLoading(false);
+      };
     }
   }, []);
 
