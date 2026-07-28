@@ -348,10 +348,10 @@ function Criar() {
           biotipo: s.biotipo,
         });
         
-        // Transição com mensagem: total 5s, fade-in da nova tela no segundo 4.
+        // Transição rápida entre etapas: total 2s, fade-in da nova tela em 0.9s.
         triggerTransition(() => {
           setStepIndex(nextIndex);
-        }, 5000, 4000, msg);
+        }, 2000, 900, msg);
       });
     } else {
       setStepIndex(nextIndex);
@@ -369,10 +369,10 @@ function Criar() {
       });
 
       s.set({ croquiUrl: null, realistaUrl: null, dbId: null });
-      // Transição de 5s para o croqui, fade-in no segundo 4.
+      // Transição rápida para o croqui: total 2s, fade-in em 0.9s.
       triggerTransition(() => {
         router.navigate({ to: "/croqui" });
-      }, 5000, 4000, msg);
+      }, 2000, 900, msg);
     });
   };
 

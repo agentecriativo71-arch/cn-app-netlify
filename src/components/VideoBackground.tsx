@@ -68,8 +68,8 @@ export function VideoBackground() {
         style={{
           opacity: showMessage ? 1 : 0,
           transform: showMessage ? "translateY(0) scale(1)" : "translateY(16px) scale(0.95)",
-          transition: "opacity 1.5s ease-in-out, transform 1.5s ease-in-out",
-          transitionDelay: showMessage ? "1s" : "0s",
+          transition: "opacity 400ms ease-in-out, transform 400ms ease-in-out",
+          transitionDelay: showMessage ? "150ms" : "0s",
         }}
       >
         {transitionMessage && (
