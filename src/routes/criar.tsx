@@ -340,10 +340,19 @@ function Criar() {
     const nextIndex = currentStepIndex + 1;
     const nextStep = steps[nextIndex];
     if (nextStep && currentStep) {
-      // Dispara a transição lenta e elegante de 4 segundos com o vídeo de fundo
-      triggerTransition(() => {
-        setStepIndex(nextIndex);
-      }, 4000);
+      import("@/lib/transitionMessages").then(({ getTransitionMessage }) => {
+        const msg = getTransitionMessage(currentStep.id, nextStep.id, {
+          nome: s.nome,
+          ocasiao: s.ocasiao,
+          peca: s.peca,
+          biotipo: s.biotipo,
+        });
+        
+        // Transição com mensagem: total 5s, fade-in da nova tela no segundo 4.
+        triggerTransition(() => {
+          setStepIndex(nextIndex);
+        }, 5000, 4000, msg);
+      });
     } else {
       setStepIndex(nextIndex);
     }
@@ -351,11 +360,20 @@ function Criar() {
 
   const submit = () => {
     if (!valid) return;
-    s.set({ croquiUrl: null, realistaUrl: null, dbId: null });
-    // Transição de 4s para o croqui
-    triggerTransition(() => {
-      router.navigate({ to: "/croqui" });
-    }, 4000);
+    import("@/lib/transitionMessages").then(({ getTransitionMessage }) => {
+      const msg = getTransitionMessage(steps[currentStepIndex].id, "croqui", {
+        nome: s.nome,
+        ocasiao: s.ocasiao,
+        peca: s.peca,
+        biotipo: s.biotipo,
+      });
+
+      s.set({ croquiUrl: null, realistaUrl: null, dbId: null });
+      // Transição de 5s para o croqui, fade-in no segundo 4.
+      triggerTransition(() => {
+        router.navigate({ to: "/croqui" });
+      }, 5000, 4000, msg);
+    });
   };
 
   const isExiting = transitionPhase === "exit";

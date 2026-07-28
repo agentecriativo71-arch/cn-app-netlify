@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { TransitionMessage } from "./transitionMessages";
 
 export type TransitionPhase = "idle" | "exit" | "enter";
 
@@ -9,8 +10,10 @@ export type VideoStore = {
   isInitialLoading: boolean;
   /** Fase atual da transição */
   transitionPhase: TransitionPhase;
-  /** Dispara a transição de 3 segundos com callback no meio (para troca de tela) */
-  triggerTransition: (onMidpoint?: () => void, durationMs?: number) => void;
+  /** Mensagem exibida durante a transição */
+  transitionMessage: TransitionMessage | null;
+  /** Dispara a transição com callback no meio (para troca de tela) */
+  triggerTransition: (onMidpoint?: () => void, durationMs?: number, customMidpointMs?: number, message?: TransitionMessage) => void;
   /** Define se o carregamento inicial está ativo */
   setInitialLoading: (loading: boolean) => void;
   /** Reseta o estado do store */
@@ -24,16 +27,17 @@ export const useVideoStore = create<VideoStore>((set) => ({
   isTransitioning: false,
   isInitialLoading: false,
   transitionPhase: "idle",
+  transitionMessage: null,
 
-  triggerTransition: (onMidpoint, durationMs = 4000) => {
+  triggerTransition: (onMidpoint, durationMs = 4000, customMidpointMs, message) => {
     // Limpa timers anteriores se houver
     if (transitionTimer) clearTimeout(transitionTimer);
     if (midpointTimer) clearTimeout(midpointTimer);
 
     // Início: ativa vídeo e inicia fade out dos elementos atuais
-    set({ isTransitioning: true, transitionPhase: "exit" });
+    set({ isTransitioning: true, transitionPhase: "exit", transitionMessage: message || null });
 
-    const midpointMs = Math.floor(durationMs * 0.45); // ~1.8s para troca suave do conteúdo
+    const midpointMs = customMidpointMs ?? Math.floor(durationMs * 0.45);
 
     midpointTimer = setTimeout(() => {
       if (onMidpoint) onMidpoint();
@@ -41,7 +45,7 @@ export const useVideoStore = create<VideoStore>((set) => ({
     }, midpointMs);
 
     transitionTimer = setTimeout(() => {
-      set({ isTransitioning: false, transitionPhase: "idle" });
+      set({ isTransitioning: false, transitionPhase: "idle", transitionMessage: null });
     }, durationMs);
   },
 
@@ -50,6 +54,6 @@ export const useVideoStore = create<VideoStore>((set) => ({
   reset: () => {
     if (transitionTimer) clearTimeout(transitionTimer);
     if (midpointTimer) clearTimeout(midpointTimer);
-    set({ isTransitioning: false, isInitialLoading: false, transitionPhase: "idle" });
+    set({ isTransitioning: false, isInitialLoading: false, transitionPhase: "idle", transitionMessage: null });
   },
 }));
