@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect } from "react";
 import { useLook } from "@/lib/store";
 import { NomeModal } from "@/components/NomeModal";
 import { useVideoStore } from "@/lib/videoStore";
@@ -19,13 +19,16 @@ function Home() {
   const s = useLook();
   const { triggerTransition, transitionPhase, reset: resetVideo } = useVideoStore();
   const [showNomeModal, setShowNomeModal] = useState(false);
-  // Inicialização síncrona: se for mobile, inicia IMEDIATAMENTE como true (evita qualquer flash de conteúdo)
-  const [isMobileLoading, setIsMobileLoading] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.innerWidth < 768;
+  // Sempre inicia como true (oculto). useLayoutEffect revela imediatamente no desktop
+  // antes do 1º paint, evitando qualquer flash em produção (SSR/hidratação/code-split).
+  const [isMobileLoading, setIsMobileLoading] = useState(true);
+
+  useLayoutEffect(() => {
+    // Desktop: revela imediatamente, antes do paint
+    if (window.innerWidth >= 768) {
+      setIsMobileLoading(false);
     }
-    return false;
-  });
+  }, []);
 
   useEffect(() => {
     s.reset();
