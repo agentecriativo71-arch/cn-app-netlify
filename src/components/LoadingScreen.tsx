@@ -48,7 +48,7 @@ export function LoadingScreen({
     <div
       className="fixed inset-0 z-50 flex flex-col items-center justify-center p-6 animate-in fade-in duration-300"
       style={{
-        background: "linear-gradient(180deg, oklch(0.99 0.005 160), oklch(0.96 0.01 160))",
+        background: "radial-gradient(circle at 50% 30%, #044d28 0%, #022a1a 60%, #01190f 100%)",
       }}
     >
       {/* Decorative blobs */}
@@ -59,7 +59,7 @@ export function LoadingScreen({
         width: "300px",
         height: "300px",
         borderRadius: "50%",
-        background: "radial-gradient(circle, oklch(0.90 0.05 160 / 0.2), transparent 70%)",
+        background: "radial-gradient(circle, oklch(0.88 0.06 160 / 0.1), transparent 70%)",
         filter: "blur(40px)",
         pointerEvents: "none",
       }} />
@@ -70,7 +70,7 @@ export function LoadingScreen({
         width: "250px",
         height: "250px",
         borderRadius: "50%",
-        background: "radial-gradient(circle, oklch(0.92 0.05 75 / 0.15), transparent 70%)",
+        background: "radial-gradient(circle, oklch(0.9 0.06 75 / 0.08), transparent 70%)",
         filter: "blur(40px)",
         pointerEvents: "none",
       }} />
@@ -90,7 +90,7 @@ export function LoadingScreen({
           <div className="font-bold tracking-wider" style={{
             fontFamily: "var(--font-display)",
             fontSize: "36px",
-            background: "linear-gradient(135deg, oklch(0.42 0.12 160), oklch(0.72 0.13 75))",
+            background: "linear-gradient(135deg, #E6DEC9, #E5D3A2)",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
           }}>
@@ -98,17 +98,17 @@ export function LoadingScreen({
           </div>
 
           {/* Progress track */}
-          <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "oklch(0.93 0.02 160)" }}>
-            <div 
+          <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255, 255, 255, 0.15)" }}>
+            <div
               className="h-full rounded-full transition-all duration-75"
               style={{
                 width: `${progress}%`,
-                background: "linear-gradient(90deg, oklch(0.42 0.12 160), oklch(0.52 0.11 160))",
+                background: "linear-gradient(90deg, #E6DEC9, #E5D3A2)",
               }}
             />
           </div>
 
-          <p className="text-[14px] font-medium tracking-wide" style={{ color: "var(--color-muted-foreground)" }}>
+          <p className="text-[14px] font-medium tracking-wide text-white/70">
             {statusText}
           </p>
         </div>
