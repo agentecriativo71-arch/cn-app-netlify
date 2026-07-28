@@ -19,7 +19,13 @@ function Home() {
   const s = useLook();
   const { triggerTransition, transitionPhase, reset: resetVideo } = useVideoStore();
   const [showNomeModal, setShowNomeModal] = useState(false);
-  const [isMobileLoading, setIsMobileLoading] = useState(false);
+  // Inicialização síncrona: se for mobile, inicia IMEDIATAMENTE como true (evita qualquer flash de conteúdo)
+  const [isMobileLoading, setIsMobileLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
 
   useEffect(() => {
     s.reset();
@@ -27,7 +33,6 @@ function Home() {
 
     // Apenas no mobile (largura < 768px), exibe tela de carregamento de 4s com o manequim caminhando
     if (typeof window !== "undefined" && window.innerWidth < 768) {
-      setIsMobileLoading(true);
       triggerTransition(undefined, 4000); // 4s total de intro com vídeo
       // O conteúdo começa a surgir suavemente em 2.2s, antes da intro de 4s terminar
       const timer = setTimeout(() => {
@@ -81,9 +86,9 @@ function Home() {
         </div>
       )}
       <main className="min-h-screen max-md:min-h-[calc(100vh-1rem)] flex flex-col items-center justify-between max-md:justify-end px-5 pt-6 pb-4 max-md:pb-3 relative z-10 text-center select-none">
-        {/* Main Title & Action — Card Glass colado na borda inferior no Mobile */}
+        {/* Main Title & Action — Card Glass afastado 20px da borda inferior no Mobile */}
         <div
-          className="w-full max-w-md my-auto max-md:my-0 max-md:mt-auto max-md:mb-0 flex flex-col items-center justify-center gap-7 sm:gap-10 max-md:bg-black/35 max-md:backdrop-blur-md max-md:p-6 max-md:rounded-3xl max-md:border max-md:border-white/15 max-md:shadow-2xl"
+          className="w-full max-w-md my-auto max-md:my-0 max-md:mt-auto max-md:mb-5 flex flex-col items-center justify-center gap-7 sm:gap-10 max-md:bg-black/35 max-md:backdrop-blur-md max-md:p-6 max-md:rounded-3xl max-md:border max-md:border-white/15 max-md:shadow-2xl"
           style={{
             opacity: hideContent ? 0 : 1,
             transform: hideContent ? "translateY(24px) scale(0.96)" : "translateY(0) scale(1)",
