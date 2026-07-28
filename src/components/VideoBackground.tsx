@@ -18,12 +18,15 @@ export function VideoBackground() {
   const isInitialLoading = useVideoStore((s) => s.isInitialLoading);
   const isHomeIdle = useVideoStore((s) => s.isHomeIdle);
 
-  const transitionPhase = useVideoStore((s) => s.transitionPhase);
   const transitionMessage = useVideoStore((s) => s.transitionMessage);
+  const messageVisible = useVideoStore((s) => s.messageVisible);
 
-  const isVideoActive = isTransitioning || isInitialLoading || isHomeIdle;
+  const showMessage = transitionMessage !== null && messageVisible;
+  // Mantém o vídeo (com véu) visível enquanto a mensagem ainda estiver
+  // flutuando sobre a nova tela, mesmo após a transição em si já ter acabado.
+  const isVideoActive = isTransitioning || isInitialLoading || isHomeIdle || showMessage;
   // Véu escuro aplicado apenas nas transições internas (não na home idle).
-  const showDarkVeil = isTransitioning && !isHomeIdle;
+  const showDarkVeil = (isTransitioning || showMessage) && !isHomeIdle;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -40,9 +43,6 @@ export function VideoBackground() {
       } catch (_) {}
     }
   }, [isVideoActive]);
-
-  // Se a fase for 'enter' ou 'idle', queremos que a mensagem desapareça.
-  const showMessage = transitionMessage !== null && transitionPhase === "exit";
 
   return (
     <>
@@ -73,7 +73,7 @@ export function VideoBackground() {
           className="absolute inset-0 transition-opacity duration-700 ease-in-out"
           style={{
             background: "#000000",
-            opacity: showDarkVeil ? 0.3 : 0,
+            opacity: showDarkVeil ? 0.2 : 0,
           }}
         />
       </div>

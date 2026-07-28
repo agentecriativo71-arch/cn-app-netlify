@@ -14,8 +14,11 @@ export type VideoStore = {
   transitionPhase: TransitionPhase;
   /** Mensagem exibida durante a transição */
   transitionMessage: TransitionMessage | null;
-  /** Dispara a transição com callback no meio (para troca de tela) */
-  triggerTransition: (onMidpoint?: () => void, durationMs?: number, customMidpointMs?: number, message?: TransitionMessage) => void;
+  /** Se a mensagem de transição deve estar visível (pode persistir além da troca de tela) */
+  messageVisible: boolean;
+  /** Dispara a transição com callback no meio (para troca de tela). messageHoldMs mantém a
+   *  mensagem visível por cima da nova tela por mais tempo, sem atrasar a navegação em si. */
+  triggerTransition: (onMidpoint?: () => void, durationMs?: number, customMidpointMs?: number, message?: TransitionMessage, messageHoldMs?: number) => void;
   /** Define se o carregamento inicial está ativo */
   setInitialLoading: (loading: boolean) => void;
   /** Define se está na tela inicial aguardando interação */
@@ -26,6 +29,7 @@ export type VideoStore = {
 
 let transitionTimer: ReturnType<typeof setTimeout> | null = null;
 let midpointTimer: ReturnType<typeof setTimeout> | null = null;
+let messageHoldTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const useVideoStore = create<VideoStore>((set) => ({
   isTransitioning: false,
@@ -33,14 +37,16 @@ export const useVideoStore = create<VideoStore>((set) => ({
   isHomeIdle: false,
   transitionPhase: "idle",
   transitionMessage: null,
+  messageVisible: false,
 
-  triggerTransition: (onMidpoint, durationMs = 4000, customMidpointMs, message) => {
+  triggerTransition: (onMidpoint, durationMs = 4000, customMidpointMs, message, messageHoldMs = 0) => {
     // Limpa timers anteriores se houver
     if (transitionTimer) clearTimeout(transitionTimer);
     if (midpointTimer) clearTimeout(midpointTimer);
+    if (messageHoldTimer) clearTimeout(messageHoldTimer);
 
     // Início: ativa vídeo e inicia fade out dos elementos atuais
-    set({ isTransitioning: true, transitionPhase: "exit", transitionMessage: message || null });
+    set({ isTransitioning: true, transitionPhase: "exit", transitionMessage: message || null, messageVisible: !!message });
 
     const midpointMs = customMidpointMs ?? Math.floor(durationMs * 0.45);
 
@@ -50,8 +56,15 @@ export const useVideoStore = create<VideoStore>((set) => ({
     }, midpointMs);
 
     transitionTimer = setTimeout(() => {
-      set({ isTransitioning: false, transitionPhase: "idle", transitionMessage: null });
+      set({ isTransitioning: false, transitionPhase: "idle" });
     }, durationMs);
+
+    // A mensagem pode persistir além do fim da transição da tela em si,
+    // dando tempo de leitura sem atrasar a navegação.
+    const messageEndMs = durationMs + messageHoldMs;
+    messageHoldTimer = setTimeout(() => {
+      set({ messageVisible: false, transitionMessage: null });
+    }, messageEndMs);
   },
 
   setInitialLoading: (loading: boolean) => set({ isInitialLoading: loading }),
@@ -61,6 +74,7 @@ export const useVideoStore = create<VideoStore>((set) => ({
   reset: () => {
     if (transitionTimer) clearTimeout(transitionTimer);
     if (midpointTimer) clearTimeout(midpointTimer);
-    set({ isTransitioning: false, isInitialLoading: false, isHomeIdle: false, transitionPhase: "idle", transitionMessage: null });
+    if (messageHoldTimer) clearTimeout(messageHoldTimer);
+    set({ isTransitioning: false, isInitialLoading: false, isHomeIdle: false, transitionPhase: "idle", transitionMessage: null, messageVisible: false });
   },
 }));

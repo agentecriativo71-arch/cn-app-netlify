@@ -349,9 +349,11 @@ function Criar() {
         });
         
         // Transição rápida entre etapas: total 2s, fade-in da nova tela em 0.9s.
+        // A mensagem permanece visível por mais 1.8s sobre a nova tela, dando
+        // tempo de leitura sem atrasar a navegação em si.
         triggerTransition(() => {
           setStepIndex(nextIndex);
-        }, 2000, 900, msg);
+        }, 2000, 900, msg, 1800);
       });
     } else {
       setStepIndex(nextIndex);
@@ -369,10 +371,11 @@ function Criar() {
       });
 
       s.set({ croquiUrl: null, realistaUrl: null, dbId: null });
-      // Transição rápida para o croqui: total 2s, fade-in em 0.9s.
+      // Transição rápida para o croqui: total 2s, fade-in em 0.9s, mensagem
+      // com 1.8s extra de leitura sobre a tela de loading do croqui.
       triggerTransition(() => {
         router.navigate({ to: "/croqui" });
-      }, 2000, 900, msg);
+      }, 2000, 900, msg, 1800);
     });
   };
 
