@@ -52,7 +52,7 @@ export function VideoBackground() {
           loop
           preload="auto"
           className={`absolute top-0 right-0 h-full w-auto max-w-none translate-x-[45%] md:translate-x-1/4 transition-opacity duration-700 ease-in-out ${
-            isInitialLoading ? "opacity-100" : "opacity-35 md:opacity-100"
+            isInitialLoading || isTransitioning ? "opacity-100" : "opacity-0"
           }`}
           style={{
             mixBlendMode: "screen",
