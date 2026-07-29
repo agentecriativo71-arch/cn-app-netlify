@@ -341,8 +341,8 @@
     overflow: hidden;
     transition: all 280ms cubic-bezier(0.4, 0, 0.2, 1);
     background: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(30px);
-    -webkit-backdrop-filter: blur(30px);
+    backdrop-filter: blur(50px);
+    -webkit-backdrop-filter: blur(50px);
     display: flex;
     flex-direction: column;
     cursor: pointer;
