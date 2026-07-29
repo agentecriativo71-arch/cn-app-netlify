@@ -7,8 +7,8 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 export default defineConfig({
   plugins: [
     tanstackStart({
-      deployment: {
-        preset: "netlify",
+      server: {
+        preset: "node-server",
       },
     }),
     react(),
