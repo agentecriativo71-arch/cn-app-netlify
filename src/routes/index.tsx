@@ -17,7 +17,7 @@ export const Route = createFileRoute("/")(  {
 function Home() {
   const router = useRouter();
   const s = useLook();
-  const { triggerTransition, transitionPhase, reset: resetVideo, setInitialLoading, setHomeIdle } = useVideoStore();
+  const { triggerTransition, transitionPhase, reset: resetVideo } = useVideoStore();
   const [showNomeModal, setShowNomeModal] = useState(false);
   // Sempre inicia como true (oculto). useLayoutEffect revela imediatamente no desktop
   // antes do 1º paint, evitando qualquer flash em produção (SSR/hidratação/code-split).
@@ -34,34 +34,20 @@ function Home() {
     s.reset();
     resetVideo();
 
-    // Vídeo do manequim sempre ativo na tela inicial, aguardando interação (totem)
-    setHomeIdle(true);
-
     // Apenas no mobile (largura < 768px), exibe tela de carregamento de 4s com o manequim caminhando em 100% qualidade
     if (typeof window !== "undefined" && window.innerWidth < 768) {
-      setInitialLoading(true);
       triggerTransition(undefined, 4000); // 4s total de intro com vídeo
       // Antecipado para 1.5s, permitindo que o fade lento de 3s ocorra gradualmente durante o vídeo
       const timer = setTimeout(() => {
         setIsMobileLoading(false);
-        setInitialLoading(false);
       }, 1500);
       return () => {
         clearTimeout(timer);
-        setInitialLoading(false);
-        setHomeIdle(false);
       };
     }
-
-    return () => {
-      setHomeIdle(false);
-    };
   }, []);
 
   const goToCriar = () => {
-    // isHomeIdle permanece true durante toda a transição de entrada — o
-    // vídeo do manequim continua sem véu até a Home desmontar de fato
-    // (cleanup do useEffect acima), ou seja, até /criar estar montada.
     // Transição lenta e fluida de 4s
     triggerTransition(() => {
       router.navigate({ to: "/criar" });

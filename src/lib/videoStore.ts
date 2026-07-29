@@ -6,10 +6,6 @@ export type TransitionPhase = "idle" | "exit" | "enter";
 export type VideoStore = {
   /** Se uma transição entre telas/steps está em andamento */
   isTransitioning: boolean;
-  /** Se o carregamento inicial no mobile está ativo */
-  isInitialLoading: boolean;
-  /** Se está na tela inicial aguardando interação (vídeo sempre visível, sem véu) */
-  isHomeIdle: boolean;
   /** Fase atual da transição */
   transitionPhase: TransitionPhase;
   /** Mensagem exibida durante a transição */
@@ -19,10 +15,6 @@ export type VideoStore = {
   /** Dispara a transição com callback no meio (para troca de tela). messageHoldMs mantém a
    *  mensagem visível por cima da nova tela por mais tempo, sem atrasar a navegação em si. */
   triggerTransition: (onMidpoint?: () => void, durationMs?: number, customMidpointMs?: number, message?: TransitionMessage, messageHoldMs?: number) => void;
-  /** Define se o carregamento inicial está ativo */
-  setInitialLoading: (loading: boolean) => void;
-  /** Define se está na tela inicial aguardando interação */
-  setHomeIdle: (idle: boolean) => void;
   /** Reseta o estado do store */
   reset: () => void;
 };
@@ -33,8 +25,6 @@ let messageHoldTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const useVideoStore = create<VideoStore>((set) => ({
   isTransitioning: false,
-  isInitialLoading: false,
-  isHomeIdle: false,
   transitionPhase: "idle",
   transitionMessage: null,
   messageVisible: false,
@@ -67,14 +57,10 @@ export const useVideoStore = create<VideoStore>((set) => ({
     }, messageEndMs);
   },
 
-  setInitialLoading: (loading: boolean) => set({ isInitialLoading: loading }),
-
-  setHomeIdle: (idle: boolean) => set({ isHomeIdle: idle }),
-
   reset: () => {
     if (transitionTimer) clearTimeout(transitionTimer);
     if (midpointTimer) clearTimeout(midpointTimer);
     if (messageHoldTimer) clearTimeout(messageHoldTimer);
-    set({ isTransitioning: false, isInitialLoading: false, isHomeIdle: false, transitionPhase: "idle", transitionMessage: null, messageVisible: false });
+    set({ isTransitioning: false, transitionPhase: "idle", transitionMessage: null, messageVisible: false });
   },
 }));

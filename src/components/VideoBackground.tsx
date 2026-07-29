@@ -5,44 +5,35 @@ import videoSrc from "@/assets/video.mp4";
 /**
  * VideoBackground
  *
- * Na tela inicial (isHomeIdle), o vídeo do manequim roda continuamente em
- * opacidade cheia, sem véu — pensado para totem, atraindo atenção enquanto
- * ninguém interagiu ainda. Nas transições internas (entre etapas do
- * formulário), o vídeo também aparece em opacidade cheia, mas recebe um véu
- * escuro por cima para não quebrar o contraste do design daquelas telas.
- * Em repouso fora da home (idle dentro do fluxo), o vídeo fica oculto.
+ * O vídeo do manequim fica sempre visível e rodando, em qualquer tela e
+ * qualquer dispositivo — sem depender de mix-blend-mode. Um véu escuro
+ * simples (sem blend mode) fica sempre por cima, um pouco mais forte
+ * durante as transições internas do formulário para preservar contraste,
+ * e um pouco mais leve fora delas. Essa escolha evita a combinação
+ * mix-blend-mode + PNG de alpha parcial + backdrop-filter dos cards, que
+ * é uma área de composição historicamente inconsistente entre engines
+ * (Blink/Chrome vs. WebKit/Safari) — com opacidade direta, a aparência
+ * fica idêntica em qualquer navegador.
  */
 export function VideoBackground() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const isTransitioning = useVideoStore((s) => s.isTransitioning);
-  const isInitialLoading = useVideoStore((s) => s.isInitialLoading);
-  const isHomeIdle = useVideoStore((s) => s.isHomeIdle);
-
   const transitionMessage = useVideoStore((s) => s.transitionMessage);
   const messageVisible = useVideoStore((s) => s.messageVisible);
 
   const showMessage = transitionMessage !== null && messageVisible;
-  // Mantém o vídeo (com véu) visível enquanto a mensagem ainda estiver
-  // flutuando sobre a nova tela, mesmo após a transição em si já ter acabado.
-  const isVideoActive = isTransitioning || isInitialLoading || isHomeIdle || showMessage;
-  // Véu escuro aplicado apenas nas transições internas (não na home idle).
-  const showDarkVeil = (isTransitioning || showMessage) && !isHomeIdle;
+  // Véu um pouco mais forte durante transições internas (com mensagem
+  // flutuando por cima), um pouco mais leve em repouso.
+  const isDimmed = isTransitioning || showMessage;
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-
-    if (isVideoActive) {
-      const playPromise = video.play();
-      if (playPromise && typeof playPromise.catch === "function") {
-        playPromise.catch(() => {});
-      }
-    } else {
-      try {
-        video.pause();
-      } catch (_) {}
+    const playPromise = video.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {});
     }
-  }, [isVideoActive]);
+  }, []);
 
   return (
     <>
@@ -58,29 +49,22 @@ export function VideoBackground() {
           muted
           playsInline
           loop
+          autoPlay
           preload="auto"
-          className={`absolute top-0 right-0 h-full w-auto max-w-none translate-x-[45%] md:translate-x-1/4 transition-opacity duration-700 ease-in-out ${
-            !isVideoActive
-              ? "opacity-0"
-              : showDarkVeil
-                ? "opacity-15 md:opacity-100"
-                : "opacity-100"
-          }`}
+          className="absolute top-0 right-0 h-full w-auto max-w-none translate-x-[45%] md:translate-x-1/4"
           style={{
-            mixBlendMode: "screen",
             maskImage: "linear-gradient(to right, transparent 0%, black 25%, black 100%)",
             WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 25%, black 100%)",
           }}
         />
-        {/* Véu escuro sobre o vídeo, apenas nas transições internas no desktop.
-            No mobile o mixBlendMode "screen" faz o vídeo "estourar" por cima
-            de qualquer véu escuro colocado acima dele — reduzir a opacidade
-            do próprio vídeo (acima) é o que de fato controla o brilho ali. */}
+        {/* Véu escuro fixo, sempre presente, sem blend mode — garante a
+            mesma aparência "escurecida" em qualquer navegador/dispositivo. */}
         <div
-          className={`absolute inset-0 transition-opacity duration-700 ease-in-out hidden md:block ${
-            showDarkVeil ? "opacity-20" : "opacity-0"
-          }`}
-          style={{ background: "#000000" }}
+          className="absolute inset-0 transition-opacity duration-700 ease-in-out"
+          style={{
+            background: "#000000",
+            opacity: isDimmed ? 0.55 : 0.4,
+          }}
         />
       </div>
 
