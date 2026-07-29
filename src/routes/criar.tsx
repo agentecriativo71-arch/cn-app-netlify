@@ -135,6 +135,7 @@ function ElementGrid({ items, selected, onSelect }: {
             className="card-element"
             data-selected={isSelected}
           >
+            <div className="card-glass" />
             <div className="card-element-image">
               {el.image_url ? (
                 <img
