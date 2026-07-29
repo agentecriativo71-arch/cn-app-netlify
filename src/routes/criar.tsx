@@ -129,13 +129,20 @@ function ElementGrid({ items, selected, onSelect }: {
       {items.map(el => {
         const isSelected = selected === el.nome;
         return (
-          <button
+          <div
             key={el.id}
+            role="button"
+            tabIndex={0}
             onClick={() => onSelect(isSelected ? "" : el.nome)}
-            className="card-element"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect(isSelected ? "" : el.nome);
+              }
+            }}
+            className="card-element bg-black/35 backdrop-blur-md border border-white/15 shadow-2xl"
             data-selected={isSelected}
           >
-            <div className="card-glass" />
             <div className="card-element-image">
               {el.image_url ? (
                 <img
@@ -151,7 +158,7 @@ function ElementGrid({ items, selected, onSelect }: {
               )}
             </div>
             <div className="card-element-label">{el.nome}</div>
-          </button>
+          </div>
         );
       })}
     </div>
