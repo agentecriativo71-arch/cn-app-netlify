@@ -60,7 +60,11 @@ export function VideoBackground() {
           loop
           preload="auto"
           className={`absolute top-0 right-0 h-full w-auto max-w-none translate-x-[45%] md:translate-x-1/4 transition-opacity duration-700 ease-in-out ${
-            isVideoActive ? "opacity-100" : "opacity-0"
+            !isVideoActive
+              ? "opacity-0"
+              : showDarkVeil
+                ? "opacity-15 md:opacity-100"
+                : "opacity-100"
           }`}
           style={{
             mixBlendMode: "screen",
@@ -68,13 +72,15 @@ export function VideoBackground() {
             WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 25%, black 100%)",
           }}
         />
-        {/* Véu escuro sobre o vídeo, apenas nas transições internas */}
+        {/* Véu escuro sobre o vídeo, apenas nas transições internas no desktop.
+            No mobile o mixBlendMode "screen" faz o vídeo "estourar" por cima
+            de qualquer véu escuro colocado acima dele — reduzir a opacidade
+            do próprio vídeo (acima) é o que de fato controla o brilho ali. */}
         <div
-          className="absolute inset-0 transition-opacity duration-700 ease-in-out"
-          style={{
-            background: "#000000",
-            opacity: showDarkVeil ? 0.2 : 0,
-          }}
+          className={`absolute inset-0 transition-opacity duration-700 ease-in-out hidden md:block ${
+            showDarkVeil ? "opacity-20" : "opacity-0"
+          }`}
+          style={{ background: "#000000" }}
         />
       </div>
 
