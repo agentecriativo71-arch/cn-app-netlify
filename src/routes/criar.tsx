@@ -388,8 +388,8 @@ function Criar() {
       <main
         className="container-app px-5 py-8 pb-36 flex flex-col justify-center flex-1"
         style={{
-          opacity: isExiting ? 0 : 1,
-          transform: isExiting ? "translateY(-16px) scale(0.97)" : "translateY(0) scale(1)",
+          opacity: isExiting ? 0 : undefined,
+          transform: isExiting ? "translateY(-16px) scale(0.97)" : "none",
           transition: "opacity 3s ease-in-out, transform 3s ease-in-out",
         }}
       >
