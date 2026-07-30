@@ -140,7 +140,7 @@ function ElementGrid({ items, selected, onSelect }: {
                 onSelect(isSelected ? "" : el.nome);
               }
             }}
-            className="card-element bg-black/35 backdrop-blur-md border border-white/15 shadow-2xl"
+            className="card-element border border-white/15 shadow-2xl"
             data-selected={isSelected}
           >
             <div className="card-element-image">
