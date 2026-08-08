@@ -3,6 +3,8 @@ import { create } from "zustand";
 export type LookState = {
   nome: string | null;
   ocasiao: string | null;
+  tipoCerimonia: string | null;
+  rendaDecisao: boolean | null;
   biotipo: string | null;
   peca: string | null;
   comprimento: string | null;
@@ -23,7 +25,7 @@ export type LookState = {
 
 const initial = {
   nome: null,
-  ocasiao: null, biotipo: null, peca: null, comprimento: null,
+  ocasiao: null, tipoCerimonia: null, rendaDecisao: null, biotipo: null, peca: null, comprimento: null,
   decote: null, manga: null, saia: null, renda: null, cor: null,
   comentario: null, modo: null, fotoUrl: null, croquiUrl: null,
   realistaUrl: null, dbId: null,

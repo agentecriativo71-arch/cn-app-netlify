@@ -11,14 +11,12 @@ import ocasiaoCasamento from "@/assets/ocasiao-casamento.png";
 import ocasiaoFesta from "@/assets/ocasiao-festa.png";
 import ocasiaoTrabalho from "@/assets/ocasiao-trabalho.png";
 import ocasiaoCasual from "@/assets/ocasiao-casual.png";
-import ocasiaoGala from "@/assets/ocasiao-gala.png";
 
 const OCASIOES_ITEMS = [
-  { id: "casamento", nome: "Casamento", image_url: ocasiaoCasamento },
+  { id: "noiva", nome: "Noiva", image_url: ocasiaoCasamento },
   { id: "festa", nome: "Festa", image_url: ocasiaoFesta },
-  { id: "trabalho", nome: "Trabalho", image_url: ocasiaoTrabalho },
   { id: "casual", nome: "Casual", image_url: ocasiaoCasual },
-  { id: "gala", nome: "Gala", image_url: ocasiaoGala },
+  { id: "fardamento", nome: "Fardamento", image_url: ocasiaoTrabalho },
 ];
 
 import pecaVestido from "@/assets/peca-vestido.png";
@@ -26,27 +24,46 @@ import pecaSaia from "@/assets/peca-saia.png";
 import pecaBlusa from "@/assets/peca-blusa.png";
 import pecaCalca from "@/assets/peca-calca.png";
 import pecaMacacao from "@/assets/peca-macacao.png";
+import pecaTop from "@/assets/peca-top.png";
+import pecaShortBermuda from "@/assets/peca-short-bermuda.png";
+import pecaBlazer from "@/assets/peca-blazer.png";
 
-const PECAS_ITEMS = [
-  { id: "vestido", nome: "Vestido", image_url: pecaVestido },
-  { id: "saia", nome: "Saia", image_url: pecaSaia },
-  { id: "blusa", nome: "Blusa", image_url: pecaBlusa },
-  { id: "calca", nome: "Calça", image_url: pecaCalca },
-  { id: "macacao", nome: "Macacão", image_url: pecaMacacao },
-];
+const PECAS_POR_CATEGORIA: Record<string, any[]> = {
+  "Noiva": [],
+  "Festa": [
+    { id: "vestido", nome: "Vestido", image_url: pecaVestido },
+    { id: "saia", nome: "Saia", image_url: pecaSaia },
+    { id: "blusa", nome: "Blusa", image_url: pecaBlusa },
+    { id: "calca", nome: "Calça", image_url: pecaCalca },
+    { id: "macacao", nome: "Macacão", image_url: pecaMacacao },
+  ],
+  "Casual": [
+    { id: "vestido", nome: "Vestido", image_url: pecaVestido },
+    { id: "top", nome: "Top", image_url: pecaTop },
+    { id: "blusa", nome: "Blusa", image_url: pecaBlusa },
+    { id: "macacao", nome: "Macacão", image_url: pecaMacacao },
+    { id: "calca", nome: "Calça", image_url: pecaCalca },
+    { id: "short_bermuda", nome: "Short/Bermuda", image_url: pecaShortBermuda },
+  ],
+  "Fardamento": [
+    { id: "calca", nome: "Calça", image_url: pecaCalca },
+    { id: "blusa", nome: "Blusa", image_url: pecaBlusa },
+    { id: "blazer", nome: "Blazer", image_url: pecaBlazer },
+    { id: "saia", nome: "Saia", image_url: pecaSaia },
+    { id: "vestido", nome: "Vestido", image_url: pecaVestido },
+  ],
+};
 
 import biotipoAmpulheta from "@/assets/biotipo-ampulheta.png";
 import biotipoTriangulo from "@/assets/biotipo-triangulo.png";
 import biotipoTrianguloInvertido from "@/assets/biotipo-triangulo-invertido.png";
 import biotipoRetangulo from "@/assets/biotipo-retangulo.png";
-import biotipoOval from "@/assets/biotipo-oval.png";
 
 const BIOTIPOS_ITEMS = [
   { id: "ampulheta", nome: "Ampulheta", image_url: biotipoAmpulheta },
   { id: "triangulo", nome: "Triângulo", image_url: biotipoTriangulo },
   { id: "triangulo_invertido", nome: "Triângulo Invertido", image_url: biotipoTrianguloInvertido },
   { id: "retangulo", nome: "Retângulo", image_url: biotipoRetangulo },
-  { id: "oval", nome: "Oval", image_url: biotipoOval },
 ];
 
 export const Route = createFileRoute("/criar")({
@@ -54,10 +71,11 @@ export const Route = createFileRoute("/criar")({
   head: () => ({ meta: [{ title: "Criar look — C&N Tecidos" }] }),
 });
 
-const OCASIOES = ["Casamento", "Festa", "Trabalho", "Casual", "Gala"];
-const BIOTIPOS = ["Ampulheta", "Triângulo", "Triângulo Invertido", "Retângulo", "Oval"];
-const PECAS = ["Vestido", "Saia", "Blusa", "Calça", "Macacão"];
+const OCASIOES = ["Noiva", "Festa", "Casual", "Fardamento"];
+const BIOTIPOS = ["Ampulheta", "Triângulo", "Triângulo Invertido", "Retângulo"];
 const COMPRIMENTOS = ["Curto", "Médio", "Longo", "Midi"];
+const TIPOS_CERIMONIA = ["Civil", "Igreja", "Cerimônia Aberta"];
+const DECISAO_RENDA = ["Sim", "Não"];
 
 // Elementos por categoria que possuem imagem
 const MANGAS = elementosData.filter(e => e.categoria === "manga" && e.image_url);
@@ -119,13 +137,14 @@ function ChipRow({ items, selected, onSelect }: {
 }
 
 /** Grid de cards com imagem + label */
-function ElementGrid({ items, selected, onSelect }: {
+function ElementGrid({ items, selected, onSelect, className }: {
   items: { id: number | string; nome: string; image_url?: string | null }[];
   selected: string | null;
   onSelect: (nome: string) => void;
+  className?: string;
 }) {
   return (
-    <div className="element-grid">
+    <div className={`element-grid ${className || ""}`}>
       {items.map(el => {
         const isSelected = selected === el.nome;
         return (
@@ -179,165 +198,261 @@ function Criar() {
     }
   }, [s.nome, router]);
 
-  const valid = s.nome && s.peca && s.biotipo;
+  const isNoiva = s.ocasiao === "Noiva";
+  const valid = s.nome && s.ocasiao && (isNoiva ? (s.tipoCerimonia && s.rendaDecisao !== null && s.comprimento && s.biotipo) : (s.peca && s.biotipo));
 
   // Condicionais de exibição baseadas na peça principal selecionada
-  const showComprimento = s.peca === "Vestido" || s.peca === "Saia";
-  const showDecote = s.peca === "Vestido" || s.peca === "Blusa" || s.peca === "Macacão";
+  const pecaAtual = isNoiva ? "Vestido" : s.peca;
+  const showComprimento = pecaAtual === "Vestido" || pecaAtual === "Saia";
+  const showDecote = !isNoiva && (pecaAtual === "Vestido" || pecaAtual === "Blusa" || pecaAtual === "Macacão" || pecaAtual === "Top");
   const isSleevelessDecote = s.decote === "Frente Única" || s.decote === "Coração (Sweetheart)" || s.decote === "Tomara que Caia";
-  const showManga = (s.peca === "Vestido" || s.peca === "Blusa" || s.peca === "Macacão") && !isSleevelessDecote;
-  const showSaia = s.peca === "Vestido" || s.peca === "Saia";
-  const showRenda = RENDAS.length > 0 && (s.peca === "Vestido" || s.peca === "Saia" || s.peca === "Blusa");
+  const showManga = !isNoiva && (pecaAtual === "Vestido" || pecaAtual === "Blusa" || pecaAtual === "Macacão" || pecaAtual === "Top") && !isSleevelessDecote;
+  const showSaia = !isNoiva && (pecaAtual === "Vestido" || pecaAtual === "Saia");
+  const showRenda = !isNoiva && RENDAS.length > 0 && (pecaAtual === "Vestido" || pecaAtual === "Saia" || pecaAtual === "Blusa" || pecaAtual === "Top");
 
   // Definindo as etapas ativas dinamicamente
-  const steps = [
-    { 
-      id: "ocasiao", 
-      title: "Escolha a Ocasião", 
-      hint: "Opcional", 
-      valid: true,
+  const steps: any[] = [];
+
+  steps.push({
+    id: "ocasiao",
+    title: "Escolha a Ocasião",
+    hint: "Obrigatório",
+    valid: !!s.ocasiao,
+    render: () => (
+      <ElementGrid
+        className="grid-2x2"
+        items={OCASIOES_ITEMS}
+        selected={s.ocasiao}
+        onSelect={(nome) => {
+          s.set({ 
+            ocasiao: nome || null, 
+            peca: nome === "Noiva" ? "Vestido" : null,
+            tipoCerimonia: null,
+            rendaDecisao: null,
+            comprimento: null,
+            decote: null,
+            manga: null,
+            saia: null,
+            renda: null,
+            biotipo: null
+          });
+        }}
+      />
+    )
+  });
+
+  if (isNoiva) {
+    steps.push({
+      id: "tipoCerimonia",
+      title: "Tipo de Cerimônia",
+      hint: "Obrigatório",
+      valid: !!s.tipoCerimonia,
       render: () => (
-        <ElementGrid
-          items={OCASIOES_ITEMS}
-          selected={s.ocasiao}
-          onSelect={(nome) => s.set({ ocasiao: nome || null })}
-        />
+        <div className="flex justify-center flex-wrap gap-2.5 max-w-md mx-auto">
+          <ChipRow items={TIPOS_CERIMONIA} selected={s.tipoCerimonia} onSelect={(v) => s.set({ tipoCerimonia: v })} />
+        </div>
       )
-    },
-    { 
-      id: "peca", 
-      title: "Peça Principal", 
-      hint: "Obrigatório", 
-      valid: !!s.peca,
+    });
+    steps.push({
+      id: "rendaDecisao",
+      title: "O vestido terá renda?",
+      hint: "Obrigatório",
+      valid: s.rendaDecisao !== null,
       render: () => (
-        <ElementGrid
-          items={PECAS_ITEMS}
-          selected={s.peca}
-          onSelect={(nome) => {
-            const v = nome || null;
-            const patch: Partial<LookState> = { peca: v };
-            if (v === "Saia") {
-              patch.decote = null;
-              patch.manga = null;
-            } else if (v === "Blusa" || v === "Macacão") {
-              patch.saia = null;
-              patch.comprimento = null;
-            } else if (v === "Calça") {
-              patch.decote = null;
-              patch.manga = null;
-              patch.saia = null;
-              patch.comprimento = null;
-            }
-            s.set(patch);
-          }}
-        />
+        <div className="flex justify-center flex-wrap gap-2.5 max-w-md mx-auto">
+          <ChipRow 
+            items={DECISAO_RENDA} 
+            selected={s.rendaDecisao === null ? null : (s.rendaDecisao ? "Sim" : "Não")} 
+            onSelect={(v) => s.set({ rendaDecisao: v === "Sim" })} 
+          />
+        </div>
       )
-    },
-    { 
-      id: "biotipo", 
-      title: "Seu Biotipo", 
-      hint: "Obrigatório", 
-      valid: !!s.biotipo,
-      render: () => (
-        <ElementGrid
-          items={BIOTIPOS_ITEMS}
-          selected={s.biotipo}
-          onSelect={(nome) => s.set({ biotipo: nome || null })}
-        />
-      )
-    },
-    ...(showComprimento ? [{ 
-      id: "comprimento", 
-      title: "Escolha o Comprimento", 
-      hint: "Opcional", 
-      valid: true,
+    });
+    steps.push({
+      id: "comprimento",
+      title: "Comprimento do Vestido",
+      hint: "Obrigatório",
+      valid: !!s.comprimento,
       render: () => (
         <div className="flex justify-center flex-wrap gap-2.5 max-w-md mx-auto">
           <ChipRow items={COMPRIMENTOS} selected={s.comprimento} onSelect={(v) => s.set({ comprimento: v })} />
         </div>
       )
-    }] : []),
-    ...(showDecote && DECOTES.length > 0 ? [{ 
-      id: "decote", 
-      title: "Escolha seu Decote", 
-      hint: "Toque para escolher", 
-      valid: true,
+    });
+    steps.push({
+      id: "biotipo",
+      title: "Seu Biotipo",
+      hint: "Obrigatório",
+      valid: !!s.biotipo,
       render: () => (
         <ElementGrid
-          items={DECOTES}
-          selected={s.decote}
-          onSelect={(nome) => {
-            const isSleeveless = nome === "Frente Única" || nome === "Coração (Sweetheart)" || nome === "Tomara que Caia";
-            s.set({
-              decote: nome || null,
-              ...(isSleeveless ? { manga: null } : {})
-            });
-          }}
+          className="grid-2x2"
+          items={BIOTIPOS_ITEMS}
+          selected={s.biotipo}
+          onSelect={(nome) => s.set({ biotipo: nome || null })}
         />
       )
-    }] : []),
-    ...(showManga && MANGAS.length > 0 ? [{ 
-      id: "manga", 
-      title: "Escolha a Manga", 
-      hint: "Toque para escolher", 
-      valid: true,
-      render: () => (
-        <ElementGrid
-          items={MANGAS}
-          selected={s.manga}
-          onSelect={(nome) => s.set({ manga: nome || null })}
-        />
-      )
-    }] : []),
-    ...(showSaia && SAIAS.length > 0 ? [{ 
-      id: "saia", 
-      title: "Modelo de Saia", 
-      hint: "Toque para escolher", 
-      valid: true,
-      render: () => (
-        <ElementGrid
-          items={SAIAS}
-          selected={s.saia}
-          onSelect={(nome) => s.set({ saia: nome || null })}
-        />
-      )
-    }] : []),
-    ...(showRenda && RENDAS.length > 0 ? [{ 
-      id: "renda", 
-      title: "Detalhes em Renda", 
-      hint: "Opcional", 
-      valid: true,
-      render: () => (
-        <ElementGrid
-          items={RENDAS}
-          selected={s.renda}
-          onSelect={(nome) => s.set({ renda: nome || null })}
-        />
-      )
-    }] : []),
-    { 
-      id: "comentario", 
-      title: "Detalhes Extras", 
-      hint: "Opcional", 
-      valid: true,
-      render: () => (
-        <div className="w-full max-w-md mx-auto">
-          <textarea
-            className="w-full min-h-[120px] p-4 rounded-xl text-[14px] leading-relaxed resize-none transition-all"
-            style={{
-              border: "1.5px solid rgba(255, 255, 255, 0.2)",
-              background: "rgba(255, 255, 255, 0.08)",
-              color: "white",
-              outline: "none",
+    });
+  } else {
+    // Festa, Casual, Fardamento
+    if (s.ocasiao) {
+      steps.push({
+        id: "peca",
+        title: "Peça Principal",
+        hint: "Obrigatório",
+        valid: !!s.peca,
+        render: () => (
+          <ElementGrid
+            items={PECAS_POR_CATEGORIA[s.ocasiao!]}
+            selected={s.peca}
+            onSelect={(nome) => {
+              const v = nome || null;
+              const patch: Partial<LookState> = { peca: v };
+              if (v === "Saia") {
+                patch.decote = null;
+                patch.manga = null;
+              } else if (v === "Blazer") {
+                patch.saia = null;
+                patch.comprimento = null;
+                patch.manga = "Longa";
+              } else if (v === "Blusa" || v === "Macacão" || v === "Top") {
+                patch.saia = null;
+                patch.comprimento = null;
+              } else if (v === "Calça" || v === "Short/Bermuda") {
+                patch.decote = null;
+                patch.manga = null;
+                patch.saia = null;
+                patch.comprimento = null;
+              }
+              s.set(patch);
             }}
-            placeholder="Ex: Gostaria de um laço grande nas costas, caimento esvoaçante ou cinto fino..."
-            value={s.comentario || ""}
-            onChange={(e) => s.set({ comentario: e.target.value || null })}
           />
-        </div>
-      )
+        )
+      });
+      
+      if (showComprimento) {
+        steps.push({
+          id: "comprimento",
+          title: "Escolha o Comprimento",
+          hint: "Opcional",
+          valid: true,
+          render: () => (
+            <div className="flex justify-center flex-wrap gap-2.5 max-w-md mx-auto">
+              <ChipRow items={COMPRIMENTOS} selected={s.comprimento} onSelect={(v) => s.set({ comprimento: v })} />
+            </div>
+          )
+        });
+      }
+      
+      if (showDecote && DECOTES.length > 0) {
+        steps.push({
+          id: "decote",
+          title: "Escolha seu Decote",
+          hint: "Toque para escolher",
+          valid: true,
+          render: () => (
+            <ElementGrid
+              items={DECOTES}
+              selected={s.decote}
+              onSelect={(nome) => {
+                const isSleeveless = nome === "Frente Única" || nome === "Coração (Sweetheart)" || nome === "Tomara que Caia";
+                s.set({
+                  decote: nome || null,
+                  ...(isSleeveless ? { manga: null } : {})
+                });
+              }}
+            />
+          )
+        });
+      }
+      
+      if (showManga && MANGAS.length > 0) {
+        steps.push({
+          id: "manga",
+          title: "Escolha a Manga",
+          hint: "Toque para escolher",
+          valid: true,
+          render: () => (
+            <ElementGrid
+              items={MANGAS}
+              selected={s.manga}
+              onSelect={(nome) => s.set({ manga: nome || null })}
+            />
+          )
+        });
+      }
+      
+      if (showSaia && SAIAS.length > 0) {
+        steps.push({
+          id: "saia",
+          title: "Modelo de Saia",
+          hint: "Toque para escolher",
+          valid: true,
+          render: () => (
+            <ElementGrid
+              items={SAIAS}
+              selected={s.saia}
+              onSelect={(nome) => s.set({ saia: nome || null })}
+            />
+          )
+        });
+      }
+      
+      if (showRenda && RENDAS.length > 0) {
+        steps.push({
+          id: "renda",
+          title: "Detalhes em Renda",
+          hint: "Opcional",
+          valid: true,
+          render: () => (
+            <ElementGrid
+              items={RENDAS}
+              selected={s.renda}
+              onSelect={(nome) => s.set({ renda: nome || null })}
+            />
+          )
+        });
+      }
+      
+      steps.push({
+        id: "biotipo",
+        title: "Seu Biotipo",
+        hint: "Obrigatório",
+        valid: !!s.biotipo,
+        render: () => (
+          <ElementGrid
+            className="grid-2x2"
+            items={BIOTIPOS_ITEMS}
+            selected={s.biotipo}
+            onSelect={(nome) => s.set({ biotipo: nome || null })}
+          />
+        )
+      });
     }
-  ];
+  }
+
+  steps.push({
+    id: "comentario",
+    title: "Detalhes Extras",
+    hint: "Opcional",
+    valid: true,
+    render: () => (
+      <div className="w-full max-w-md mx-auto">
+        <textarea
+          className="w-full min-h-[120px] p-4 rounded-xl text-[14px] leading-relaxed resize-none transition-all"
+          style={{
+            border: "1.5px solid rgba(255, 255, 255, 0.2)",
+            background: "rgba(255, 255, 255, 0.08)",
+            color: "white",
+            outline: "none",
+          }}
+          placeholder="Ex: Gostaria de um laço grande nas costas, caimento esvoaçante ou cinto fino..."
+          value={s.comentario || ""}
+          onChange={(e) => s.set({ comentario: e.target.value || null })}
+        />
+      </div>
+    )
+  });
 
   // Garantir que o index esteja dentro dos limites atuais das etapas dinâmicas
   const currentStepIndex = Math.min(stepIndex, steps.length - 1);

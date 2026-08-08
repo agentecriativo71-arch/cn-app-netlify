@@ -67,7 +67,6 @@ const _BODY_CHARS = {
   "Triângulo": "hips visibly wider than shoulders, narrower upper body — triangular silhouette wider at the hips",
   "Triângulo Invertido": "shoulders broader than hips, V-shaped athletic upper body, narrower lower body",
   "Retângulo": "shoulders, waist and hips all nearly equal width with minimal waist curve — straight athletic silhouette",
-  "Oval": "plus-size body type, full-figured and robust with a wide waist, broad torso, and rounded midsection — a heavy-set mannequin form with a thick waist, wide chest, and full silhouette. The body is thick and voluptuous, NOT thin, NOT slender, and NOT pregnant.",
 };
 
 const PECA_EN: Record<string, string> = {
@@ -75,7 +74,10 @@ const PECA_EN: Record<string, string> = {
   "Saia": "skirt",
   "Blusa": "blouse",
   "Calça": "pants",
-  "Macacão": "jumpsuit"
+  "Macacão": "jumpsuit",
+  "Top": "crop top",
+  "Short/Bermuda": "shorts",
+  "Blazer": "blazer"
 };
 
 const COMPRIMENTO_EN: Record<string, string> = {
@@ -116,7 +118,7 @@ function isBottomGarment(pecaEn: string, pecaPt: string): boolean {
 }
 
 // Top-only garment keywords (blouse, shirt, top)
-const _TOP_KEYWORDS = ["blouse", "blusa", "shirt", "top"];
+const _TOP_KEYWORDS = ["blouse", "blusa", "shirt", "top", "crop", "blazer"];
 function isTopGarment(pecaEn: string, pecaPt: string): boolean {
   const combined = `${pecaEn} ${pecaPt}`.toLowerCase();
   return _TOP_KEYWORDS.some(kw => combined.includes(kw));
@@ -132,7 +134,7 @@ function buildSleevelessInstruction(decote: string | null | undefined, manga: st
 
 export const generateCroquiFn = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
-    const { peca, biotipo, comprimento, decote, manga, saia, renda, comentario } = data;
+    const { peca, biotipo, comprimento, decote, manga, saia, renda, comentario, tipoCerimonia, rendaDecisao, ocasiao } = data;
 
     let bodyContext = "";
     if (biotipo && _BODY_CHARS[biotipo as keyof typeof _BODY_CHARS]) {
@@ -150,7 +152,18 @@ export const generateCroquiFn = createServerFn({ method: 'POST' })
 
     // Build the leading instruction block — garment type + length come FIRST
     let leadingInstructions = '';
-    if (isBottom) {
+    if (ocasiao === "Noiva") {
+      let cerimonyCtx = "";
+      if (tipoCerimonia === "Civil") cerimonyCtx = " for a civil ceremony";
+      else if (tipoCerimonia === "Igreja") cerimonyCtx = " for a traditional church wedding";
+      else if (tipoCerimonia === "Cerimônia Aberta") cerimonyCtx = " for an outdoor open wedding ceremony";
+      
+      let laceCtx = "";
+      if (rendaDecisao === true) laceCtx = " It features lace details and applications.";
+      else if (rendaDecisao === false) laceCtx = " It is absolutely plain with NO lace anywhere.";
+      
+      leadingInstructions = `This is a bridal wedding dress${cerimonyCtx}.${laceCtx}\nPresent the dress fully visible from neckline to hem.\n${hemInstruction}`;
+    } else if (isBottom) {
       leadingInstructions = `IMPORTANT: This is a BOTTOM garment ONLY — a ${pecaEn}. Do NOT draw any top, blouse, shirt, or upper body clothing. Show ONLY the ${pecaEn} from waistband to hem. The mannequin torso above the waistband MUST be completely bare and clean — no seam lines, no zippers, no closure lines, no stitching, no fabric details above the waist. The upper body is just an empty mannequin form.\n${hemInstruction}`;
     } else if (isTop) {
       leadingInstructions = `IMPORTANT: This is a TOP garment ONLY — a ${pecaEn}. Do NOT draw any skirt, pants, dress, or lower body clothing. Show ONLY the ${pecaEn} from neckline to the natural hem at the waist/hips. The mannequin legs and lower body below the hem of the ${pecaEn} MUST be completely bare and clean — no fabric details, no skirt, no pants. The lower body is just an empty mannequin form.`;
@@ -427,6 +440,8 @@ export const sendWhatsAppLookFn = createServerFn({ method: 'POST' })
     realistaUrl?: string | null;
     peca?: string | null;
     ocasiao?: string | null;
+    tipoCerimonia?: string | null;
+    rendaDecisao?: boolean | null;
     biotipo?: string | null;
     comprimento?: string | null;
     decote?: string | null;
@@ -434,7 +449,7 @@ export const sendWhatsAppLookFn = createServerFn({ method: 'POST' })
     cor?: string | null;
     comentario?: string | null;
   } }) => {
-    const { nome, telefone, croquiUrl, realistaUrl, peca, ocasiao, biotipo, comprimento, decote, manga, cor, comentario } = data;
+    const { nome, telefone, croquiUrl, realistaUrl, peca, ocasiao, tipoCerimonia, rendaDecisao, biotipo, comprimento, decote, manga, cor, comentario } = data;
 
     const evolutionUrl = process.env.EVOLUTION_API_URL || import.meta.env.EVOLUTION_API_URL || "";
     const evolutionInstance = process.env.EVOLUTION_INSTANCE || import.meta.env.EVOLUTION_INSTANCE || "";
@@ -646,6 +661,8 @@ export const sendWhatsAppLookFn = createServerFn({ method: 'POST' })
               const detailsList = [
                 peca ? `Peça: ${peca}` : "",
                 ocasiao ? `Ocasião: ${ocasiao}` : "",
+                tipoCerimonia ? `Tipo Cerimônia: ${tipoCerimonia}` : "",
+                rendaDecisao !== undefined && rendaDecisao !== null ? `Terá Renda: ${rendaDecisao ? "Sim" : "Não"}` : "",
                 biotipo ? `Biotipo: ${biotipo}` : "",
                 comprimento ? `Comprimento: ${comprimento}` : "",
                 decote ? `Decote: ${decote}` : "",

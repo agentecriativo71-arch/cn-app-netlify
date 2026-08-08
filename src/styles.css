@@ -687,6 +687,11 @@
     .element-grid {
       grid-template-columns: repeat(3, 1fr);
     }
+    .element-grid.grid-2x2 {
+      grid-template-columns: repeat(2, 1fr);
+      max-width: 400px;
+      margin: 0 auto;
+    }
   }
 
   /* ── Color Swatch ──────────────────────────────── */

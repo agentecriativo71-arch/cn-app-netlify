@@ -63,6 +63,8 @@ function Croqui() {
           const dbRes = await saveLookDbFn({
             data: {
               ocasiao: s.ocasiao,
+              tipo_cerimonia: s.tipoCerimonia,
+              renda_decisao: s.rendaDecisao,
               biotipo: s.biotipo,
               peca: s.peca,
               comprimento: s.comprimento,

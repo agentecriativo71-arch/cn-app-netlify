@@ -36,6 +36,18 @@ export function getTransitionMessage(
         subtitle: "Agora, defina a silhueta para um caimento sob medida.",
       };
 
+    case "tipoCerimonia":
+      return {
+        title: "Momento inesquecível",
+        subtitle: "Qual será o estilo da cerimônia?",
+      };
+
+    case "rendaDecisao":
+      return {
+        title: "Clássico e romântico",
+        subtitle: "O vestido terá detalhes em renda?",
+      };
+
     case "comprimento":
       return {
         title: "Silhueta definida",

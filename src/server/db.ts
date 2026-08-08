@@ -32,6 +32,8 @@ if (dbUrl) {
     );
     ALTER TABLE looks ADD COLUMN IF NOT EXISTS nome_cliente VARCHAR(255);
     ALTER TABLE looks ADD COLUMN IF NOT EXISTS telefone_cliente VARCHAR(255);
+    ALTER TABLE looks ADD COLUMN IF NOT EXISTS tipo_cerimonia VARCHAR(255);
+    ALTER TABLE looks ADD COLUMN IF NOT EXISTS renda_decisao BOOLEAN;
   `).catch(err => {
     console.error('[DB] Error verifying/creating looks table:', err);
   });
@@ -42,12 +44,14 @@ if (dbUrl) {
 export async function saveLook(data: any): Promise<string> {
   if (pool) {
     const query = `
-      INSERT INTO looks (ocasiao, biotipo, peca, comprimento, decote, manga, cor, croqui_url, foto_usuario_url)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO looks (ocasiao, tipo_cerimonia, renda_decisao, biotipo, peca, comprimento, decote, manga, cor, croqui_url, foto_usuario_url)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING id;
     `;
     const values = [
       data.ocasiao,
+      data.tipo_cerimonia,
+      data.renda_decisao,
       data.biotipo,
       data.peca,
       data.comprimento,
