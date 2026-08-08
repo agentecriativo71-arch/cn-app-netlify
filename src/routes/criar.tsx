@@ -234,10 +234,10 @@ function Criar() {
   // Condicionais de exibição baseadas na peça principal selecionada
   const pecaAtual = isNoiva ? "Vestido" : s.peca;
   const showComprimento = pecaAtual === "Vestido" || pecaAtual === "Saia";
-  const showDecote = !isNoiva && (pecaAtual === "Vestido" || pecaAtual === "Blusa" || pecaAtual === "Macacão" || pecaAtual === "Top");
+  const showDecote = pecaAtual === "Vestido" || pecaAtual === "Blusa" || pecaAtual === "Macacão" || pecaAtual === "Top";
   const isSleevelessDecote = s.decote === "Frente Única" || s.decote === "Coração (Sweetheart)" || s.decote === "Tomara que Caia";
-  const showManga = !isNoiva && (pecaAtual === "Vestido" || pecaAtual === "Blusa" || pecaAtual === "Macacão" || pecaAtual === "Top") && !isSleevelessDecote;
-  const showSaia = !isNoiva && (pecaAtual === "Vestido" || pecaAtual === "Saia");
+  const showManga = (pecaAtual === "Vestido" || pecaAtual === "Blusa" || pecaAtual === "Macacão" || pecaAtual === "Top") && !isSleevelessDecote;
+  const showSaia = pecaAtual === "Vestido" || pecaAtual === "Saia";
   const showRenda = !isNoiva && RENDAS.length > 0 && (pecaAtual === "Vestido" || pecaAtual === "Saia" || pecaAtual === "Blusa" || pecaAtual === "Top");
 
   // Definindo as etapas ativas dinamicamente
@@ -312,6 +312,57 @@ function Criar() {
             items={RENDAS}
             selected={s.renda}
             onSelect={(nome) => s.set({ renda: nome || null })}
+          />
+        )
+      });
+    }
+    if (showDecote && DECOTES.length > 0) {
+      steps.push({
+        id: "decote",
+        title: "Escolha seu Decote / Gola",
+        hint: "Toque para escolher",
+        valid: true,
+        render: () => (
+          <ElementGrid
+            items={DECOTES}
+            selected={s.decote}
+            onSelect={(nome) => {
+              const isSleeveless = nome === "Frente Única" || nome === "Coração (Sweetheart)" || nome === "Tomara que Caia";
+              s.set({
+                decote: nome || null,
+                ...(isSleeveless ? { manga: null } : {})
+              });
+            }}
+          />
+        )
+      });
+    }
+    if (showManga && MANGAS.length > 0) {
+      steps.push({
+        id: "manga",
+        title: "Escolha a Manga",
+        hint: "Toque para escolher",
+        valid: true,
+        render: () => (
+          <ElementGrid
+            items={MANGAS}
+            selected={s.manga}
+            onSelect={(nome) => s.set({ manga: nome || null })}
+          />
+        )
+      });
+    }
+    if (showSaia && SAIAS.length > 0) {
+      steps.push({
+        id: "saia",
+        title: "Modelo de Saia",
+        hint: "Toque para escolher",
+        valid: true,
+        render: () => (
+          <ElementGrid
+            items={SAIAS}
+            selected={s.saia}
+            onSelect={(nome) => s.set({ saia: nome || null })}
           />
         )
       });
