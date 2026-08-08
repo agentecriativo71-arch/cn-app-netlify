@@ -35,6 +35,8 @@ function Croqui() {
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [showAdjust, setShowAdjust] = useState(false);
 
+  const lastCroquiRef = useState<string | null>(s.croquiUrl)[0];
+
   useEffect(() => {
     if (!loading) return;
     
@@ -52,6 +54,10 @@ function Croqui() {
             saia: s.saia,
             renda: s.renda,
             comentario: s.comentario,
+            ocasiao: s.ocasiao,
+            tipoCerimonia: s.tipoCerimonia,
+            rendaDecisao: s.rendaDecisao,
+            previousCroquiUrl: lastCroquiRef || undefined,
           }
         });
         

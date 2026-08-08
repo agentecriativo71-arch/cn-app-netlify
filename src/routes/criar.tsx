@@ -77,11 +77,40 @@ const COMPRIMENTOS = ["Curto", "Médio", "Longo", "Midi"];
 const TIPOS_CERIMONIA = ["Civil", "Igreja", "Cerimônia Aberta"];
 const DECISAO_RENDA = ["Sim", "Não"];
 
+import rendaAplicacoes from "@/assets/renda-aplicacoes-localizadas.png";
+import rendaSobreposicao from "@/assets/renda-sobreposicao.png";
+import rendaInteira from "@/assets/renda-inteira.png";
+import rendaBarrados from "@/assets/renda-barrados.png";
+import rendaRecortes from "@/assets/renda-recortes.png";
+import rendaMangas from "@/assets/renda-mangas.png";
+import rendaCostas from "@/assets/renda-costas.png";
+import rendaBordado from "@/assets/renda-bordado.png";
+import rendaCamadas from "@/assets/renda-camadas.png";
+import rendaFlorais3D from "@/assets/renda-florais-3d.png";
+import rendaMisturaTecidos from "@/assets/renda-mistura-tecidos.png";
+
+const ASSETS_MAP: Record<string, string> = {
+  "/src/assets/renda-aplicacoes-localizadas.png": rendaAplicacoes,
+  "/src/assets/renda-sobreposicao.png": rendaSobreposicao,
+  "/src/assets/renda-inteira.png": rendaInteira,
+  "/src/assets/renda-barrados.png": rendaBarrados,
+  "/src/assets/renda-recortes.png": rendaRecortes,
+  "/src/assets/renda-mangas.png": rendaMangas,
+  "/src/assets/renda-costas.png": rendaCostas,
+  "/src/assets/renda-bordado.png": rendaBordado,
+  "/src/assets/renda-camadas.png": rendaCamadas,
+  "/src/assets/renda-florais-3d.png": rendaFlorais3D,
+  "/src/assets/renda-mistura-tecidos.png": rendaMisturaTecidos,
+};
+
 // Elementos por categoria que possuem imagem
 const MANGAS = elementosData.filter(e => e.categoria === "manga" && e.image_url);
 const DECOTES = elementosData.filter(e => e.categoria === "decote" && e.image_url);
 const SAIAS = elementosData.filter(e => e.categoria === "saia" && e.image_url);
-const RENDAS = elementosData.filter(e => e.categoria === "renda" && e.image_url);
+const RENDAS = elementosData.filter(e => e.categoria === "renda").map(e => ({
+  ...e,
+  image_url: e.image_url ? (ASSETS_MAP[e.image_url] || e.image_url) : null
+}));
 
 // ── Section Icons ────────────────────────────────────────────────
 const SECTION_ICONS: Record<string, React.ReactNode> = {
@@ -191,6 +220,7 @@ function Criar() {
   const s = useLook();
   const { triggerTransition, transitionPhase } = useVideoStore();
   const [stepIndex, setStepIndex] = useState(0);
+  const [localComentario, setLocalComentario] = useState(s.comentario || "");
 
   useEffect(() => {
     if (!s.nome) {
@@ -465,8 +495,9 @@ function Criar() {
             outline: "none",
           }}
           placeholder="Ex: Gostaria de um laço grande nas costas, caimento esvoaçante ou cinto fino..."
-          value={s.comentario || ""}
-          onChange={(e) => s.set({ comentario: e.target.value || null })}
+          value={localComentario}
+          onChange={(e) => setLocalComentario(e.target.value)}
+          onBlur={(e) => s.set({ comentario: e.target.value || null })}
         />
       </div>
     )
@@ -503,6 +534,7 @@ function Criar() {
 
   const submit = () => {
     if (!valid) return;
+    s.set({ comentario: localComentario || null, croquiUrl: null, realistaUrl: null, dbId: null });
     import("@/lib/transitionMessages").then(({ getTransitionMessage }) => {
       const msg = getTransitionMessage(steps[currentStepIndex].id, "croqui", {
         nome: s.nome,
@@ -511,7 +543,6 @@ function Criar() {
         biotipo: s.biotipo,
       });
 
-      s.set({ croquiUrl: null, realistaUrl: null, dbId: null });
       // Transição rápida para o croqui: total 2s, fade-in em 0.9s, mensagem
       // com 1.8s extra de leitura sobre a tela de loading do croqui.
       triggerTransition(() => {

@@ -456,7 +456,7 @@
   "description_en": "Isolated fragments and motifs of lace applied only to specific parts of the garment, such as bust contour, waist, sleeves or back, leaving the base fabric clean",
   "diretrizes": "Fragmentos e motivos isolados de renda aplicados apenas em partes específicas da peça, como contorno do busto, cintura, mangas ou costas, deixando o tecido de fundo limpo",
   "id": 42,
-  "image_url": null,
+  "image_url": "/src/assets/renda-aplicacoes-localizadas.png",
   "nome": "Aplicações Localizadas",
   "nome_en": "Localized Lace Appliqués",
   "updated_at": "2026-05-30T14:34:55.566366Z"
@@ -467,21 +467,10 @@
   "description_en": "A continuous layer of lace positioned over another base fabric, such as satin or zibeline, to create a rich effect of transparency and texture",
   "diretrizes": "Uma camada contínua de renda posicionada por cima de outro tecido de base, como cetim ou zibeline, para criar um efeito rico de transparência e textura",
   "id": 43,
-  "image_url": null,
+  "image_url": "/src/assets/renda-sobreposicao.png",
   "nome": "Sobreposição (Overlay)",
   "nome_en": "Lace Overlay",
   "updated_at": "2026-05-30T14:34:55.567286Z"
- },
- {
-  "categoria": "renda",
-  "created_at": "2026-05-30T14:34:55.568109Z",
-  "description_en": "Use of ultra-fine translucent tulle creating a second-skin effect, with lace applied over it, making the patterns appear to float directly on the body",
-  "diretrizes": "Uso de tule ultrafino e translúcido, criando um efeito segunda pele, com renda aplicada por cima, fazendo os desenhos parecerem flutuar diretamente no corpo",
-  "id": 44,
-  "image_url": null,
-  "nome": "Transparência (Ilusione)",
-  "nome_en": "Illusion Lace",
-  "updated_at": "2026-05-30T14:34:55.568111Z"
  },
  {
   "categoria": "renda",
@@ -489,7 +478,7 @@
   "description_en": "Piece or dress entirely made of structural lace fabric from neckline to hem, obligatorily accompanied by an opaque internal lining",
   "diretrizes": "Peça ou vestido totalmente feito em tecido rendado estrutural do decote à barra, acompanhado obrigatoriamente de um forro interno opaco",
   "id": 45,
-  "image_url": null,
+  "image_url": "/src/assets/renda-inteira.png",
   "nome": "Renda Inteira",
   "nome_en": "Full Lace",
   "updated_at": "2026-05-30T14:34:55.5689Z"
@@ -500,7 +489,7 @@
   "description_en": "Lace applied with scalloped and sinuous finish only at the garment edges, such as the skirt hem or sleeve ends",
   "diretrizes": "Renda aplicada com acabamento recortado e sinuoso apenas nas extremidades da peça, como na barra final da saia ou no término das mangas",
   "id": 46,
-  "image_url": null,
+  "image_url": "/src/assets/renda-barrados.png",
   "nome": "Barrados",
   "nome_en": "Lace Border Trim",
   "updated_at": "2026-05-30T14:34:55.569674Z"
@@ -511,7 +500,7 @@
   "description_en": "Insertion of lace panels in hollowed areas of the dress, such as waist or ribs, creating a visual break and delivering sophisticated sensuality",
   "diretrizes": "Inserção de painéis rendados em áreas vazadas do vestido, como cintura ou costelas, criando uma quebra visual e entregando uma sensualidade sofisticada",
   "id": 47,
-  "image_url": null,
+  "image_url": "/src/assets/renda-recortes.png",
   "nome": "Recortes Estratégicos",
   "nome_en": "Strategic Lace Cutouts",
   "updated_at": "2026-05-30T14:34:55.570478Z"
@@ -522,7 +511,7 @@
   "description_en": "Arm extensions made exclusively of translucent lace without lining, highlighting the textured pattern against the skin tone",
   "diretrizes": "Extensões de braço feitas exclusivamente em renda translúcida e sem forro, destacando a padronagem texturizada contra o tom de pele",
   "id": 48,
-  "image_url": null,
+  "image_url": "/src/assets/renda-mangas.png",
   "nome": "Mangas Rendadas",
   "nome_en": "Lace Sleeves",
   "updated_at": "2026-05-30T14:34:55.571427Z"
@@ -533,7 +522,7 @@
   "description_en": "Delicate and sophisticated detail where the back region of the bodice is made of transparent lace or tulle with appliqués, frequently closed by buttons",
   "diretrizes": "Detalle delicado e sofisticado onde a região posterior do corpete é feita de renda transparente ou tule com apliques, frequentemente fechada por botões",
   "id": 49,
-  "image_url": null,
+  "image_url": "/src/assets/renda-costas.png",
   "nome": "Costas Rendadas",
   "nome_en": "Lace Back",
   "updated_at": "2026-05-30T14:34:55.572213Z"
@@ -544,7 +533,7 @@
   "description_en": "Rich combination of lace patterns serving as base for embroidery of rhinestones, micro-pearls, sequins or reflective beads",
   "diretrizes": "Combinação rica de padrões de renda que servem de base para o bordado de pedrarias, micro-pérolas, paetês ou vidrilhos reflexivos",
   "id": 50,
-  "image_url": null,
+  "image_url": "/src/assets/renda-bordado.png",
   "nome": "Renda com Bordado",
   "nome_en": "Embroidered Lace",
   "updated_at": "2026-05-30T14:34:55.572986Z"
@@ -555,7 +544,7 @@
   "description_en": "Mix and overlay of different types and densities of lace to give visual depth and three-dimensional relief to the dress",
   "diretrizes": "Mistura e sobreposição de diferentes tipos e densidades de renda para dar profundidade visual e relevo tridimensional ao vestido",
   "id": 51,
-  "image_url": null,
+  "image_url": "/src/assets/renda-camadas.png",
   "nome": "Camadas de Renda",
   "nome_en": "Layered Lace",
   "updated_at": "2026-05-30T14:34:55.57379Z"
@@ -566,7 +555,7 @@
   "description_en": "Flowers and petals of lace crafted individually and sewn onto tulle or plain fabric, projecting outward in three-dimensional relief",
   "diretrizes": "Flores e pétalas de renda confeccionadas individualmente e costuradas sobre o tule ou tecido liso, projetando-se para fora em relevo tridimensional",
   "id": 52,
-  "image_url": null,
+  "image_url": "/src/assets/renda-florais-3d.png",
   "nome": "Apliques Florais (3D)",
   "nome_en": "3D Floral Lace Appliqués",
   "updated_at": "2026-05-30T14:34:55.574718Z"
@@ -577,7 +566,7 @@
   "description_en": "Perfect balance of textures where lace is combined with haute couture fabrics, such as the shine of satin, the structure of zibeline, or the lightness of tulle and chiffon",
   "diretrizes": "Equilíbrio perfeito de texturas onde a renda é combinada a tecidos de alta costura, como o brilho do cetim, a estrutura do zibeline ou a leveza do tule e chiffon",
   "id": 53,
-  "image_url": null,
+  "image_url": "/src/assets/renda-mistura-tecidos.png",
   "nome": "Mistura com Tecidos Nobres",
   "nome_en": "Mixed Noble Fabrics Lace",
   "updated_at": "2026-05-30T14:34:55.575503Z"

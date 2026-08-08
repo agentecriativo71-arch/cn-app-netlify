@@ -134,7 +134,35 @@ function buildSleevelessInstruction(decote: string | null | undefined, manga: st
 
 export const generateCroquiFn = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
-    const { peca, biotipo, comprimento, decote, manga, saia, renda, comentario, tipoCerimonia, rendaDecisao, ocasiao } = data;
+    const { peca, biotipo, comprimento, decote, manga, saia, renda, comentario, tipoCerimonia, rendaDecisao, ocasiao, previousCroquiUrl } = data;
+
+    // Se houver um croqui anterior (ajuste/edição), usamos o endpoint de EDIT do Seedream para alterar a imagem existente
+    if (previousCroquiUrl) {
+      const editPrompt = `CRITICAL INSTRUCTION FOR CROQUI EDIT: The reference image is an existing hand-drawn fashion croqui sketch.
+Modify this exact croqui drawing by applying ONLY the following requested design adjustment: "${comentario || 'update details'}".
+Preserve the exact composition, mannequin body shape, hand-drawn black pencil line-art sketch style, fabric drape, and side-by-side front/back layout from the reference image.
+Do NOT redraw a completely different dress or alter unrelated parts of the garment. Only alter the specified elements (such as adding long sleeves, changing neckline, or adding details) while maintaining maximum fidelity to the original reference croqui image.
+Style: hand-drawn black pencil on white paper. No color, no photo, no background, no text, no facial features.`;
+
+      try {
+        const result: any = await fal.subscribe("fal-ai/bytedance/seedream/v4/edit", {
+          input: {
+            prompt: editPrompt,
+            image_urls: [previousCroquiUrl],
+            image_size: "portrait_4_3",
+            num_images: 1,
+            enable_safety_checker: false,
+          }
+        });
+
+        const imageUrl = result.images?.[0]?.url;
+        if (!imageUrl) throw new Error("No image returned from Fal.ai");
+        return { url: imageUrl };
+      } catch (error) {
+        console.error("[CROQUI EDIT] Error editing croqui:", error);
+        throw error;
+      }
+    }
 
     let bodyContext = "";
     if (biotipo && _BODY_CHARS[biotipo as keyof typeof _BODY_CHARS]) {
