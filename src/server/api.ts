@@ -159,8 +159,11 @@ export const generateCroquiFn = createServerFn({ method: 'POST' })
       else if (tipoCerimonia === "Cerimônia Aberta") cerimonyCtx = " for an outdoor open wedding ceremony";
       
       let laceCtx = "";
-      if (rendaDecisao === true) laceCtx = " It features lace details and applications.";
-      else if (rendaDecisao === false) laceCtx = " It is absolutely plain with NO lace anywhere.";
+      if (rendaDecisao === true) {
+        laceCtx = renda ? ` It features ${renda} lace details and applications.` : " It features lace details and applications.";
+      } else if (rendaDecisao === false) {
+        laceCtx = " It is absolutely plain with NO lace anywhere.";
+      }
       
       leadingInstructions = `This is a bridal wedding dress${cerimonyCtx}.${laceCtx}\nPresent the dress fully visible from neckline to hem.\n${hemInstruction}`;
     } else if (isBottom) {

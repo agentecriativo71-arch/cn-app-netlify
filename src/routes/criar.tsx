@@ -263,11 +263,29 @@ function Criar() {
           <ChipRow 
             items={DECISAO_RENDA} 
             selected={s.rendaDecisao === null ? null : (s.rendaDecisao ? "Sim" : "Não")} 
-            onSelect={(v) => s.set({ rendaDecisao: v === "Sim" })} 
+            onSelect={(v) => {
+              const isSim = v === "Sim";
+              s.set({ rendaDecisao: isSim, ...(isSim ? {} : { renda: null }) });
+            }} 
           />
         </div>
       )
     });
+    if (s.rendaDecisao === true && RENDAS.length > 0) {
+      steps.push({
+        id: "renda",
+        title: "Tipo de Renda",
+        hint: "Escolha a renda desejada",
+        valid: true,
+        render: () => (
+          <ElementGrid
+            items={RENDAS}
+            selected={s.renda}
+            onSelect={(nome) => s.set({ renda: nome || null })}
+          />
+        )
+      });
+    }
     steps.push({
       id: "comprimento",
       title: "Comprimento do Vestido",
