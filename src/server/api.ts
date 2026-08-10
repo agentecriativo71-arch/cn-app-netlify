@@ -180,6 +180,9 @@ Style: hand-drawn black pencil on white paper. No color, no photo, no background
 
     // Build the leading instruction block — garment type + length come FIRST
     let leadingInstructions = '';
+    // Determina se a peça é de uma única peça (vestido, macacão)
+    const isOnePiece = pecaEn === 'dress' || pecaEn === 'jumpsuit' || ocasiao === 'Noiva';
+
     if (ocasiao === "Noiva") {
       let cerimonyCtx = "";
       if (tipoCerimonia === "Civil") cerimonyCtx = " for a civil ceremony";
@@ -193,14 +196,17 @@ Style: hand-drawn black pencil on white paper. No color, no photo, no background
         laceCtx = " It is absolutely plain with NO lace anywhere.";
       }
       
-      leadingInstructions = `This is a bridal wedding dress${cerimonyCtx}.${laceCtx}\nPresent the dress fully visible from neckline to hem.\n${hemInstruction}`;
+      leadingInstructions = `CRITICAL — ONE-PIECE GARMENT: This is a SINGLE bridal wedding dress${cerimonyCtx} — NOT a two-piece outfit. The dress is ONE continuous garment from neckline to hem with NO visible separation between bodice and skirt. Do NOT draw a top and separate skirt. The bodice and skirt are structurally integrated as one unified dress.${laceCtx}\nPresent the dress fully visible from neckline to hem.\n${hemInstruction}`;
     } else if (isBottom) {
       leadingInstructions = `IMPORTANT: This is a BOTTOM garment ONLY — a ${pecaEn}. Do NOT draw any top, blouse, shirt, or upper body clothing. Show ONLY the ${pecaEn} from waistband to hem. The mannequin torso above the waistband MUST be completely bare and clean — no seam lines, no zippers, no closure lines, no stitching, no fabric details above the waist. The upper body is just an empty mannequin form.\n${hemInstruction}`;
     } else if (isTop) {
       leadingInstructions = `IMPORTANT: This is a TOP garment ONLY — a ${pecaEn}. Do NOT draw any skirt, pants, dress, or lower body clothing. Show ONLY the ${pecaEn} from neckline to the natural hem at the waist/hips. The mannequin legs and lower body below the hem of the ${pecaEn} MUST be completely bare and clean — no fabric details, no skirt, no pants. The lower body is just an empty mannequin form.`;
     } else {
       const lengthPrefix = comprimentoEn ? `${comprimentoEn} ` : '';
-      leadingInstructions = `This is a ${lengthPrefix}${pecaEn}. Present the garment fully visible from neckline/collar to hem, showing the complete silhouette: neckline, sleeves, body fit, waistline, and hem.\n${hemInstruction}`;
+      const onePieceNote = isOnePiece
+        ? ` CRITICAL — ONE-PIECE GARMENT: This is a SINGLE unified ${pecaEn} — NOT a two-piece outfit. The bodice and lower portion are ONE continuous integrated garment. Do NOT draw a separate top and separate bottom. The waistline is a seam detail WITHIN the garment, not a separation point between two pieces.`
+        : '';
+      leadingInstructions = `This is a ${lengthPrefix}${pecaEn}.${onePieceNote} Present the garment fully visible from neckline/collar to hem, showing the complete silhouette: neckline, sleeves, body fit, waistline, and hem.\n${hemInstruction}`;
     }
 
     // Build strong front/back consistency instruction
@@ -217,7 +223,7 @@ Style: hand-drawn black pencil on white paper. No color, no photo, no background
 
     const prompt = `${sleevelessInstruction}${leadingInstructions}
 Professional fashion design croqui of a ${comprimentoEn} ${pecaEn}.${elementFragment}${bodyContext}
-${comentario ? `Extra design instructions: ${comentario}\n` : ''}
+${isOnePiece ? `REMINDER: This is ONE single piece of clothing — bodice and skirt/lower portion are NOT separate items. Draw it as one unified garment with continuous fabric flow from top to bottom.\n` : ''}${comentario ? `Extra design instructions: ${comentario}\n` : ''}
 CRITICAL: Show BOTH front view AND back view of the garment side by side in a single composition — front view on the left, back view on the right, as in professional fashion croquis.
 The figure is a faceless fashion mannequin form — no facial features, no face detail, just a smooth featureless head or implied head shape. The focus is entirely on the garment.
 Style: hand-drawn black pencil on white paper. Use hatching and cross-hatching for volume and shadow, directional strokes following the fabric grain to convey drape and texture, fine contour lines for garment structure, and stippling for any textured surfaces.
