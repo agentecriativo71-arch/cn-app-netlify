@@ -34,6 +34,7 @@ if (dbUrl) {
     ALTER TABLE looks ADD COLUMN IF NOT EXISTS telefone_cliente VARCHAR(255);
     ALTER TABLE looks ADD COLUMN IF NOT EXISTS tipo_cerimonia VARCHAR(255);
     ALTER TABLE looks ADD COLUMN IF NOT EXISTS renda_decisao BOOLEAN;
+    ALTER TABLE looks ADD COLUMN IF NOT EXISTS tecido_sku VARCHAR(255);
   `).catch(err => {
     console.error('[DB] Error verifying/creating looks table:', err);
   });
@@ -41,11 +42,49 @@ if (dbUrl) {
   console.log('[DB] DATABASE_URL not set. Falling back to Supabase for looks database...');
 }
 
+export type ProductSearchResult = {
+  id: number;
+  name: string;
+  sku: string;
+  image_url: string | null;
+  pantone: string | null;
+  tag: string | null;
+};
+
+export async function searchProducts(term: string): Promise<ProductSearchResult[]> {
+  const cleanTerm = term.trim();
+  if (!cleanTerm) return [];
+
+  if (pool) {
+    const query = `
+      SELECT id, name, sku, image_url, pantone, tag
+      FROM products
+      WHERE sku ILIKE $1 OR name ILIKE $1
+      ORDER BY id DESC
+      LIMIT 10;
+    `;
+    const res = await pool.query(query, [`%${cleanTerm}%`]);
+    return res.rows;
+  } else {
+    const { data, error } = await supabaseFallback
+      .from('products')
+      .select('id, name, sku, image_url, pantone, tag')
+      .or(`sku.ilike.%${cleanTerm}%,name.ilike.%${cleanTerm}%`)
+      .limit(10);
+
+    if (error) {
+      console.warn('[DB] Error searching products on Supabase:', error);
+      return [];
+    }
+    return data || [];
+  }
+}
+
 export async function saveLook(data: any): Promise<string> {
   if (pool) {
     const query = `
-      INSERT INTO looks (ocasiao, tipo_cerimonia, renda_decisao, biotipo, peca, comprimento, decote, manga, cor, croqui_url, foto_usuario_url)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO looks (ocasiao, tipo_cerimonia, renda_decisao, biotipo, peca, comprimento, decote, manga, cor, tecido_sku, croqui_url, foto_usuario_url)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING id;
     `;
     const values = [
@@ -58,6 +97,7 @@ export async function saveLook(data: any): Promise<string> {
       data.decote,
       data.manga,
       data.cor,
+      data.tecido_sku,
       data.croqui_url,
       data.foto_usuario_url
     ];

@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start';
 import * as fal from '@fal-ai/serverless-client';
 import { createClient } from '@supabase/supabase-js';
 import elementosRaw from '../lib/elementos_vestuario.json';
-import { saveLook, updateLook } from './db';
+import { saveLook, updateLook, searchProducts } from './db';
 
 // Map nome -> element for fast O(1) lookup
 type Elemento = {
@@ -346,9 +346,15 @@ function hexToColorDescription(hex: string): string {
   return `${prefix}${colorName}`;
 }
 
+export const searchProductsFn = createServerFn({ method: 'POST' })
+  .handler(async ({ data }: { data: { term: string } }) => {
+    const results = await searchProducts(data.term || '');
+    return { results };
+  });
+
 export const generateRealistaFn = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
-    const { peca, cor, userImageUrl, croquiUrl, modo, biotipo, comprimento, decote, manga, saia, renda, comentario } = data;
+    const { peca, cor, userImageUrl, croquiUrl, modo, biotipo, comprimento, decote, manga, saia, renda, comentario, tecidoImageUrl, tecidoPantone, tecidoSku, tecidoNome } = data;
 
     const pecaEn = PECA_EN[peca as keyof typeof PECA_EN] || peca || 'garment';
     const corEn = cor ? (cor.startsWith('#') ? `${hexToColorDescription(cor)} color (hex: ${cor})` : (CORES_EN[cor as keyof typeof CORES_EN] || cor)) : 'a beautiful';
@@ -360,11 +366,19 @@ export const generateRealistaFn = createServerFn({ method: 'POST' })
         throw new Error("Foto do usuário é obrigatória para este passo.");
       }
 
-      const prompt = `CRITICAL: Two reference images are provided.
+      const imageUrls = [userImageUrl, croquiUrl];
+      let fabricInstruction = "";
+
+      if (tecidoImageUrl) {
+        imageUrls.push(tecidoImageUrl);
+        fabricInstruction = `\nCRITICAL FABRIC REFERENCE: The THIRD image provided is a real fabric swatch photo (${tecidoNome || tecidoSku || 'fabric'}). Dress the person in a ${pecaEn} made of THIS EXACT FABRIC. Transfer the fabric color, material texture, weave, pattern, and finish from the third image onto the garment.`;
+      }
+
+      const prompt = `CRITICAL: Reference images are provided.
 The FIRST image shows a real person — preserve their exact face, identity, skin tone, hair, body shape, and natural pose with absolute fidelity. Do NOT alter their appearance.
-The SECOND image shows a complete, ready-to-wear ${pecaEn} as a finished garment (NOT a fabric swatch — this is the actual constructed garment).
-Dress the person from the FIRST image in this exact ${pecaEn} from the SECOND image.
-Transfer the garment with precision: preserve its design, color (${corEn}), silhouette, cut, and every construction detail.
+The SECOND image shows a complete fashion croqui/sketch of the ${pecaEn}.${fabricInstruction}
+Dress the person from the FIRST image in this exact ${pecaEn} design from the SECOND image${tecidoImageUrl ? ' using the fabric from the THIRD image' : ` in ${corEn} color`}.
+Transfer the garment with precision: preserve its design, silhouette, cut, and every construction detail.
 The garment must drape naturally over the person's body, fitting their actual posture and proportions.
 Keep the original background, lighting, and environment from the person's photo unchanged.
 Result must look like a real editorial fashion photograph — photorealistic, sharp focus, high resolution.
@@ -377,7 +391,7 @@ No illustrations, no sketches, no cartoons.`;
         result = await fal.subscribe("fal-ai/bytedance/seedream/v4/edit", {
           input: {
             prompt,
-            image_urls: [userImageUrl, croquiUrl],
+            image_urls: imageUrls,
             image_size: "square_hd",
             num_images: 1,
             enable_safety_checker: false,
@@ -411,9 +425,18 @@ No illustrations, no sketches, no cartoons.`;
       }
 
       const lengthPrefix = comprimentoEn ? `${comprimentoEn} ` : '';
+      const imageUrls = [croquiUrl];
+      let fabricInstruction = "";
+
+      if (tecidoImageUrl) {
+        imageUrls.push(tecidoImageUrl);
+        fabricInstruction = `\nCRITICAL FABRIC REFERENCE: The SECOND image provided is a real fabric swatch photo (${tecidoNome || tecidoSku || 'fabric'}). Convert this flat sketch into a photorealistic, ready-to-wear finished garment using the EXACT fabric color, texture, pattern, drape, and material finish shown in that fabric swatch reference image. The final garment MUST match the fabric swatch.`;
+      } else {
+        fabricInstruction = `\nConvert this flat sketch into a photorealistic, ready-to-wear finished garment in ${corEn} color, worn on a headless featureless dress mannequin.`;
+      }
+
       const prompt = `${sleevelessInstruction}${garmentTypeInstruction}
-CRITICAL: The reference image is a hand-drawn fashion design croqui sketch of a ${lengthPrefix}${pecaEn}.${elementFragment}
-Convert this flat sketch into a photorealistic, ready-to-wear finished garment in ${corEn} color, worn on a headless featureless dress mannequin.
+CRITICAL: The first reference image is a hand-drawn fashion design croqui sketch of a ${lengthPrefix}${pecaEn}.${elementFragment}${fabricInstruction}
 Maintain high fidelity to the cut, shape, style and construction shown in the reference sketch.
 The final result must look like a professional editorial fashion photograph with soft natural studio lighting and a clean white background, showing the real fabric texture.
 ${comentario ? `Extra design details: ${comentario}\n` : ''}${bodyContext}
@@ -423,7 +446,7 @@ No face, no person, just the mannequin with the garment. No text, no watermark, 
         result = await fal.subscribe("fal-ai/bytedance/seedream/v4/edit", {
           input: {
             prompt,
-            image_urls: [croquiUrl],
+            image_urls: imageUrls,
             image_size: "square_hd",
             num_images: 1,
             enable_safety_checker: false,

@@ -13,6 +13,10 @@ export type LookState = {
   saia: string | null;
   renda: string | null;
   cor: string | null;
+  tecidoSku: string | null;
+  tecidoNome: string | null;
+  tecidoImageUrl: string | null;
+  tecidoPantone: string | null;
   comentario: string | null;
   modo: "manequim" | "foto" | null;
   fotoUrl: string | null;
@@ -27,6 +31,7 @@ const initial = {
   nome: null,
   ocasiao: null, tipoCerimonia: null, rendaDecisao: null, biotipo: null, peca: null, comprimento: null,
   decote: null, manga: null, saia: null, renda: null, cor: null,
+  tecidoSku: null, tecidoNome: null, tecidoImageUrl: null, tecidoPantone: null,
   comentario: null, modo: null, fotoUrl: null, croquiUrl: null,
   realistaUrl: null, dbId: null,
 };

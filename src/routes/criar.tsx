@@ -238,7 +238,6 @@ function Criar() {
   const isSleevelessDecote = s.decote === "Frente Única" || s.decote === "Coração (Sweetheart)" || s.decote === "Tomara que Caia";
   const showManga = (pecaAtual === "Vestido" || pecaAtual === "Blusa" || pecaAtual === "Macacão" || pecaAtual === "Top") && !isSleevelessDecote;
   const showSaia = pecaAtual === "Vestido" || pecaAtual === "Saia";
-  const showRenda = !isNoiva && RENDAS.length > 0 && (pecaAtual === "Vestido" || pecaAtual === "Saia" || pecaAtual === "Blusa" || pecaAtual === "Top");
 
   // Definindo as etapas ativas dinamicamente
   const steps: any[] = [];
@@ -492,22 +491,6 @@ function Criar() {
               items={SAIAS}
               selected={s.saia}
               onSelect={(nome) => s.set({ saia: nome || null })}
-            />
-          )
-        });
-      }
-      
-      if (showRenda && RENDAS.length > 0) {
-        steps.push({
-          id: "renda",
-          title: "Detalhes em Renda",
-          hint: "Opcional",
-          valid: true,
-          render: () => (
-            <ElementGrid
-              items={RENDAS}
-              selected={s.renda}
-              onSelect={(nome) => s.set({ renda: nome || null })}
             />
           )
         });

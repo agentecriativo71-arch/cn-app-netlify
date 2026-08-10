@@ -56,6 +56,10 @@ function Resultado() {
             saia: s.saia,
             renda: s.renda,
             comentario: s.comentario,
+            tecidoImageUrl: s.tecidoImageUrl,
+            tecidoPantone: s.tecidoPantone,
+            tecidoSku: s.tecidoSku,
+            tecidoNome: s.tecidoNome,
           }
         });
         
