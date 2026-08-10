@@ -592,7 +592,7 @@ function Criar() {
       <Header title="Nova Criação" back="/" />
       <Stepper current="criar" />
       <main
-        className="container-app px-5 py-8 pb-36 flex flex-col justify-center flex-1"
+        className="container-app px-5 py-8 pb-48 flex flex-col justify-center flex-1"
         style={{
           opacity: isExiting ? 0 : undefined,
           transform: isExiting ? "translateY(-16px) scale(0.97)" : "none",
