@@ -8,11 +8,24 @@ const supabaseFallback = createClient(supabaseUrl, supabaseKey);
 let pool: pg.Pool | null = null;
 const dbUrl = process.env.DATABASE_URL;
 
+function shouldUseSsl(url: string): boolean {
+  // Desabilita SSL se explicitamente indicado na URL
+  if (url.includes('sslmode=disable') || url.includes('ssl=false')) return false;
+  // Desabilita SSL para hosts internos (localhost, db, nomes sem ponto = rede Docker)
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || !host.includes('.')) return false;
+  } catch { /* ignora erro de parse */ }
+  return true;
+}
+
 if (dbUrl) {
-  console.log('[DB] Connecting to internal PostgreSQL via DATABASE_URL...');
+  const useSsl = shouldUseSsl(dbUrl);
+  console.log(`[DB] Connecting to PostgreSQL via DATABASE_URL... (SSL: ${useSsl})`);
   pool = new pg.Pool({
     connectionString: dbUrl,
-    ssl: dbUrl.includes('localhost') ? false : { rejectUnauthorized: false }
+    ssl: useSsl ? { rejectUnauthorized: false } : false
   });
   
   pool.query(`
