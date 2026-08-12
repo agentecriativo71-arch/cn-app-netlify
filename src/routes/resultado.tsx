@@ -60,6 +60,7 @@ function Resultado() {
             tecidoPantone: s.tecidoPantone,
             tecidoSku: s.tecidoSku,
             tecidoNome: s.tecidoNome,
+            ocasiao: s.ocasiao,
           }
         });
         
