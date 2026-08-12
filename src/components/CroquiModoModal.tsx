@@ -5,6 +5,18 @@ import { createUploadSessionFn, pollUploadSessionFn } from "@/server/api";
 import { useLook } from "@/lib/store";
 import { useRouter } from "@tanstack/react-router";
 
+import ocasiaoCasamento from "@/assets/ocasiao-casamento.png";
+import ocasiaoFesta from "@/assets/ocasiao-festa.png";
+import ocasiaoTrabalho from "@/assets/ocasiao-trabalho.png";
+import ocasiaoCasual from "@/assets/ocasiao-casual.png";
+
+const OCASIOES_ITEMS = [
+  { id: "noiva", nome: "Noiva", image_url: ocasiaoCasamento },
+  { id: "festa", nome: "Festa", image_url: ocasiaoFesta },
+  { id: "casual", nome: "Casual", image_url: ocasiaoCasual },
+  { id: "fardamento", nome: "Fardamento", image_url: ocasiaoTrabalho },
+];
+
 interface CroquiModoModalProps {
   open: boolean;
   nome: string;
@@ -15,7 +27,7 @@ interface CroquiModoModalProps {
 export function CroquiModoModal({ open, nome, onClose, onSelectCriarDoZero }: CroquiModoModalProps) {
   const router = useRouter();
   const s = useLook();
-  const [step, setStep] = useState<"choice" | "qr">("choice");
+  const [step, setStep] = useState<"choice" | "ocasiao" | "qr">("choice");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loadingSession, setLoadingSession] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -59,7 +71,8 @@ export function CroquiModoModal({ open, nome, onClose, onSelectCriarDoZero }: Cr
 
   if (!open) return null;
 
-  const handleStartUploadFlow = async () => {
+  const handleSelectOcasiao = async (ocasiaoId: string) => {
+    s.set({ ocasiao: ocasiaoId });
     setLoadingSession(true);
     try {
       const res = await createUploadSessionFn({ data: { nomeCliente: nome } });
@@ -101,7 +114,7 @@ export function CroquiModoModal({ open, nome, onClose, onSelectCriarDoZero }: Cr
 
             <div className="space-y-3 pt-2">
               <button
-                onClick={handleStartUploadFlow}
+                onClick={() => setStep("ocasiao")}
                 disabled={loadingSession}
                 className="w-full p-4 rounded-2xl bg-white/10 hover:bg-white/15 border border-[#E5D3A2]/40 hover:border-[#E5D3A2] transition-all flex items-center justify-between text-left group"
               >
@@ -140,12 +153,57 @@ export function CroquiModoModal({ open, nome, onClose, onSelectCriarDoZero }: Cr
               Cancelar
             </button>
           </>
-        ) : (
-          /* Passo 2: Exibição do QR Code */
+        ) : step === "ocasiao" ? (
+          /* Passo Intermediário: Qual a Ocasião? */
           <>
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <button
                 onClick={() => setStep("choice")}
+                className="text-white/60 hover:text-white flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider"
+              >
+                <ArrowLeft size={16} /> Voltar
+              </button>
+              <span className="text-xs font-bold text-[#E5D3A2] uppercase tracking-widest">Ocasião do Look</span>
+              <div className="w-12" />
+            </div>
+
+            <div className="py-2 space-y-4">
+              <p className="text-sm text-white/70 max-w-xs mx-auto">
+                Para que a IA compreenda o contexto, qual a ocasião desse vestido/look?
+              </p>
+              
+              <div className="grid grid-cols-2 gap-3">
+                {OCASIOES_ITEMS.map((oc) => (
+                  <button
+                    key={oc.nome}
+                    onClick={() => handleSelectOcasiao(oc.nome)}
+                    disabled={loadingSession}
+                    className="flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border-2 border-transparent bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group"
+                  >
+                    <div className="w-16 h-16 rounded-xl bg-black/30 overflow-hidden group-hover:scale-105 transition-transform">
+                      <img src={oc.image_url} alt={oc.nome} className="w-full h-full object-cover opacity-80 group-hover:opacity-100" />
+                    </div>
+                    <span className="text-xs font-bold text-white tracking-wider uppercase">
+                      {oc.nome}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              
+              {loadingSession && (
+                <div className="flex items-center justify-center gap-2 text-xs text-[#E5D3A2] animate-pulse pt-2">
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Preparando ambiente...</span>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          /* Passo 3: Exibição do QR Code */
+          <>
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <button
+                onClick={() => setStep("ocasiao")}
                 className="text-white/60 hover:text-white flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider"
               >
                 <ArrowLeft size={16} /> Voltar
