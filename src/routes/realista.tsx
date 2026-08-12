@@ -5,6 +5,7 @@ import { Stepper } from "@/components/Stepper";
 import { useLook } from "@/lib/store";
 import { searchProductsFn } from "@/server/api";
 import { Search, X, Layers, AlertCircle, Check } from "lucide-react";
+import { getAvailableColors } from "@/lib/noivaUtils";
 
 export const Route = createFileRoute("/realista")({
   component: Realista,
@@ -181,8 +182,9 @@ function Realista() {
     router.navigate({ to: "/resultado" });
   };
 
+  const coresDisponiveis = getAvailableColors(s.ocasiao);
   const isValid = !!s.cor || !!s.tecidoImageUrl || !!s.tecidoSku;
-  const isCustomSelected = s.cor && !CORES.some(c => c.nome === s.cor || c.hex === s.cor);
+  const isCustomSelected = s.cor && !coresDisponiveis.some(c => c.nome === s.cor || c.hex === s.cor);
 
   const openCustomPicker = () => {
     if (isCustomSelected && s.cor?.startsWith("#")) {
@@ -322,7 +324,7 @@ function Realista() {
         {!hasTecidoWithImage ? (
           <Section title="Cor" hint={s.tecidoSku ? "Necessária (tecido sem foto)" : "Obrigatório"}>
             <div className="flex flex-wrap gap-4 items-center justify-center sm:justify-start">
-              {CORES.map(c => {
+              {coresDisponiveis.map(c => {
                 const isSelected = s.cor === c.nome || s.cor === c.hex;
                 return (
                   <div key={c.nome} className="relative group">
@@ -344,24 +346,22 @@ function Realista() {
               })}
 
               {/* Custom Color Selector */}
-              {(() => {
-                return (
-                  <button
-                    type="button"
-                    className="color-swatch relative cursor-pointer flex items-center justify-center"
-                    data-selected={isCustomSelected || undefined}
-                    style={{
-                      background: isCustomSelected ? s.cor! : "conic-gradient(from 0deg, red, yellow, green, cyan, blue, magenta, red)",
-                    }}
-                    title="Cor personalizada"
-                    onClick={openCustomPicker}
-                  >
-                    {!isCustomSelected && (
-                      <span className="text-[20px] font-bold text-white drop-shadow-md select-none">+</span>
-                    )}
-                  </button>
-                );
-              })()}
+              {s.ocasiao !== "Noiva" && (
+                <button
+                  type="button"
+                  className="color-swatch relative cursor-pointer flex items-center justify-center"
+                  data-selected={isCustomSelected || undefined}
+                  style={{
+                    background: isCustomSelected ? s.cor! : "conic-gradient(from 0deg, red, yellow, green, cyan, blue, magenta, red)",
+                  }}
+                  title="Cor personalizada"
+                  onClick={openCustomPicker}
+                >
+                  {!isCustomSelected && (
+                    <span className="text-[20px] font-bold text-white drop-shadow-md select-none">+</span>
+                  )}
+                </button>
+              )}
             </div>
             {s.cor && (
               <p className="text-xs mt-2 font-medium" style={{ color: "var(--color-muted-foreground)" }}>

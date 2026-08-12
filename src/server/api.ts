@@ -3,6 +3,7 @@ import * as fal from '@fal-ai/serverless-client';
 import { createClient } from '@supabase/supabase-js';
 import elementosRaw from '../lib/elementos_vestuario.json';
 import { saveLook, updateLook, searchProducts } from './db';
+import { getBackgroundInstruction } from '../lib/noivaUtils';
 
 // Map nome -> element for fast O(1) lookup
 type Elemento = {
@@ -441,10 +442,11 @@ No illustrations, no sketches, no cartoons.`;
         fabricInstruction = `\nConvert this flat sketch into a photorealistic, ready-to-wear finished garment in ${corEn} color, worn on a headless featureless dress mannequin.`;
       }
 
+      const bgInstruction = getBackgroundInstruction(ocasiao);
       const prompt = `${sleevelessInstruction}${garmentTypeInstruction}
 CRITICAL: The first reference image is a hand-drawn fashion design croqui sketch of a ${lengthPrefix}${pecaEn}.${elementFragment}${fabricInstruction}
 Maintain high fidelity to the cut, shape, style and construction shown in the reference sketch.
-The final result must look like a professional editorial fashion photograph with soft natural studio lighting and a clean white background, showing the real fabric texture.
+The final result must look like a professional editorial fashion photograph with soft natural studio lighting and ${bgInstruction}, showing the real fabric texture.
 ${comentario ? `Extra design details: ${comentario}\n` : ''}${bodyContext}
 No face, no person, just the mannequin with the garment. No text, no watermark, no illustration, no sketch, no cartoon, no flat drawing.`;
 

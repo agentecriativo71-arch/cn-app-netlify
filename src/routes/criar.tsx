@@ -229,7 +229,7 @@ function Criar() {
   }, [s.nome, router]);
 
   const isNoiva = s.ocasiao === "Noiva";
-  const valid = s.nome && s.ocasiao && (isNoiva ? (s.tipoCerimonia && s.rendaDecisao !== null && s.comprimento && s.biotipo) : (s.peca && s.biotipo));
+  const valid = s.nome && s.ocasiao && (isNoiva ? (s.tipoCerimonia && s.rendaDecisao !== null && s.comprimento && s.biotipo && !!localComentario.trim()) : (s.peca && s.biotipo));
 
   // Condicionais de exibição baseadas na peça principal selecionada
   const pecaAtual = isNoiva ? "Vestido" : s.peca;
@@ -516,8 +516,8 @@ function Criar() {
   steps.push({
     id: "comentario",
     title: "Detalhes Extras",
-    hint: "Opcional",
-    valid: true,
+    hint: isNoiva ? "Obrigatório" : "Opcional",
+    valid: isNoiva ? !!localComentario.trim() : true,
     render: () => (
       <div className="w-full max-w-md mx-auto">
         <textarea
