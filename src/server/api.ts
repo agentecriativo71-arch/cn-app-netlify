@@ -361,7 +361,7 @@ export const searchProductsFn = createServerFn({ method: 'POST' })
 
 export const generateRealistaFn = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
-    const { peca, cor, userImageUrl, croquiUrl, modo, biotipo, comprimento, decote, manga, saia, renda, comentario, tecidoImageUrl, tecidoPantone, tecidoSku, tecidoNome } = data;
+    const { peca, cor, userImageUrl, croquiUrl, modo, biotipo, comprimento, decote, manga, saia, renda, comentario, tecidoImageUrl, tecidoPantone, tecidoSku, tecidoNome, ocasiao } = data;
 
     const pecaEn = PECA_EN[peca as keyof typeof PECA_EN] || peca || 'garment';
     const corEn = cor ? (cor.startsWith('#') ? `${hexToColorDescription(cor)} color (hex: ${cor})` : (CORES_EN[cor as keyof typeof CORES_EN] || cor)) : 'a beautiful';
