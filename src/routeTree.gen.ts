@@ -14,6 +14,7 @@ import { Route as RealistaRouteImport } from './routes/realista'
 import { Route as CroquiRouteImport } from './routes/croqui'
 import { Route as CriarRouteImport } from './routes/criar'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as UploadSessionIdRouteImport } from './routes/upload.$sessionId'
 
 const ResultadoRoute = ResultadoRouteImport.update({
   id: '/resultado',
@@ -40,6 +41,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UploadSessionIdRoute = UploadSessionIdRouteImport.update({
+  id: '/upload/$sessionId',
+  path: '/upload/$sessionId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,6 +53,7 @@ export interface FileRoutesByFullPath {
   '/croqui': typeof CroquiRoute
   '/realista': typeof RealistaRoute
   '/resultado': typeof ResultadoRoute
+  '/upload/$sessionId': typeof UploadSessionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +61,7 @@ export interface FileRoutesByTo {
   '/croqui': typeof CroquiRoute
   '/realista': typeof RealistaRoute
   '/resultado': typeof ResultadoRoute
+  '/upload/$sessionId': typeof UploadSessionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +70,33 @@ export interface FileRoutesById {
   '/croqui': typeof CroquiRoute
   '/realista': typeof RealistaRoute
   '/resultado': typeof ResultadoRoute
+  '/upload/$sessionId': typeof UploadSessionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/criar' | '/croqui' | '/realista' | '/resultado'
+  fullPaths:
+    | '/'
+    | '/criar'
+    | '/croqui'
+    | '/realista'
+    | '/resultado'
+    | '/upload/$sessionId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/criar' | '/croqui' | '/realista' | '/resultado'
-  id: '__root__' | '/' | '/criar' | '/croqui' | '/realista' | '/resultado'
+  to:
+    | '/'
+    | '/criar'
+    | '/croqui'
+    | '/realista'
+    | '/resultado'
+    | '/upload/$sessionId'
+  id:
+    | '__root__'
+    | '/'
+    | '/criar'
+    | '/croqui'
+    | '/realista'
+    | '/resultado'
+    | '/upload/$sessionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,6 +105,7 @@ export interface RootRouteChildren {
   CroquiRoute: typeof CroquiRoute
   RealistaRoute: typeof RealistaRoute
   ResultadoRoute: typeof ResultadoRoute
+  UploadSessionIdRoute: typeof UploadSessionIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -116,6 +145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/upload/$sessionId': {
+      id: '/upload/$sessionId'
+      path: '/upload/$sessionId'
+      fullPath: '/upload/$sessionId'
+      preLoaderRoute: typeof UploadSessionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -125,6 +161,7 @@ const rootRouteChildren: RootRouteChildren = {
   CroquiRoute: CroquiRoute,
   RealistaRoute: RealistaRoute,
   ResultadoRoute: ResultadoRoute,
+  UploadSessionIdRoute: UploadSessionIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

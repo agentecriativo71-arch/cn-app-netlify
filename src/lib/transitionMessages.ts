@@ -8,6 +8,7 @@ export type TransitionContext = {
 export type TransitionMessage = {
   title: string;
   subtitle: string;
+  emoji?: string;
 };
 
 export function getTransitionMessage(

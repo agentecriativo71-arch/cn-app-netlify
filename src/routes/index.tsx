@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState, useEffect, useLayoutEffect } from "react";
 import { useLook } from "@/lib/store";
 import { NomeModal } from "@/components/NomeModal";
+import { CroquiModoModal } from "@/components/CroquiModoModal";
 import { useVideoStore } from "@/lib/videoStore";
 
 export const Route = createFileRoute("/")(  {
@@ -19,6 +20,7 @@ function Home() {
   const s = useLook();
   const { triggerTransition, transitionPhase, reset: resetVideo } = useVideoStore();
   const [showNomeModal, setShowNomeModal] = useState(false);
+  const [showCroquiModoModal, setShowCroquiModoModal] = useState(false);
   // Sempre inicia como true (oculto). useLayoutEffect revela imediatamente no desktop
   // antes do 1º paint, evitando qualquer flash em produção (SSR/hidratação/code-split).
   const [isMobileLoading, setIsMobileLoading] = useState(true);
@@ -66,7 +68,11 @@ function Home() {
   const handleConfirmNome = (nome: string) => {
     s.set({ nome });
     setShowNomeModal(false);
-    goToCriar();
+    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+      setShowCroquiModoModal(true);
+    } else {
+      goToCriar();
+    }
   };
 
   const isExiting = transitionPhase === "exit";
@@ -142,18 +148,28 @@ function Home() {
           </div>
 
           {/* QR Code link — mantido apenas no Desktop */}
-          <Link
-            to="/qr"
+          <a
+            href="/qr"
             className="hidden md:inline-block text-[11px] sm:text-xs text-white/70 hover:text-white underline tracking-wider uppercase transition-colors drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
           >
             Abrir QR para celular
-          </Link>
+          </a>
         </div>
 
         <NomeModal
           open={showNomeModal}
           onClose={() => setShowNomeModal(false)}
           onConfirm={handleConfirmNome}
+        />
+
+        <CroquiModoModal
+          open={showCroquiModoModal}
+          nome={s.nome || ""}
+          onClose={() => setShowCroquiModoModal(false)}
+          onSelectCriarDoZero={() => {
+            setShowCroquiModoModal(false);
+            goToCriar();
+          }}
         />
       </main>
 

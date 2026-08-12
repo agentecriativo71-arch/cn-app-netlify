@@ -48,8 +48,17 @@ if (dbUrl) {
     ALTER TABLE looks ADD COLUMN IF NOT EXISTS tipo_cerimonia VARCHAR(255);
     ALTER TABLE looks ADD COLUMN IF NOT EXISTS renda_decisao BOOLEAN;
     ALTER TABLE looks ADD COLUMN IF NOT EXISTS tecido_sku VARCHAR(255);
+
+    CREATE TABLE IF NOT EXISTS upload_sessions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      nome_cliente VARCHAR(255),
+      status VARCHAR(50) DEFAULT 'pending',
+      croqui_url TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      expires_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP + INTERVAL '15 minutes'
+    );
   `).catch(err => {
-    console.error('[DB] Error verifying/creating looks table:', err);
+    console.error('[DB] Error verifying/creating tables:', err);
   });
 } else {
   console.log('[DB] DATABASE_URL not set. Falling back to Supabase for looks database...');
@@ -145,5 +154,121 @@ export async function updateLook(id: string, update: any): Promise<void> {
       .update(update)
       .eq('id', id);
     if (error) throw error;
+  }
+}
+
+export type UploadSession = {
+  id: string;
+  nome_cliente: string | null;
+  status: string;
+  croqui_url: string | null;
+  created_at?: string;
+  expires_at?: string;
+};
+
+const memoryUploadSessions = new Map<string, UploadSession>();
+
+export async function createUploadSession(nomeCliente: string): Promise<UploadSession> {
+  const sessionId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `sess_${Math.random().toString(36).slice(2, 11)}`;
+  if (process.env.NODE_ENV === 'test') {
+    const session: UploadSession = {
+      id: sessionId,
+      nome_cliente: nomeCliente,
+      status: 'pending',
+      croqui_url: null,
+    };
+    memoryUploadSessions.set(sessionId, session);
+    return session;
+  }
+
+  if (pool) {
+    const query = `
+      INSERT INTO upload_sessions (id, nome_cliente, status)
+      VALUES ($1, $2, 'pending')
+      RETURNING id, nome_cliente, status, croqui_url, created_at, expires_at;
+    `;
+    const res = await pool.query(query, [sessionId, nomeCliente]);
+    return res.rows[0];
+  } else {
+    try {
+      const { data, error } = await supabaseFallback
+        .from('upload_sessions')
+        .insert([{ id: sessionId, nome_cliente: nomeCliente, status: 'pending' }])
+        .select('id, nome_cliente, status, croqui_url, created_at, expires_at')
+        .single();
+      if (error || !data) throw error || new Error('No data');
+      return data;
+    } catch {
+      const session: UploadSession = {
+        id: sessionId,
+        nome_cliente: nomeCliente,
+        status: 'pending',
+        croqui_url: null,
+      };
+      memoryUploadSessions.set(sessionId, session);
+      return session;
+    }
+  }
+}
+
+export async function getUploadSession(id: string): Promise<UploadSession | null> {
+  if (process.env.NODE_ENV === 'test') {
+    return memoryUploadSessions.get(id) || null;
+  }
+
+  if (pool) {
+    const query = `
+      SELECT id, nome_cliente, status, croqui_url, created_at, expires_at
+      FROM upload_sessions
+      WHERE id = $1;
+    `;
+    const res = await pool.query(query, [id]);
+    return res.rows[0] || null;
+  } else {
+    try {
+      const { data, error } = await supabaseFallback
+        .from('upload_sessions')
+        .select('id, nome_cliente, status, croqui_url, created_at, expires_at')
+        .eq('id', id)
+        .single();
+      if (error || !data) throw error || new Error('No data');
+      return data;
+    } catch {
+      return memoryUploadSessions.get(id) || null;
+    }
+  }
+}
+
+export async function confirmUploadSession(id: string, croquiUrl: string): Promise<void> {
+  if (process.env.NODE_ENV === 'test') {
+    const sess = memoryUploadSessions.get(id);
+    if (sess) {
+      sess.status = 'uploaded';
+      sess.croqui_url = croquiUrl;
+    }
+    return;
+  }
+
+  if (pool) {
+    const query = `
+      UPDATE upload_sessions
+      SET status = 'uploaded', croqui_url = $2
+      WHERE id = $1;
+    `;
+    await pool.query(query, [id, croquiUrl]);
+  } else {
+    try {
+      const { error } = await supabaseFallback
+        .from('upload_sessions')
+        .update({ status: 'uploaded', croqui_url: croquiUrl })
+        .eq('id', id);
+      if (error) throw error;
+    } catch {
+      const sess = memoryUploadSessions.get(id);
+      if (sess) {
+        sess.status = 'uploaded';
+        sess.croqui_url = croquiUrl;
+      }
+    }
   }
 }

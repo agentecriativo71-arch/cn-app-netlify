@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start';
 import * as fal from '@fal-ai/serverless-client';
 import { createClient } from '@supabase/supabase-js';
 import elementosRaw from '../lib/elementos_vestuario.json';
-import { saveLook, updateLook, searchProducts } from './db';
+import { saveLook, updateLook, searchProducts, createUploadSession, getUploadSession, confirmUploadSession } from './db';
 import { getBackgroundInstruction } from '../lib/noivaUtils';
 
 // Map nome -> element for fast O(1) lookup
@@ -133,7 +133,7 @@ function buildSleevelessInstruction(decote: string | null | undefined, manga: st
   return `CRITICAL — SLEEVELESS GARMENT: This design is completely and absolutely sleeveless. Do NOT draw, render, or imply any sleeves, shoulder straps, arm coverage, or any fabric on the arms or shoulders (other than the neckline itself). The arms and shoulders must be completely bare. Adding sleeves would be a critical error that ruins the design.\n`;
 }
 
-export const generateCroquiFn = createServerFn({ method: 'POST' })
+export const generateCroquiFn: any = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
     const { peca, biotipo, comprimento, decote, manga, saia, renda, comentario, tipoCerimonia, rendaDecisao, ocasiao, previousCroquiUrl } = data;
 
@@ -353,13 +353,14 @@ function hexToColorDescription(hex: string): string {
   return `${prefix}${colorName}`;
 }
 
-export const searchProductsFn = createServerFn({ method: 'POST' })
-  .handler(async ({ data }: { data: { term: string } }) => {
-    const results = await searchProducts(data.term || '');
+export const searchProductsFn: any = createServerFn({ method: 'POST' })
+  .handler(async ({ data }: { data: any }) => {
+    const term = data?.term || '';
+    const results = await searchProducts(term);
     return { results };
   });
 
-export const generateRealistaFn = createServerFn({ method: 'POST' })
+export const generateRealistaFn: any = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
     const { peca, cor, userImageUrl, croquiUrl, modo, biotipo, comprimento, decote, manga, saia, renda, comentario, tecidoImageUrl, tecidoPantone, tecidoSku, tecidoNome, ocasiao } = data;
 
@@ -472,7 +473,7 @@ No face, no person, just the mannequin with the garment. No text, no watermark, 
     return { url: imageUrl };
   });
 
-export const saveLookDbFn = createServerFn({ method: 'POST' })
+export const saveLookDbFn: any = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
     try {
       const id = await saveLook(data);
@@ -483,8 +484,8 @@ export const saveLookDbFn = createServerFn({ method: 'POST' })
     }
   });
 
-export const updateLookDbFn = createServerFn({ method: 'POST' })
-  .handler(async ({ data }: { data: { id: string; update: any } }) => {
+export const updateLookDbFn: any = createServerFn({ method: 'POST' })
+  .handler(async ({ data }: { data: any }) => {
     try {
       await updateLook(data.id, data.update);
       return { success: true };
@@ -494,23 +495,8 @@ export const updateLookDbFn = createServerFn({ method: 'POST' })
     }
   });
 
-export const sendWhatsAppLookFn = createServerFn({ method: 'POST' })
-  .handler(async ({ data }: { data: {
-    nome: string;
-    telefone: string;
-    croquiUrl: string;
-    realistaUrl?: string | null;
-    peca?: string | null;
-    ocasiao?: string | null;
-    tipoCerimonia?: string | null;
-    rendaDecisao?: boolean | null;
-    biotipo?: string | null;
-    comprimento?: string | null;
-    decote?: string | null;
-    manga?: string | null;
-    cor?: string | null;
-    comentario?: string | null;
-  } }) => {
+export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
+  .handler(async ({ data }: { data: any }) => {
     const { nome, telefone, croquiUrl, realistaUrl, peca, ocasiao, tipoCerimonia, rendaDecisao, biotipo, comprimento, decote, manga, cor, comentario } = data;
 
     const evolutionUrl = process.env.EVOLUTION_API_URL || import.meta.env.EVOLUTION_API_URL || "";
@@ -760,3 +746,58 @@ export const sendWhatsAppLookFn = createServerFn({ method: 'POST' })
       throw error;
     }
   });
+
+export const createUploadSessionFn: any = createServerFn({ method: 'POST' })
+  .handler(async ({ data }: { data: any }) => {
+    const session = await createUploadSession(data.nomeCliente);
+    return { session };
+  });
+
+export const pollUploadSessionFn: any = createServerFn({ method: 'POST' })
+  .handler(async ({ data }: { data: any }) => {
+    const session = await getUploadSession(data.sessionId);
+    return { session };
+  });
+
+export const confirmUploadFn: any = createServerFn({ method: 'POST' })
+  .handler(async ({ data }: { data: any }) => {
+    await confirmUploadSession(data.sessionId, data.croquiUrl);
+    return { success: true };
+  });
+
+export const uploadCroquiFileFn: any = createServerFn({ method: 'POST' })
+  .handler(async ({ data }: { data: any }) => {
+    const { sessionId, fileBase64, fileName } = data;
+    try {
+      const buffer = Buffer.from(fileBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+      const path = `croquis/${sessionId}_${Date.now()}_${fileName || 'croqui.jpg'}`;
+
+      const { error } = await supabase.storage
+        .from('croqui-uploads')
+        .upload(path, buffer, {
+          contentType: 'image/jpeg',
+          upsert: true,
+        });
+
+      if (error) {
+        console.warn('[STORAGE] Falling back to base64 data URL:', error.message);
+        const fallbackUrl = fileBase64.startsWith('data:') ? fileBase64 : `data:image/jpeg;base64,${fileBase64}`;
+        await confirmUploadSession(sessionId, fallbackUrl);
+        return { url: fallbackUrl };
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('croqui-uploads')
+        .getPublicUrl(path);
+
+      const croquiUrl = publicUrlData.publicUrl;
+      await confirmUploadSession(sessionId, croquiUrl);
+      return { url: croquiUrl };
+    } catch (err) {
+      console.warn('[STORAGE] Storage upload error, using base64 fallback:', err);
+      const fallbackUrl = fileBase64.startsWith('data:') ? fileBase64 : `data:image/jpeg;base64,${fileBase64}`;
+      await confirmUploadSession(sessionId, fallbackUrl);
+      return { url: fallbackUrl };
+    }
+  });
+
