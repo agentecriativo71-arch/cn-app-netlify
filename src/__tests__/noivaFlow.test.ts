@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { getBackgroundInstruction, getAvailableColors, isFormValidForNoiva, getMannequinUrl, MANNEQUIN_URLS } from "../lib/noivaUtils";
+import {
+  getBackgroundInstruction,
+  getAvailableColors,
+  isFormValidForNoiva,
+  getMannequinUrl,
+  MANNEQUIN_URLS,
+  buildSleevelessInstruction,
+  buildMannequinSurfaceInstruction,
+} from "../lib/noivaUtils";
 
 describe("Fluxo Vestido de Noiva - Ajustes Cliente", () => {
   it("deve retornar fundo bege suave e claro para imagem realista quando for noiva", () => {
@@ -60,5 +68,29 @@ describe("Fluxo Vestido de Noiva - Ajustes Cliente", () => {
       expect(url).toContain("szbptnoviikflyzulhhs.supabase.co");
       expect(url).toContain("/elementos/manequins/");
     });
+  });
+
+  it("deve gerar instrução estrita de tomara que caia (sem alças)", () => {
+    const inst = buildSleevelessInstruction("Tomara que Caia", null);
+    expect(inst).toContain("STRAPLESS GARMENT (TOMARA QUE CAIA)");
+    expect(inst).toContain("NO shoulder straps");
+    expect(inst).toContain("100% bare mannequin surface");
+  });
+
+  it("deve gerar instrução de frente única", () => {
+    const inst = buildSleevelessInstruction("Frente Única", null);
+    expect(inst).toContain("HALTER NECK GARMENT (FRENTE ÚNICA)");
+  });
+
+  it("deve respeitar mangas quando o usuário escolher manga explicitamente", () => {
+    const inst = buildSleevelessInstruction("Tomara que Caia", "Manga Longa");
+    expect(inst).toBe("");
+  });
+
+  it("deve gerar instrução para remoção de collant/roupas de baixo e proporções de membros", () => {
+    const inst = buildMannequinSurfaceInstruction();
+    expect(inst).toContain("CRITICAL MANNEQUIN SURFACE & UNDERGARMENT REMOVAL");
+    expect(inst).toContain("Do NOT show, render, or bleed any grey bodysuit");
+    expect(inst).toContain("MANNEQUIN ANATOMY");
   });
 });

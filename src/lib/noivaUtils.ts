@@ -71,3 +71,32 @@ export function isFormValidForNoiva(state: {
 
   return !!(state.peca && state.biotipo);
 }
+
+export const SLEEVELESS_DECOTES = ["Frente Única", "Coração (Sweetheart)", "Tomara que Caia"];
+
+export function buildSleevelessInstruction(decote?: string | null, manga?: string | null): string {
+  if (manga && manga !== "Sem Manga") return '';
+
+  if (decote === "Tomara que Caia") {
+    return `CRITICAL — STRAPLESS GARMENT (TOMARA QUE CAIA): The garment is completely and absolutely strapless. Absolutely NO shoulder straps, NO spaghetti straps, NO halter neck, and NO fabric over the shoulders or collarbones. The upper chest, shoulders, neck, and upper back must be 100% bare mannequin surface with a clean neckline cutoff. Adding straps is a critical error.\n`;
+  }
+
+  if (decote === "Frente Única") {
+    return `CRITICAL — HALTER NECK GARMENT (FRENTE ÚNICA): The garment fastens behind the neck with completely bare shoulders, arms, and upper back. Do NOT add standard sleeves or shoulder straps.\n`;
+  }
+
+  if (decote === "Coração (Sweetheart)" && (!manga || manga === "Sem Manga")) {
+    return `CRITICAL — SWEETHEART SLEEVELESS GARMENT: The neckline follows a sweetheart shape with completely bare arms and shoulders. Do NOT add sleeves or arm coverage.\n`;
+  }
+
+  if (manga === "Sem Manga" || (decote && SLEEVELESS_DECOTES.includes(decote))) {
+    return `CRITICAL — SLEEVELESS GARMENT: This design is completely and absolutely sleeveless. Do NOT draw, render, or imply any sleeves, shoulder straps, arm coverage, or any fabric on the arms or shoulders (other than the neckline itself). The arms and shoulders must be completely bare.\n`;
+  }
+
+  return '';
+}
+
+export function buildMannequinSurfaceInstruction(): string {
+  return `CRITICAL MANNEQUIN SURFACE & UNDERGARMENT REMOVAL: The mannequin must be dressed in the new garment. Any exposed mannequin skin/limbs (arms, legs, shoulders, neck, chest) must appear as clean, uniform, bare matte grey mannequin surface. Do NOT show, render, or bleed any grey bodysuit, collar, long sleeves, leggings, tights, or undergarments under or around the new garment — the new garment completely replaces any clothing from the reference image.
+MANNEQUIN ANATOMY: Maintain natural, balanced proportions for the mannequin's arms, shoulders, and legs. When rendering sleeves, ensure clean, crisp hemlines where the sleeve fabric ends and the bare mannequin arm continues, without distortion.`;
+}

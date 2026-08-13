@@ -3,7 +3,7 @@ import * as fal from '@fal-ai/serverless-client';
 import { createClient } from '@supabase/supabase-js';
 import elementosRaw from '../lib/elementos_vestuario.json';
 import { saveLook, updateLook, searchProducts, createUploadSession, getUploadSession, confirmUploadSession } from './db';
-import { getBackgroundInstruction, getMannequinUrl } from '../lib/noivaUtils';
+import { getBackgroundInstruction, getMannequinUrl, buildSleevelessInstruction, buildMannequinSurfaceInstruction, SLEEVELESS_DECOTES } from '../lib/noivaUtils';
 
 // Map nome -> element for fast O(1) lookup
 type Elemento = {
@@ -123,14 +123,6 @@ const _TOP_KEYWORDS = ["blouse", "blusa", "shirt", "top", "crop", "blazer"];
 function isTopGarment(pecaEn: string, pecaPt: string): boolean {
   const combined = `${pecaEn} ${pecaPt}`.toLowerCase();
   return _TOP_KEYWORDS.some(kw => combined.includes(kw));
-}
-
-// Necklines that are inherently sleeveless — no sleeves should ever appear
-const SLEEVELESS_DECOTES = ["Frente Única", "Coração (Sweetheart)", "Tomara que Caia"];
-function buildSleevelessInstruction(decote: string | null | undefined, manga: string | null | undefined): string {
-  if (manga) return ''; // user explicitly chose a sleeve — respect that
-  if (!decote || !SLEEVELESS_DECOTES.includes(decote)) return '';
-  return `CRITICAL — SLEEVELESS GARMENT: This design is completely and absolutely sleeveless. Do NOT draw, render, or imply any sleeves, shoulder straps, arm coverage, or any fabric on the arms or shoulders (other than the neckline itself). The arms and shoulders must be completely bare. Adding sleeves would be a critical error that ruins the design.\n`;
 }
 
 export const generateCroquiFn: any = createServerFn({ method: 'POST' })
@@ -462,6 +454,7 @@ No illustrations, no sketches, no cartoons.`;
       }
 
       const bgInstruction = getBackgroundInstruction(ocasiao);
+      const mannequinSurfaceInstruction = mannequinUrl ? buildMannequinSurfaceInstruction() : '';
 
       const prompt = mannequinUrl
         ? `CRITICAL: ${mannequinUrl ? String(imageUrls.length) : '1'} reference images are provided.
@@ -469,6 +462,7 @@ ${mannequinRef}${croquiRef ? '\n' + croquiRef : ''}
 TASK: Dress the mannequin from IMAGE 1 with the exact garment shown in IMAGE 2.${fabricInstruction}
 ${sleevelessInstruction}${garmentTypeInstruction}
 ${elementFragment}
+${mannequinSurfaceInstruction}
 Maintain absolute fidelity to the mannequin body shape and proportions from IMAGE 1.
 Maintain high fidelity to the cut, shape, style and construction of the garment from IMAGE 2.
 The final result must look like a professional editorial fashion photograph with soft natural studio lighting and ${bgInstruction}, showing the real fabric texture.
