@@ -14,10 +14,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const BUCKET = 'elementos';
 
 const manequins = [
-  { file: 'public/manequins/ampulheta.png',           path: 'manequins/ampulheta.png' },
-  { file: 'public/manequins/triangulo.png',           path: 'manequins/triangulo.png' },
-  { file: 'public/manequins/triangulo_invertido.png', path: 'manequins/triangulo_invertido.png' },
-  { file: 'public/manequins/retangulo.png',           path: 'manequins/retangulo.png' },
+  { file: 'public/manequins/ampulheta.jpg',           path: 'manequins/ampulheta.jpg',           contentType: 'image/jpeg' },
+  { file: 'public/manequins/triangulo.jpg',           path: 'manequins/triangulo.jpg',           contentType: 'image/jpeg' },
+  { file: 'public/manequins/triangulo_invertido.jpg', path: 'manequins/triangulo_invertido.jpg', contentType: 'image/jpeg' },
+  { file: 'public/manequins/retangulo.jpg',           path: 'manequins/retangulo.jpg',           contentType: 'image/jpeg' },
 ];
 
 async function main() {
@@ -27,7 +27,7 @@ async function main() {
 
     const { error } = await supabase.storage
       .from(BUCKET)
-      .upload(m.path, buffer, { contentType: 'image/png', upsert: true });
+      .upload(m.path, buffer, { contentType: m.contentType, upsert: true });
 
     if (error) {
       console.error(`[ERRO] ${m.path}:`, error.message);
