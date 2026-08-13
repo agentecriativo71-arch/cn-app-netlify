@@ -1,3 +1,17 @@
+const SUPABASE_ELEMENTOS_URL = 'https://szbptnoviikflyzulhhs.supabase.co/storage/v1/object/public/elementos';
+
+export const MANNEQUIN_URLS: Record<string, string> = {
+  "Ampulheta":           `${SUPABASE_ELEMENTOS_URL}/manequins/ampulheta.png`,
+  "Triângulo":           `${SUPABASE_ELEMENTOS_URL}/manequins/triangulo.png`,
+  "Triângulo Invertido": `${SUPABASE_ELEMENTOS_URL}/manequins/triangulo_invertido.png`,
+  "Retângulo":           `${SUPABASE_ELEMENTOS_URL}/manequins/retangulo.png`,
+};
+
+export function getMannequinUrl(biotipo?: string | null): string | null {
+  if (!biotipo) return null;
+  return MANNEQUIN_URLS[biotipo] || null;
+}
+
 export const CORES_PADRAO = [
   { nome: "Verde C&N", hex: "#1A6B2F" },
   { nome: "Preto", hex: "#000000" },

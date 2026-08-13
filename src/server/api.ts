@@ -3,7 +3,7 @@ import * as fal from '@fal-ai/serverless-client';
 import { createClient } from '@supabase/supabase-js';
 import elementosRaw from '../lib/elementos_vestuario.json';
 import { saveLook, updateLook, searchProducts, createUploadSession, getUploadSession, confirmUploadSession } from './db';
-import { getBackgroundInstruction } from '../lib/noivaUtils';
+import { getBackgroundInstruction, getMannequinUrl } from '../lib/noivaUtils';
 
 // Map nome -> element for fast O(1) lookup
 type Elemento = {
@@ -411,10 +411,7 @@ No illustrations, no sketches, no cartoons.`;
       }
     } else {
       // Modo Manequim (gera a foto realista a partir do croqui de referência)
-      let bodyContext = "";
-      if (biotipo && _BODY_CHARS[biotipo as keyof typeof _BODY_CHARS]) {
-        bodyContext = ` The mannequin must have ${_BODY_CHARS[biotipo as keyof typeof _BODY_CHARS]}. `;
-      }
+      const mannequinUrl = getMannequinUrl(biotipo);
 
       const comprimentoEn = comprimento ? (COMPRIMENTO_EN[comprimento as keyof typeof COMPRIMENTO_EN] || comprimento) : '';
       const elementFragment = buildElementPromptFragment({ decote, manga, saia, renda, peca });
@@ -433,22 +430,55 @@ No illustrations, no sketches, no cartoons.`;
       }
 
       const lengthPrefix = comprimentoEn ? `${comprimentoEn} ` : '';
-      const imageUrls = [croquiUrl];
-      let fabricInstruction = "";
 
-      if (tecidoImageUrl) {
-        imageUrls.push(tecidoImageUrl);
-        fabricInstruction = `\nCRITICAL FABRIC REFERENCE: The SECOND image provided is a real fabric swatch photo (${tecidoNome || tecidoSku || 'fabric'}). Convert this flat sketch into a photorealistic, ready-to-wear finished garment using the EXACT fabric color, texture, pattern, drape, and material finish shown in that fabric swatch reference image. The final garment MUST match the fabric swatch.`;
+      // Monta array de imagens: [manequim?, croqui, tecido?]
+      const imageUrls: string[] = [];
+      if (mannequinUrl) imageUrls.push(mannequinUrl);
+      imageUrls.push(croquiUrl);
+
+      let fabricInstruction = "";
+      let mannequinRef = "";
+      let croquiRef = "";
+
+      if (mannequinUrl) {
+        mannequinRef = `IMAGE 1 is a photorealistic dressmaking mannequin — it defines the exact body shape, silhouette and proportions to preserve.\nIMAGE 2 is a hand-drawn fashion croqui sketch of a ${lengthPrefix}${pecaEn}.`;
+        if (tecidoImageUrl) {
+          imageUrls.push(tecidoImageUrl);
+          croquiRef = `IMAGE 3 is a real fabric swatch (${tecidoNome || tecidoSku || 'fabric'}).`;
+          fabricInstruction = `\nCRITICAL FABRIC: Use the EXACT color, texture, pattern and material finish from IMAGE 3 to dress the garment.`;
+        } else {
+          fabricInstruction = `\nDress the garment in ${corEn} color.`;
+        }
       } else {
-        fabricInstruction = `\nConvert this flat sketch into a photorealistic, ready-to-wear finished garment in ${corEn} color, worn on a headless featureless dress mannequin.`;
+        // fallback sem manequim de referência
+        mannequinRef = `IMAGE 1 is a hand-drawn fashion croqui sketch of a ${lengthPrefix}${pecaEn}.`;
+        if (tecidoImageUrl) {
+          imageUrls.push(tecidoImageUrl);
+          croquiRef = `IMAGE 2 is a real fabric swatch (${tecidoNome || tecidoSku || 'fabric'}).`;
+          fabricInstruction = `\nCRITICAL FABRIC: Use the EXACT color, texture, pattern and material finish from IMAGE 2.`;
+        } else {
+          fabricInstruction = `\nConvert this flat sketch into a photorealistic, ready-to-wear finished garment in ${corEn} color, worn on a headless featureless dress mannequin.`;
+        }
       }
 
       const bgInstruction = getBackgroundInstruction(ocasiao);
-      const prompt = `${sleevelessInstruction}${garmentTypeInstruction}
+
+      const prompt = mannequinUrl
+        ? `CRITICAL: ${mannequinUrl ? String(imageUrls.length) : '1'} reference images are provided.
+${mannequinRef}${croquiRef ? '\n' + croquiRef : ''}
+TASK: Dress the mannequin from IMAGE 1 with the exact garment shown in IMAGE 2.${fabricInstruction}
+${sleevelessInstruction}${garmentTypeInstruction}
+${elementFragment}
+Maintain absolute fidelity to the mannequin body shape and proportions from IMAGE 1.
+Maintain high fidelity to the cut, shape, style and construction of the garment from IMAGE 2.
+The final result must look like a professional editorial fashion photograph with soft natural studio lighting and ${bgInstruction}, showing the real fabric texture.
+${comentario ? `Extra design details: ${comentario}\n` : ''}
+No face, no person, just the mannequin with the garment. No text, no watermark, no illustration, no sketch, no cartoon, no flat drawing.`
+        : `${sleevelessInstruction}${garmentTypeInstruction}
 CRITICAL: The first reference image is a hand-drawn fashion design croqui sketch of a ${lengthPrefix}${pecaEn}.${elementFragment}${fabricInstruction}
 Maintain high fidelity to the cut, shape, style and construction shown in the reference sketch.
 The final result must look like a professional editorial fashion photograph with soft natural studio lighting and ${bgInstruction}, showing the real fabric texture.
-${comentario ? `Extra design details: ${comentario}\n` : ''}${bodyContext}
+${comentario ? `Extra design details: ${comentario}\n` : ''}
 No face, no person, just the mannequin with the garment. No text, no watermark, no illustration, no sketch, no cartoon, no flat drawing.`;
 
       try {

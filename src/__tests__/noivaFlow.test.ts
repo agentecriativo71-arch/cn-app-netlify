@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getBackgroundInstruction, getAvailableColors, isFormValidForNoiva } from "../lib/noivaUtils";
+import { getBackgroundInstruction, getAvailableColors, isFormValidForNoiva, getMannequinUrl, MANNEQUIN_URLS } from "../lib/noivaUtils";
 
 describe("Fluxo Vestido de Noiva - Ajustes Cliente", () => {
   it("deve retornar fundo bege suave e claro para imagem realista quando for noiva", () => {
@@ -40,5 +40,25 @@ describe("Fluxo Vestido de Noiva - Ajustes Cliente", () => {
     };
 
     expect(isFormValidForNoiva(estadoComComentario)).toBe(true);
+  });
+
+  it("deve retornar URL correta do manequim por biotipo", () => {
+    expect(getMannequinUrl("Ampulheta")).toBe(MANNEQUIN_URLS["Ampulheta"]);
+    expect(getMannequinUrl("Triângulo")).toBe(MANNEQUIN_URLS["Triângulo"]);
+    expect(getMannequinUrl("Triângulo Invertido")).toBe(MANNEQUIN_URLS["Triângulo Invertido"]);
+    expect(getMannequinUrl("Retângulo")).toBe(MANNEQUIN_URLS["Retângulo"]);
+  });
+
+  it("deve retornar null para biotipo inválido ou nulo", () => {
+    expect(getMannequinUrl(null)).toBeNull();
+    expect(getMannequinUrl(undefined)).toBeNull();
+    expect(getMannequinUrl("Biotipo Inexistente")).toBeNull();
+  });
+
+  it("deve conter URLs do Supabase elementos para todos os biotipos", () => {
+    Object.values(MANNEQUIN_URLS).forEach((url) => {
+      expect(url).toContain("szbptnoviikflyzulhhs.supabase.co");
+      expect(url).toContain("/elementos/manequins/");
+    });
   });
 });
