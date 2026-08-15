@@ -55,9 +55,18 @@ export function CroquiModoModal({ open, nome, onClose, onSelectCriarDoZero }: Cr
 
           if (res.session.status === "uploaded" && res.session.croqui_url) {
             setUploadSuccess(true);
+            const specs = res.session.specs || {};
             s.set({
               croquiUrl: res.session.croqui_url,
               croquiUploadSessionId: sessionId,
+              ...(specs.peca ? { peca: specs.peca } : {}),
+              ...(specs.comprimento ? { comprimento: specs.comprimento } : {}),
+              ...(specs.decote ? { decote: specs.decote } : {}),
+              ...(specs.manga ? { manga: specs.manga } : {}),
+              ...(specs.saia ? { saia: specs.saia } : {}),
+              ...(specs.renda ? { renda: specs.renda } : {}),
+              ...(specs.rendaDecisao !== undefined ? { rendaDecisao: specs.rendaDecisao } : {}),
+              ...(specs.comentario ? { comentario: specs.comentario } : {}),
             });
 
             // Navega para /croqui para visualização do croqui gerado antes do realista

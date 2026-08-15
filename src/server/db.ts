@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
 const supabaseKey = process.env.VITE_SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
@@ -160,23 +161,27 @@ export async function updateLook(id: string, update: any): Promise<void> {
 export type UploadSession = {
   id: string;
   nome_cliente: string | null;
+  ocasiao?: string | null;
   status: string;
   croqui_url: string | null;
+  specs?: any;
   created_at?: string;
   expires_at?: string;
 };
 
 const memoryUploadSessions = new Map<string, UploadSession>();
 
-export async function createUploadSession(nomeCliente: string): Promise<UploadSession> {
-  const sessionId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `sess_${Math.random().toString(36).slice(2, 11)}`;
+export async function createUploadSession(nomeCliente: string, ocasiao?: string): Promise<UploadSession> {
+  const sessionId = randomUUID();
+  const session: UploadSession = {
+    id: sessionId,
+    nome_cliente: nomeCliente,
+    ocasiao: ocasiao || null,
+    status: 'pending',
+    croqui_url: null,
+  };
+
   if (process.env.NODE_ENV === 'test') {
-    const session: UploadSession = {
-      id: sessionId,
-      nome_cliente: nomeCliente,
-      status: 'pending',
-      croqui_url: null,
-    };
     memoryUploadSessions.set(sessionId, session);
     return session;
   }
@@ -188,7 +193,9 @@ export async function createUploadSession(nomeCliente: string): Promise<UploadSe
       RETURNING id, nome_cliente, status, croqui_url, created_at, expires_at;
     `;
     const res = await pool.query(query, [sessionId, nomeCliente]);
-    return res.rows[0];
+    const row = res.rows[0];
+    if (row) row.ocasiao = ocasiao || null;
+    return row;
   } else {
     try {
       const { data, error } = await supabaseFallback
@@ -197,14 +204,9 @@ export async function createUploadSession(nomeCliente: string): Promise<UploadSe
         .select('id, nome_cliente, status, croqui_url, created_at, expires_at')
         .single();
       if (error || !data) throw error || new Error('No data');
+      data.ocasiao = ocasiao || null;
       return data;
     } catch {
-      const session: UploadSession = {
-        id: sessionId,
-        nome_cliente: nomeCliente,
-        status: 'pending',
-        croqui_url: null,
-      };
       memoryUploadSessions.set(sessionId, session);
       return session;
     }
@@ -239,13 +241,15 @@ export async function getUploadSession(id: string): Promise<UploadSession | null
   }
 }
 
-export async function updateUploadSessionStatus(id: string, status: string, croquiUrl?: string | null): Promise<void> {
+export async function updateUploadSessionStatus(id: string, status: string, croquiUrl?: string | null, specs?: any): Promise<void> {
+  const sess = memoryUploadSessions.get(id);
+  if (sess) {
+    sess.status = status;
+    if (croquiUrl) sess.croqui_url = croquiUrl;
+    if (specs) sess.specs = specs;
+  }
+
   if (process.env.NODE_ENV === 'test') {
-    const sess = memoryUploadSessions.get(id);
-    if (sess) {
-      sess.status = status;
-      if (croquiUrl) sess.croqui_url = croquiUrl;
-    }
     return;
   }
 
@@ -254,7 +258,11 @@ export async function updateUploadSessionStatus(id: string, status: string, croq
       ? `UPDATE upload_sessions SET status = $2, croqui_url = $3 WHERE id = $1;`
       : `UPDATE upload_sessions SET status = $2 WHERE id = $1;`;
     const params = croquiUrl ? [id, status, croquiUrl] : [id, status];
-    await pool.query(query, params);
+    try {
+      await pool.query(query, params);
+    } catch (err) {
+      console.warn('[DB] Error updating upload_sessions status:', err);
+    }
   } else {
     try {
       const updateData: any = { status };
@@ -265,15 +273,12 @@ export async function updateUploadSessionStatus(id: string, status: string, croq
         .eq('id', id);
       if (error) throw error;
     } catch {
-      const sess = memoryUploadSessions.get(id);
-      if (sess) {
-        sess.status = status;
-        if (croquiUrl) sess.croqui_url = croquiUrl;
-      }
+      // Fallback already handled in memoryUploadSessions
     }
   }
 }
 
-export async function confirmUploadSession(id: string, croquiUrl: string): Promise<void> {
-  await updateUploadSessionStatus(id, 'uploaded', croquiUrl);
+export async function confirmUploadSession(id: string, croquiUrl: string, specs?: any): Promise<void> {
+  await updateUploadSessionStatus(id, 'uploaded', croquiUrl, specs);
 }
+

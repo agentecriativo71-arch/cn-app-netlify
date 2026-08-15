@@ -784,7 +784,7 @@ export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
 
 export const createUploadSessionFn: any = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
-    const session = await createUploadSession(data.nomeCliente);
+    const session = await createUploadSession(data.nomeCliente, data.ocasiao);
     return { session };
   });
 
@@ -832,26 +832,69 @@ async function analyzeReferenceImages(params: {
   imageUrls: string[];
 }): Promise<any> {
   const { mode, ocasiao, imageUrls } = params;
-  const prompt = mode === 'composite'
-    ? buildVisionPromptForCompositeReference(ocasiao)
-    : buildVisionPromptForSingleReference(ocasiao);
 
   try {
-    const res: any = await fal.subscribe("fal-ai/any-llm/vision", {
-      input: {
-        prompt,
-        image_urls: imageUrls,
-        model: "openai/gpt-4o-mini"
-      }
-    });
-    const outputText = res.output || res.text || res.choices?.[0]?.message?.content || JSON.stringify(res);
-    return parseVisionAnalysisToCroquiSpecs(outputText, ocasiao);
+    if (mode === 'composite' && imageUrls.length >= 2) {
+      const topPrompt = `You are an haute couture fashion designer. Analyze this TOP / BODICE image.${ocasiao ? ` Occasion: "${ocasiao}".` : ''}
+Extract in exact JSON:
+{
+  "decote": "Decote V" | "Tomara que Caia" | "Coração (Sweetheart)" | "Frente Única" | "Canoa" | "Quadrado" | "Redondo" | "Ombro a Ombro" | "Assimétrico",
+  "manga": "Sem Manga" | "Manga Curta" | "Manga 3/4" | "Manga Longa" | "Manga Bufante" | "Alça Fina" | "Alça Larga",
+  "detalhes": "Description of bodice construction, neckline, bust structure, straps, and texture."
+}`;
+      const bottomPrompt = `You are an haute couture fashion designer. Analyze this LOWER / SKIRT / PANTS image.${ocasiao ? ` Occasion: "${ocasiao}".` : ''}
+Extract in exact JSON:
+{
+  "saia": "Evasê" | "Godê" | "Sereia" | "Reta" | "Plissada" | "Com Fenda" | "Lápis",
+  "comprimento": "Curto" | "Médio" | "Midi" | "Longo",
+  "detalhes": "Description of skirt/pants silhouette, volume, slit, drape, and hemline."
+}`;
+
+      const [topRes, bottomRes]: [any, any] = await Promise.all([
+        fal.subscribe("fal-ai/any-llm/vision", {
+          input: { prompt: topPrompt, image_url: imageUrls[0] }
+        }),
+        fal.subscribe("fal-ai/any-llm/vision", {
+          input: { prompt: bottomPrompt, image_url: imageUrls[1] }
+        })
+      ]);
+
+      let topData: any = {};
+      let bottomData: any = {};
+      try {
+        const tMatch = (topRes.output || '').match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, (topRes.output || '').trim()];
+        topData = JSON.parse(tMatch[1]);
+      } catch {}
+      try {
+        const bMatch = (bottomRes.output || '').match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, (bottomRes.output || '').trim()];
+        bottomData = JSON.parse(bMatch[1]);
+      } catch {}
+
+      return synthesizeTechnicalSpecs({
+        peca: 'Vestido',
+        decote: topData.decote,
+        manga: topData.manga,
+        saia: bottomData.saia,
+        comprimento: bottomData.comprimento,
+        detalhes_extras: `Upper bodice: ${topData.detalhes || ''}. Lower skirt: ${bottomData.detalhes || ''}. Unified into a seamless haute couture dress.`
+      }, ocasiao);
+    } else {
+      const prompt = buildVisionPromptForSingleReference(ocasiao);
+      const res: any = await fal.subscribe("fal-ai/any-llm/vision", {
+        input: {
+          prompt,
+          image_url: imageUrls[0],
+        }
+      });
+      const outputText = res.output || res.text || res.choices?.[0]?.message?.content || JSON.stringify(res);
+      return parseVisionAnalysisToCroquiSpecs(outputText, ocasiao);
+    }
   } catch (err) {
     console.warn("[VISION LLM] Any-LLM falhou, tentando fallback:", err);
     try {
       const resFallback: any = await fal.subscribe("fal-ai/llavav1.5-13b", {
         input: {
-          prompt,
+          prompt: buildVisionPromptForSingleReference(ocasiao),
           image_url: imageUrls[0],
         }
       });
@@ -909,8 +952,8 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
         ocasiao: ocasiao || specs.ocasiao,
       });
 
-      // 3. Atualiza a sessão com o croqui gerado
-      await confirmUploadSession(sessionId, croquiUrl);
+      // 3. Atualiza a sessão com o croqui gerado e as specs
+      await confirmUploadSession(sessionId, croquiUrl, specs);
 
       return { success: true, croquiUrl, specs };
     } catch (err: any) {
