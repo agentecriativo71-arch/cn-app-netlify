@@ -239,36 +239,41 @@ export async function getUploadSession(id: string): Promise<UploadSession | null
   }
 }
 
-export async function confirmUploadSession(id: string, croquiUrl: string): Promise<void> {
+export async function updateUploadSessionStatus(id: string, status: string, croquiUrl?: string | null): Promise<void> {
   if (process.env.NODE_ENV === 'test') {
     const sess = memoryUploadSessions.get(id);
     if (sess) {
-      sess.status = 'uploaded';
-      sess.croqui_url = croquiUrl;
+      sess.status = status;
+      if (croquiUrl) sess.croqui_url = croquiUrl;
     }
     return;
   }
 
   if (pool) {
-    const query = `
-      UPDATE upload_sessions
-      SET status = 'uploaded', croqui_url = $2
-      WHERE id = $1;
-    `;
-    await pool.query(query, [id, croquiUrl]);
+    const query = croquiUrl
+      ? `UPDATE upload_sessions SET status = $2, croqui_url = $3 WHERE id = $1;`
+      : `UPDATE upload_sessions SET status = $2 WHERE id = $1;`;
+    const params = croquiUrl ? [id, status, croquiUrl] : [id, status];
+    await pool.query(query, params);
   } else {
     try {
+      const updateData: any = { status };
+      if (croquiUrl) updateData.croqui_url = croquiUrl;
       const { error } = await supabaseFallback
         .from('upload_sessions')
-        .update({ status: 'uploaded', croqui_url: croquiUrl })
+        .update(updateData)
         .eq('id', id);
       if (error) throw error;
     } catch {
       const sess = memoryUploadSessions.get(id);
       if (sess) {
-        sess.status = 'uploaded';
-        sess.croqui_url = croquiUrl;
+        sess.status = status;
+        if (croquiUrl) sess.croqui_url = croquiUrl;
       }
     }
   }
+}
+
+export async function confirmUploadSession(id: string, croquiUrl: string): Promise<void> {
+  await updateUploadSessionStatus(id, 'uploaded', croquiUrl);
 }

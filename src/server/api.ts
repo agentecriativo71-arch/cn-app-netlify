@@ -2,8 +2,14 @@ import { createServerFn } from '@tanstack/react-start';
 import * as fal from '@fal-ai/serverless-client';
 import { createClient } from '@supabase/supabase-js';
 import elementosRaw from '../lib/elementos_vestuario.json';
-import { saveLook, updateLook, searchProducts, createUploadSession, getUploadSession, confirmUploadSession } from './db';
+import { saveLook, updateLook, searchProducts, createUploadSession, getUploadSession, confirmUploadSession, updateUploadSessionStatus } from './db';
 import { getBackgroundInstruction, getMannequinUrl, buildSleevelessInstruction, buildMannequinSurfaceInstruction, SLEEVELESS_DECOTES } from '../lib/noivaUtils';
+import {
+  buildVisionPromptForSingleReference,
+  buildVisionPromptForCompositeReference,
+  parseVisionAnalysisToCroquiSpecs,
+  synthesizeTechnicalSpecs,
+} from '../lib/referenceUtils';
 
 // Map nome -> element for fast O(1) lookup
 type Elemento = {
@@ -125,96 +131,95 @@ function isTopGarment(pecaEn: string, pecaPt: string): boolean {
   return _TOP_KEYWORDS.some(kw => combined.includes(kw));
 }
 
-export const generateCroquiFn: any = createServerFn({ method: 'POST' })
-  .handler(async ({ data }: { data: any }) => {
-    const { peca, biotipo, comprimento, decote, manga, saia, renda, comentario, tipoCerimonia, rendaDecisao, ocasiao, previousCroquiUrl } = data;
+async function internalGenerateCroqui(data: any): Promise<string> {
+  const { peca, biotipo, comprimento, decote, manga, saia, renda, comentario, tipoCerimonia, rendaDecisao, ocasiao, previousCroquiUrl } = data;
 
-    // Se houver um croqui anterior (ajuste/edição), usamos o endpoint de EDIT do Seedream para alterar a imagem existente
-    if (previousCroquiUrl) {
-      const editPrompt = `CRITICAL INSTRUCTION FOR CROQUI EDIT: The reference image is an existing hand-drawn fashion croqui sketch.
+  // Se houver um croqui anterior (ajuste/edição), usamos o endpoint de EDIT do Seedream para alterar a imagem existente
+  if (previousCroquiUrl) {
+    const editPrompt = `CRITICAL INSTRUCTION FOR CROQUI EDIT: The reference image is an existing hand-drawn fashion croqui sketch.
 Modify this exact croqui drawing by applying ONLY the following requested design adjustment: "${comentario || 'update details'}".
 Preserve the exact composition, mannequin body shape, hand-drawn black pencil line-art sketch style, fabric drape, and side-by-side front/back layout from the reference image.
 Do NOT redraw a completely different dress or alter unrelated parts of the garment. Only alter the specified elements (such as adding long sleeves, changing neckline, or adding details) while maintaining maximum fidelity to the original reference croqui image.
 Style: hand-drawn black pencil on white paper. No color, no photo, no background, no text, no facial features.`;
 
-      try {
-        const result: any = await fal.subscribe("fal-ai/bytedance/seedream/v4/edit", {
-          input: {
-            prompt: editPrompt,
-            image_urls: [previousCroquiUrl],
-            image_size: "portrait_4_3",
-            num_images: 1,
-            enable_safety_checker: false,
-          }
-        });
+    try {
+      const result: any = await fal.subscribe("fal-ai/bytedance/seedream/v4/edit", {
+        input: {
+          prompt: editPrompt,
+          image_urls: [previousCroquiUrl],
+          image_size: "portrait_4_3",
+          num_images: 1,
+          enable_safety_checker: false,
+        }
+      });
 
-        const imageUrl = result.images?.[0]?.url;
-        if (!imageUrl) throw new Error("No image returned from Fal.ai");
-        return { url: imageUrl };
-      } catch (error) {
-        console.error("[CROQUI EDIT] Error editing croqui:", error);
-        throw error;
-      }
+      const imageUrl = result.images?.[0]?.url;
+      if (!imageUrl) throw new Error("No image returned from Fal.ai");
+      return imageUrl;
+    } catch (error) {
+      console.error("[CROQUI EDIT] Error editing croqui:", error);
+      throw error;
     }
+  }
 
-    let bodyContext = "";
-    if (biotipo && _BODY_CHARS[biotipo as keyof typeof _BODY_CHARS]) {
-      bodyContext = ` CRITICAL — the figure MUST have body type: ${_BODY_CHARS[biotipo as keyof typeof _BODY_CHARS]}. This is NOT a standard thin fashion illustration — the body shape described must be clearly visible with realistic proportions. Do NOT draw a slender model.`;
+  let bodyContext = "";
+  if (biotipo && _BODY_CHARS[biotipo as keyof typeof _BODY_CHARS]) {
+    bodyContext = ` CRITICAL — the figure MUST have body type: ${_BODY_CHARS[biotipo as keyof typeof _BODY_CHARS]}. This is NOT a standard thin fashion illustration — the body shape described must be clearly visible with realistic proportions. Do NOT draw a slender model.`;
+  }
+
+  const pecaEn = PECA_EN[peca as keyof typeof PECA_EN] || peca || 'garment';
+  const comprimentoEn = comprimento ? (COMPRIMENTO_EN[comprimento as keyof typeof COMPRIMENTO_EN] || comprimento) : '';
+
+  const elementFragment = buildElementPromptFragment({ decote, manga, saia, renda, peca });
+  const isBottom = isBottomGarment(pecaEn, peca || '');
+  const isTop = isTopGarment(pecaEn, peca || '');
+  const hemInstruction = comprimento ? (COMPRIMENTO_HEM[comprimento as keyof typeof COMPRIMENTO_HEM] || '') : '';
+  const sleevelessInstruction = buildSleevelessInstruction(decote, manga);
+
+  // Build the leading instruction block — garment type + length come FIRST
+  let leadingInstructions = '';
+  // Determina se a peça é de uma única peça (vestido, macacão)
+  const isOnePiece = pecaEn === 'dress' || pecaEn === 'jumpsuit' || ocasiao === 'Noiva';
+
+  if (ocasiao === "Noiva") {
+    let cerimonyCtx = "";
+    if (tipoCerimonia === "Civil") cerimonyCtx = " for a civil ceremony";
+    else if (tipoCerimonia === "Igreja") cerimonyCtx = " for a traditional church wedding";
+    else if (tipoCerimonia === "Cerimônia Aberta") cerimonyCtx = " for an outdoor open wedding ceremony";
+    
+    let laceCtx = "";
+    if (rendaDecisao === true) {
+      laceCtx = renda ? ` It features ${renda} lace details and applications.` : " It features lace details and applications.";
+    } else if (rendaDecisao === false) {
+      laceCtx = " It is absolutely plain with NO lace anywhere.";
     }
-
-    const pecaEn = PECA_EN[peca as keyof typeof PECA_EN] || peca || 'garment';
-    const comprimentoEn = comprimento ? (COMPRIMENTO_EN[comprimento as keyof typeof COMPRIMENTO_EN] || comprimento) : '';
-
-    const elementFragment = buildElementPromptFragment({ decote, manga, saia, renda, peca });
-    const isBottom = isBottomGarment(pecaEn, peca || '');
-    const isTop = isTopGarment(pecaEn, peca || '');
-    const hemInstruction = comprimento ? (COMPRIMENTO_HEM[comprimento as keyof typeof COMPRIMENTO_HEM] || '') : '';
-    const sleevelessInstruction = buildSleevelessInstruction(decote, manga);
-
-    // Build the leading instruction block — garment type + length come FIRST
-    let leadingInstructions = '';
-    // Determina se a peça é de uma única peça (vestido, macacão)
-    const isOnePiece = pecaEn === 'dress' || pecaEn === 'jumpsuit' || ocasiao === 'Noiva';
-
-    if (ocasiao === "Noiva") {
-      let cerimonyCtx = "";
-      if (tipoCerimonia === "Civil") cerimonyCtx = " for a civil ceremony";
-      else if (tipoCerimonia === "Igreja") cerimonyCtx = " for a traditional church wedding";
-      else if (tipoCerimonia === "Cerimônia Aberta") cerimonyCtx = " for an outdoor open wedding ceremony";
-      
-      let laceCtx = "";
-      if (rendaDecisao === true) {
-        laceCtx = renda ? ` It features ${renda} lace details and applications.` : " It features lace details and applications.";
-      } else if (rendaDecisao === false) {
-        laceCtx = " It is absolutely plain with NO lace anywhere.";
-      }
-      
-      leadingInstructions = `CRITICAL — ONE-PIECE GARMENT: This is a SINGLE bridal wedding dress${cerimonyCtx} — NOT a two-piece outfit. The dress is ONE continuous garment from neckline to hem with NO visible separation between bodice and skirt. Do NOT draw a top and separate skirt. The bodice and skirt are structurally integrated as one unified dress.${laceCtx}\nPresent the dress fully visible from neckline to hem.\n${hemInstruction}`;
-    } else if (isBottom) {
-      leadingInstructions = `IMPORTANT: This is a BOTTOM garment ONLY — a ${pecaEn}. Do NOT draw any top, blouse, shirt, or upper body clothing. Show ONLY the ${pecaEn} from waistband to hem. The mannequin torso above the waistband MUST be completely bare and clean — no seam lines, no zippers, no closure lines, no stitching, no fabric details above the waist. The upper body is just an empty mannequin form.\n${hemInstruction}`;
-    } else if (isTop) {
-      leadingInstructions = `IMPORTANT: This is a TOP garment ONLY — a ${pecaEn}. Do NOT draw any skirt, pants, dress, or lower body clothing. Show ONLY the ${pecaEn} from neckline to the natural hem at the waist/hips. The mannequin legs and lower body below the hem of the ${pecaEn} MUST be completely bare and clean — no fabric details, no skirt, no pants. The lower body is just an empty mannequin form.`;
-    } else {
-      const lengthPrefix = comprimentoEn ? `${comprimentoEn} ` : '';
-      const onePieceNote = isOnePiece
-        ? ` CRITICAL — ONE-PIECE GARMENT: This is a SINGLE unified ${pecaEn} — NOT a two-piece outfit. The bodice and lower portion are ONE continuous integrated garment. Do NOT draw a separate top and separate bottom. The waistline is a seam detail WITHIN the garment, not a separation point between two pieces.`
-        : '';
-      leadingInstructions = `This is a ${lengthPrefix}${pecaEn}.${onePieceNote} Present the garment fully visible from neckline/collar to hem, showing the complete silhouette: neckline, sleeves, body fit, waistline, and hem.\n${hemInstruction}`;
-    }
-
-    // Build strong front/back consistency instruction
-    const isSleevelessDesign = SLEEVELESS_DECOTES.includes(decote || '');
-    const sleevelessBackRule = isSleevelessDesign
-      ? ` CRITICAL BACK VIEW RULE: The front of this garment is strapless/sleeveless (${decote}). The back MUST also be strapless — do NOT add any straps, racerback, halter neck, shoulder coverage, tank-top back, or any fabric covering the shoulders or upper back that does not exist on the front. The back neckline must match the same strapless construction as the front. The upper back and shoulders must be completely bare, matching the front.`
+    
+    leadingInstructions = `CRITICAL — ONE-PIECE GARMENT: This is a SINGLE bridal wedding dress${cerimonyCtx} — NOT a two-piece outfit. The dress is ONE continuous garment from neckline to hem with NO visible separation between bodice and skirt. Do NOT draw a top and separate skirt. The bodice and skirt are structurally integrated as one unified dress.${laceCtx}\nPresent the dress fully visible from neckline to hem.\n${hemInstruction}`;
+  } else if (isBottom) {
+    leadingInstructions = `IMPORTANT: This is a BOTTOM garment ONLY — a ${pecaEn}. Do NOT draw any top, blouse, shirt, or upper body clothing. Show ONLY the ${pecaEn} from waistband to hem. The mannequin torso above the waistband MUST be completely bare and clean — no seam lines, no zippers, no closure lines, no stitching, no fabric details above the waist. The upper body is just an empty mannequin form.\n${hemInstruction}`;
+  } else if (isTop) {
+    leadingInstructions = `IMPORTANT: This is a TOP garment ONLY — a ${pecaEn}. Do NOT draw any skirt, pants, dress, or lower body clothing. Show ONLY the ${pecaEn} from neckline to the natural hem at the waist/hips. The mannequin legs and lower body below the hem of the ${pecaEn} MUST be completely bare and clean — no fabric details, no skirt, no pants. The lower body is just an empty mannequin form.`;
+  } else {
+    const lengthPrefix = comprimentoEn ? `${comprimentoEn} ` : '';
+    const onePieceNote = isOnePiece
+      ? ` CRITICAL — ONE-PIECE GARMENT: This is a SINGLE unified ${pecaEn} — NOT a two-piece outfit. The bodice and lower portion are ONE continuous integrated garment. Do NOT draw a separate top and separate bottom. The waistline is a seam detail WITHIN the garment, not a separation point between two pieces.`
       : '';
+    leadingInstructions = `This is a ${lengthPrefix}${pecaEn}.${onePieceNote} Present the garment fully visible from neckline/collar to hem, showing the complete silhouette: neckline, sleeves, body fit, waistline, and hem.\n${hemInstruction}`;
+  }
 
-    const backViewInstruction = isBottom
-      ? 'The back view must show closure details and seam lines ONLY on the garment itself (below the waistband). The mannequin torso above the waistband must remain completely bare — no zippers, seams, or lines on the upper back.'
-      : isTop
-        ? `The back view must show closure details and seam lines ONLY on the garment itself (above the waist/hips). The mannequin lower body below the hem of the ${pecaEn} must remain completely bare.`
-        : `CRITICAL FRONT/BACK CONSISTENCY: The back view must be structurally consistent with the front view — same neckline type, same sleeve type (or lack thereof), same overall silhouette and construction. Do NOT add structural elements to the back (straps, sleeves, coverage) that do not exist on the front. The back view should show: the reverse of the same garment construction, any back closure details (invisible zipper, buttons), back seam lines, and darts — but the overall structure must match the front exactly.${sleevelessBackRule}`;
+  // Build strong front/back consistency instruction
+  const isSleevelessDesign = SLEEVELESS_DECOTES.includes(decote || '');
+  const sleevelessBackRule = isSleevelessDesign
+    ? ` CRITICAL BACK VIEW RULE: The front of this garment is strapless/sleeveless (${decote}). The back MUST also be strapless — do NOT add any straps, racerback, halter neck, shoulder coverage, tank-top back, or any fabric covering the shoulders or upper back that does not exist on the front. The back neckline must match the same strapless construction as the front. The upper back and shoulders must be completely bare, matching the front.`
+    : '';
 
-    const prompt = `${sleevelessInstruction}${leadingInstructions}
+  const backViewInstruction = isBottom
+    ? 'The back view must show closure details and seam lines ONLY on the garment itself (below the waistband). The mannequin torso above the waistband must remain completely bare — no zippers, seams, or lines on the upper back.'
+    : isTop
+      ? `The back view must show closure details and seam lines ONLY on the garment itself (above the waist/hips). The mannequin lower body below the hem of the ${pecaEn} must remain completely bare.`
+      : `CRITICAL FRONT/BACK CONSISTENCY: The back view must be structurally consistent with the front view — same neckline type, same sleeve type (or lack thereof), same overall silhouette and construction. Do NOT add structural elements to the back (straps, sleeves, coverage) that do not exist on the front. The back view should show: the reverse of the same garment construction, any back closure details (invisible zipper, buttons), back seam lines, and darts — but the overall structure must match the front exactly.${sleevelessBackRule}`;
+
+  const prompt = `${sleevelessInstruction}${leadingInstructions}
 Professional fashion design croqui of a ${comprimentoEn} ${pecaEn}.${elementFragment}${bodyContext}
 ${isOnePiece ? `REMINDER: This is ONE single piece of clothing — bodice and skirt/lower portion are NOT separate items. Draw it as one unified garment with continuous fabric flow from top to bottom.\n` : ''}${comentario ? `Extra design instructions: ${comentario}\n` : ''}
 CRITICAL: Show BOTH front view AND back view of the garment side by side in a single composition — front view on the left, back view on the right, as in professional fashion croquis.
@@ -225,24 +230,30 @@ ${backViewInstruction}
 No color, no photographs, no realistic rendering, no 3D, no shading gradients, no painted or digital look.
 No text, no labels, no annotations, no watermarks, no faces, no facial features.`;
 
-    try {
-      const result: any = await fal.subscribe("fal-ai/bytedance/seedream/v4/text-to-image", {
-        input: {
-          prompt,
-          image_size: "portrait_4_3",
-          num_images: 1,
-          enable_safety_checker: false,
-        }
-      });
+  try {
+    const result: any = await fal.subscribe("fal-ai/bytedance/seedream/v4/text-to-image", {
+      input: {
+        prompt,
+        image_size: "portrait_4_3",
+        num_images: 1,
+        enable_safety_checker: false,
+      }
+    });
 
-      const imageUrl = result.images?.[0]?.url;
-      if (!imageUrl) throw new Error("No image returned from Fal.ai");
+    const imageUrl = result.images?.[0]?.url;
+    if (!imageUrl) throw new Error("No image returned from Fal.ai");
 
-      return { url: imageUrl };
-    } catch (error) {
-      console.error("[CROQUI] Error generating:", error);
-      throw error;
-    }
+    return imageUrl;
+  } catch (error) {
+    console.error("[CROQUI] Error generating:", error);
+    throw error;
+  }
+}
+
+export const generateCroquiFn: any = createServerFn({ method: 'POST' })
+  .handler(async ({ data }: { data: any }) => {
+    const url = await internalGenerateCroqui(data);
+    return { url };
   });
 
 function hexToColorDescription(hex: string): string {
@@ -789,39 +800,144 @@ export const confirmUploadFn: any = createServerFn({ method: 'POST' })
     return { success: true };
   });
 
-export const uploadCroquiFileFn: any = createServerFn({ method: 'POST' })
-  .handler(async ({ data }: { data: any }) => {
-    const { sessionId, fileBase64, fileName } = data;
+async function uploadBase64ToStorage(fileBase64: string, path: string): Promise<string> {
+  try {
+    const buffer = Buffer.from(fileBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+    const { error } = await supabase.storage
+      .from('croqui-uploads')
+      .upload(path, buffer, {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
+
+    if (error) {
+      console.warn('[STORAGE] Falling back to base64 data URL:', error.message);
+      return fileBase64.startsWith('data:') ? fileBase64 : `data:image/jpeg;base64,${fileBase64}`;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('croqui-uploads')
+      .getPublicUrl(path);
+
+    return publicUrlData.publicUrl;
+  } catch (err) {
+    console.warn('[STORAGE] Storage upload error, using base64 fallback:', err);
+    return fileBase64.startsWith('data:') ? fileBase64 : `data:image/jpeg;base64,${fileBase64}`;
+  }
+}
+
+async function analyzeReferenceImages(params: {
+  mode: 'single' | 'composite';
+  ocasiao?: string;
+  imageUrls: string[];
+}): Promise<any> {
+  const { mode, ocasiao, imageUrls } = params;
+  const prompt = mode === 'composite'
+    ? buildVisionPromptForCompositeReference(ocasiao)
+    : buildVisionPromptForSingleReference(ocasiao);
+
+  try {
+    const res: any = await fal.subscribe("fal-ai/any-llm/vision", {
+      input: {
+        prompt,
+        image_urls: imageUrls,
+        model: "openai/gpt-4o-mini"
+      }
+    });
+    const outputText = res.output || res.text || res.choices?.[0]?.message?.content || JSON.stringify(res);
+    return parseVisionAnalysisToCroquiSpecs(outputText, ocasiao);
+  } catch (err) {
+    console.warn("[VISION LLM] Any-LLM falhou, tentando fallback:", err);
     try {
-      const buffer = Buffer.from(fileBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
-      const path = `croquis/${sessionId}_${Date.now()}_${fileName || 'croqui.jpg'}`;
+      const resFallback: any = await fal.subscribe("fal-ai/llavav1.5-13b", {
+        input: {
+          prompt,
+          image_url: imageUrls[0],
+        }
+      });
+      const outputText = resFallback.output || resFallback.text || JSON.stringify(resFallback);
+      return parseVisionAnalysisToCroquiSpecs(outputText, ocasiao);
+    } catch (err2) {
+      console.warn("[VISION LLM] Fallback falhou, usando parâmetros padrão:", err2);
+      return synthesizeTechnicalSpecs({
+        peca: "Vestido",
+        comprimento: ocasiao === "Noiva" ? "Longo" : "Longo",
+        detalhes_extras: "Modelo de referência de alta costura sintetizado."
+      }, ocasiao);
+    }
+  }
+}
 
-      const { error } = await supabase.storage
-        .from('croqui-uploads')
-        .upload(path, buffer, {
-          contentType: 'image/jpeg',
-          upsert: true,
-        });
+export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
+  .handler(async ({ data }: { data: any }) => {
+    const { sessionId, mode, ocasiao, singleFileBase64, topFileBase64, bottomFileBase64 } = data;
 
-      if (error) {
-        console.warn('[STORAGE] Falling back to base64 data URL:', error.message);
-        const fallbackUrl = fileBase64.startsWith('data:') ? fileBase64 : `data:image/jpeg;base64,${fileBase64}`;
-        await confirmUploadSession(sessionId, fallbackUrl);
-        return { url: fallbackUrl };
+    try {
+      await updateUploadSessionStatus(sessionId, 'analyzing');
+
+      const imageUrls: string[] = [];
+      if (mode === 'composite') {
+        if (topFileBase64) {
+          const topUrl = await uploadBase64ToStorage(topFileBase64, `references/${sessionId}_top_${Date.now()}.jpg`);
+          imageUrls.push(topUrl);
+        }
+        if (bottomFileBase64) {
+          const bottomUrl = await uploadBase64ToStorage(bottomFileBase64, `references/${sessionId}_bottom_${Date.now()}.jpg`);
+          imageUrls.push(bottomUrl);
+        }
+      } else {
+        if (singleFileBase64) {
+          const singleUrl = await uploadBase64ToStorage(singleFileBase64, `references/${sessionId}_single_${Date.now()}.jpg`);
+          imageUrls.push(singleUrl);
+        }
       }
 
-      const { data: publicUrlData } = supabase.storage
-        .from('croqui-uploads')
-        .getPublicUrl(path);
+      if (imageUrls.length === 0) {
+        throw new Error('Nenhuma imagem de referência enviada.');
+      }
 
-      const croquiUrl = publicUrlData.publicUrl;
+      // 1. Analisa as imagens com o Vision LLM
+      const specs = await analyzeReferenceImages({
+        mode: mode === 'composite' ? 'composite' : 'single',
+        ocasiao,
+        imageUrls,
+      });
+
+      // 2. Gera o croqui técnico a partir das especificações
+      const croquiUrl = await internalGenerateCroqui({
+        ...specs,
+        ocasiao: ocasiao || specs.ocasiao,
+      });
+
+      // 3. Atualiza a sessão com o croqui gerado
       await confirmUploadSession(sessionId, croquiUrl);
-      return { url: croquiUrl };
-    } catch (err) {
-      console.warn('[STORAGE] Storage upload error, using base64 fallback:', err);
-      const fallbackUrl = fileBase64.startsWith('data:') ? fileBase64 : `data:image/jpeg;base64,${fileBase64}`;
-      await confirmUploadSession(sessionId, fallbackUrl);
-      return { url: fallbackUrl };
+
+      return { success: true, croquiUrl, specs };
+    } catch (err: any) {
+      console.error('[REFERENCE UPLOAD] Erro ao processar referência e gerar croqui:', err);
+      await updateUploadSessionStatus(sessionId, 'failed');
+      throw err;
     }
   });
+
+export const uploadCroquiFileFn: any = createServerFn({ method: 'POST' })
+  .handler(async ({ data }: { data: any }) => {
+    const { sessionId, fileBase64, fileName, ocasiao } = data;
+    try {
+      return await uploadReferenceFilesFn({
+        data: {
+          sessionId,
+          mode: 'single',
+          ocasiao,
+          singleFileBase64: fileBase64,
+        }
+      });
+    } catch (err) {
+      console.warn('[STORAGE] Falling back to direct upload handler:', err);
+      const url = await uploadBase64ToStorage(fileBase64, `croquis/${sessionId}_${Date.now()}_${fileName || 'croqui.jpg'}`);
+      await confirmUploadSession(sessionId, url);
+      return { url };
+    }
+  });
+
 

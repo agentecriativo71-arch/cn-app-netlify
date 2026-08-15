@@ -30,6 +30,7 @@ export function CroquiModoModal({ open, nome, onClose, onSelectCriarDoZero }: Cr
   const [step, setStep] = useState<"choice" | "ocasiao" | "qr">("choice");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loadingSession, setLoadingSession] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState<string>("pending");
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
   useEffect(() => {
@@ -37,6 +38,7 @@ export function CroquiModoModal({ open, nome, onClose, onSelectCriarDoZero }: Cr
       setStep("choice");
       setSessionId(null);
       setLoadingSession(false);
+      setSessionStatus("pending");
       setUploadSuccess(false);
     }
   }, [open]);
@@ -48,23 +50,27 @@ export function CroquiModoModal({ open, nome, onClose, onSelectCriarDoZero }: Cr
     const interval = setInterval(async () => {
       try {
         const res = await pollUploadSessionFn({ data: { sessionId } });
-        if (res.session && res.session.status === "uploaded" && res.session.croqui_url) {
-          setUploadSuccess(true);
-          s.set({
-            croquiUrl: res.session.croqui_url,
-            croquiUploadSessionId: sessionId,
-          });
+        if (res.session) {
+          setSessionStatus(res.session.status);
 
-          // Navega diretamente para /realista após 1.2s de feedback
-          setTimeout(() => {
-            onClose();
-            router.navigate({ to: "/realista" });
-          }, 1200);
+          if (res.session.status === "uploaded" && res.session.croqui_url) {
+            setUploadSuccess(true);
+            s.set({
+              croquiUrl: res.session.croqui_url,
+              croquiUploadSessionId: sessionId,
+            });
+
+            // Navega diretamente para /realista após feedback
+            setTimeout(() => {
+              onClose();
+              router.navigate({ to: "/realista" });
+            }, 1200);
+          }
         }
       } catch (err) {
         console.error("[POLL] Erro ao consultar sessão:", err);
       }
-    }, 3000);
+    }, 2500);
 
     return () => clearInterval(interval);
   }, [step, sessionId, uploadSuccess]);
@@ -108,7 +114,7 @@ export function CroquiModoModal({ open, nome, onClose, onSelectCriarDoZero }: Cr
                 Olá, {nome}!
               </h3>
               <p className="text-sm text-white/70 max-w-xs mx-auto">
-                Você já possui a foto ou print de um croqui que deseja utilizar, ou prefere criar um do zero?
+                Você já possui a foto ou print de um modelo que deseja utilizar como referência, ou prefere criar um do zero?
               </p>
             </div>
 
@@ -123,8 +129,8 @@ export function CroquiModoModal({ open, nome, onClose, onSelectCriarDoZero }: Cr
                     {loadingSession ? <Loader2 size={24} className="animate-spin" /> : <Upload size={24} />}
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-white uppercase tracking-wider">Já tenho um croqui</h4>
-                    <p className="text-xs text-white/60">Enviar do celular via QR Code</p>
+                    <h4 className="text-sm font-bold text-white uppercase tracking-wider">Já tenho um modelo</h4>
+                    <p className="text-xs text-white/60">Enviar fotos do celular via QR Code</p>
                   </div>
                 </div>
                 <Smartphone size={20} className="text-[#E5D3A2] opacity-80" />
@@ -217,23 +223,30 @@ export function CroquiModoModal({ open, nome, onClose, onSelectCriarDoZero }: Cr
                 <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center border border-emerald-500/40 animate-bounce">
                   <CheckCircle2 size={36} />
                 </div>
-                <h4 className="text-xl font-bold text-white uppercase tracking-wide">Croqui Recebido!</h4>
-                <p className="text-xs text-white/70">Avançando para a foto realista...</p>
+                <h4 className="text-xl font-bold text-white uppercase tracking-wide">Modelo Recebido!</h4>
+                <p className="text-xs text-white/70">Croqui técnico gerado. Avançando para foto realista...</p>
               </div>
             ) : (
               <div className="space-y-5 py-2">
                 <p className="text-xs text-white/80 max-w-sm mx-auto">
-                  Aponte a câmera do seu celular para o QR Code abaixo e envie a foto do seu croqui:
+                  Aponte a câmera do seu celular para o QR Code abaixo e envie a foto do seu modelo de referência:
                 </p>
 
                 <div className="bg-white p-4 rounded-2xl inline-block shadow-2xl border-4 border-[#E5D3A2]">
                   <QRCodeSVG value={uploadUrl} size={190} level="H" includeMargin={false} />
                 </div>
 
-                <div className="flex items-center justify-center gap-2 text-xs text-[#E5D3A2] animate-pulse">
-                  <Loader2 size={16} className="animate-spin" />
-                  <span>Aguardando envio do croqui pelo celular...</span>
-                </div>
+                {sessionStatus === "analyzing" ? (
+                  <div className="flex items-center justify-center gap-2 text-xs text-[#E5D3A2] animate-pulse">
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>A IA está analisando as fotos e gerando o croqui técnico...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2 text-xs text-[#E5D3A2] animate-pulse">
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Aguardando envio das fotos pelo celular...</span>
+                  </div>
+                )}
 
                 <div className="pt-2 text-[10px] text-white/40 break-all max-w-xs mx-auto">
                   Ou acesse no celular: <span className="underline text-white/60">{uploadUrl}</span>
