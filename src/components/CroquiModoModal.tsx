@@ -60,10 +60,10 @@ export function CroquiModoModal({ open, nome, onClose, onSelectCriarDoZero }: Cr
               croquiUploadSessionId: sessionId,
             });
 
-            // Navega diretamente para /realista após feedback
+            // Navega para /croqui para visualização do croqui gerado antes do realista
             setTimeout(() => {
               onClose();
-              router.navigate({ to: "/realista" });
+              router.navigate({ to: "/croqui" });
             }, 1200);
           }
         }
@@ -224,7 +224,7 @@ export function CroquiModoModal({ open, nome, onClose, onSelectCriarDoZero }: Cr
                   <CheckCircle2 size={36} />
                 </div>
                 <h4 className="text-xl font-bold text-white uppercase tracking-wide">Modelo Recebido!</h4>
-                <p className="text-xs text-white/70">Croqui técnico gerado. Avançando para foto realista...</p>
+                <p className="text-xs text-white/70">Croqui técnico gerado. Abrindo visualização do croqui...</p>
               </div>
             ) : (
               <div className="space-y-5 py-2">
