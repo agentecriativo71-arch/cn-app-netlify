@@ -7,9 +7,9 @@ export const MANNEQUIN_URLS: Record<string, string> = {
   "Retângulo":           `${SUPABASE_ELEMENTOS_URL}/manequins/retangulo.jpg`,
 };
 
-export function getMannequinUrl(biotipo?: string | null): string | null {
-  if (!biotipo) return null;
-  return MANNEQUIN_URLS[biotipo] || null;
+export function getMannequinUrl(biotipo?: string | null): string {
+  if (!biotipo) return MANNEQUIN_URLS["Ampulheta"];
+  return MANNEQUIN_URLS[biotipo] || MANNEQUIN_URLS["Ampulheta"];
 }
 
 export const CORES_PADRAO = [

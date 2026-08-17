@@ -57,10 +57,10 @@ describe("Fluxo Vestido de Noiva - Ajustes Cliente", () => {
     expect(getMannequinUrl("Retângulo")).toBe(MANNEQUIN_URLS["Retângulo"]);
   });
 
-  it("deve retornar null para biotipo inválido ou nulo", () => {
-    expect(getMannequinUrl(null)).toBeNull();
-    expect(getMannequinUrl(undefined)).toBeNull();
-    expect(getMannequinUrl("Biotipo Inexistente")).toBeNull();
+  it("deve retornar o manequim Ampulheta padrão para biotipo inválido ou nulo", () => {
+    expect(getMannequinUrl(null)).toBe(MANNEQUIN_URLS["Ampulheta"]);
+    expect(getMannequinUrl(undefined)).toBe(MANNEQUIN_URLS["Ampulheta"]);
+    expect(getMannequinUrl("Biotipo Inexistente")).toBe(MANNEQUIN_URLS["Ampulheta"]);
   });
 
   it("deve conter URLs do Supabase elementos para todos os biotipos", () => {
