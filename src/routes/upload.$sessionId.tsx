@@ -1,11 +1,12 @@
 // ROTA PÚBLICA — não adicionar auth guard aqui
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Cropper, { type Area } from "react-easy-crop";
 import { pollUploadSessionFn, uploadReferenceFilesFn } from "@/server/api";
 import { cropImageToDataUrl, type CropPixels } from "@/lib/imageCrop";
 import { buildReferenceUploadPayload } from "@/lib/referenceUpload";
+import { REFERENCE_FILE_ACCEPT, isReferenceImageType } from "@/lib/referenceUploadUi";
 import { type ReferencePiece } from "@/lib/referenceUtils";
+import { ReferenceCropper } from "@/components/ReferenceCropper";
 import { Upload, CheckCircle2, Loader2, ImagePlus, RefreshCw, Layers, Sparkles, Crop, X } from "lucide-react";
 
 export const Route = createFileRoute("/upload/$sessionId")({
@@ -19,7 +20,6 @@ export const Route = createFileRoute("/upload/$sessionId")({
 });
 
 type ImageTarget = "single" | "top" | "bottom";
-type CropPosition = { x: number; y: number };
 
 function UploadModeloMobile() {
   const { sessionId } = Route.useParams();
@@ -36,8 +36,6 @@ function UploadModeloMobile() {
   const [bottomCrop, setBottomCrop] = useState<string | null>(null);
 
   const [cropTarget, setCropTarget] = useState<ImageTarget | null>(null);
-  const [cropPosition, setCropPosition] = useState<CropPosition>({ x: 0, y: 0 });
-  const [cropZoom, setCropZoom] = useState(1);
   const [cropAreaPixels, setCropAreaPixels] = useState<CropPixels | null>(null);
   const [cropping, setCropping] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -100,8 +98,8 @@ function UploadModeloMobile() {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, target: ImageTarget) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!(file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp")) {
-      setErrorMsg("Selecione uma imagem JPEG, PNG ou WebP.");
+    if (!isReferenceImageType(file.type)) {
+      setErrorMsg("Selecione um arquivo de imagem pela câmera ou galeria.");
       return;
     }
     setErrorMsg(null);
@@ -110,8 +108,6 @@ function UploadModeloMobile() {
     if (target === "single") setSingleCrop(null);
     if (target === "top") setTopCrop(null);
     if (target === "bottom") setBottomCrop(null);
-    setCropPosition({ x: 0, y: 0 });
-    setCropZoom(1);
     setCropAreaPixels(null);
     setCropTarget(target);
   };
@@ -196,7 +192,7 @@ function UploadModeloMobile() {
 
       <footer className="pb-2 pt-2"><button onClick={handleUploadSubmit} disabled={!isReadyToSubmit || uploading || !!cropTarget} className="w-full py-4 rounded-2xl bg-[#E5D3A2] text-black font-extrabold uppercase tracking-wider text-sm shadow-xl disabled:opacity-40 flex items-center justify-center gap-2">{uploading ? <><Loader2 size={18} className="animate-spin" /> Analisando recortes...</> : <><Sparkles size={18} /> Enviar análise ao totem</>}</button></footer>
 
-      {cropTarget && cropImage && <div className="fixed inset-0 z-50 bg-black/95 p-4 flex flex-col justify-center gap-4"><div className="flex items-center justify-between"><div><p className="text-[#E5D3A2] text-xs uppercase tracking-wider font-bold">Recortar foco</p><p className="text-white/70 text-xs">Enquadre somente a pessoa ou roupa cujo modelo deseja usar.</p></div><button onClick={handleCancelCrop} className="p-2 text-white/70"><X /></button></div><div className="relative w-full h-[60vh] bg-[#181818] rounded-2xl overflow-hidden"><Cropper image={cropImage} crop={cropPosition} zoom={cropZoom} aspect={cropTarget === "single" ? 3 / 4 : cropTarget === "top" ? 4 / 3 : 3 / 4} onCropChange={setCropPosition} onZoomChange={setCropZoom} onCropComplete={(_, pixels) => setCropAreaPixels(pixels)} /></div><label className="text-xs text-white/70">Zoom<input type="range" min={1} max={3} step={0.1} value={cropZoom} onChange={(event) => setCropZoom(Number(event.target.value))} className="w-full accent-[#E5D3A2]" /></label><button onClick={handleApplyCrop} disabled={cropping || !cropAreaPixels} className="w-full py-3 rounded-xl bg-[#E5D3A2] text-black font-bold uppercase disabled:opacity-40">{cropping ? "Preparando..." : "Aplicar recorte"}</button></div>}
+      {cropTarget && cropImage && <div className="fixed inset-0 z-50 bg-black/95 p-4 flex flex-col justify-center gap-4"><div className="flex items-center justify-between"><div><p className="text-[#E5D3A2] text-xs uppercase tracking-wider font-bold">Selecionar foco</p><p className="text-white/70 text-xs">Arraste a área e ajuste os quatro cantos para enquadrar somente a pessoa ou roupa principal.</p></div><button onClick={handleCancelCrop} className="p-2 text-white/70"><X /></button></div><ReferenceCropper image={cropImage} onCropChange={setCropAreaPixels} /><button onClick={handleApplyCrop} disabled={cropping || !cropAreaPixels} className="w-full py-3 rounded-xl bg-[#E5D3A2] text-black font-bold uppercase disabled:opacity-40">{cropping ? "Preparando..." : "Aplicar recorte"}</button></div>}
     </div>
   );
 }
@@ -204,14 +200,14 @@ function UploadModeloMobile() {
 function CenteredMessage({ children }: { children: React.ReactNode }) { return <div className="min-h-screen bg-[#121212] text-white flex flex-col items-center justify-center p-6 text-center space-y-4">{children}</div>; }
 
 function SingleSlot({ preview, onChange, onRecrop }: { preview: string | null; onChange: (event: React.ChangeEvent<HTMLInputElement>) => void; onRecrop: () => void }) {
-  if (!preview) return <label className="w-full h-64 rounded-3xl border-2 border-dashed border-[#E5D3A2]/50 bg-white/5 flex flex-col items-center justify-center p-6 text-center cursor-pointer"><input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={onChange} className="hidden" /><ImagePlus size={32} className="text-[#E5D3A2] mb-3" /><span className="text-sm font-bold uppercase">Tirar foto ou escolher arquivo</span><span className="text-[11px] text-white/50">O recorte será enviado, não a foto original</span></label>;
+  if (!preview) return <label className="w-full h-64 rounded-3xl border-2 border-dashed border-[#E5D3A2]/50 bg-white/5 flex flex-col items-center justify-center p-6 text-center cursor-pointer"><input type="file" accept={REFERENCE_FILE_ACCEPT} onChange={onChange} className="hidden" /><ImagePlus size={32} className="text-[#E5D3A2] mb-3" /><span className="text-sm font-bold uppercase">Tirar foto ou escolher da galeria</span><span className="text-[11px] text-white/50">O recorte será enviado, não a foto original</span></label>;
   return <div className="w-full space-y-3"><PreviewImage src={preview} alt="Recorte do modelo" onRecrop={onRecrop} onChange={onChange} /><p className="text-[11px] text-center text-white/60">Apenas este recorte será enviado ao GPT-5 Vision.</p></div>;
 }
 
 function CompositeSlot({ label, preview, onChange, onRecrop }: { label: string; preview: string | null; onChange: (event: React.ChangeEvent<HTMLInputElement>) => void; onRecrop: () => void }) {
-  return <div className="space-y-1.5 text-center"><span className="text-[10px] font-bold text-[#E5D3A2] uppercase tracking-wider flex items-center justify-center gap-1"><Layers size={12} /> {label}</span>{preview ? <PreviewImage src={preview} alt={label} onRecrop={onRecrop} onChange={onChange} compact /> : <label className="w-full h-44 rounded-2xl border-2 border-dashed border-[#E5D3A2]/40 bg-white/5 flex flex-col items-center justify-center p-3 cursor-pointer"><input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={onChange} className="hidden" /><ImagePlus size={24} className="text-[#E5D3A2] mb-1" /><span className="text-[11px] font-bold uppercase">Selecionar foto</span></label>}</div>;
+  return <div className="space-y-1.5 text-center"><span className="text-[10px] font-bold text-[#E5D3A2] uppercase tracking-wider flex items-center justify-center gap-1"><Layers size={12} /> {label}</span>{preview ? <PreviewImage src={preview} alt={label} onRecrop={onRecrop} onChange={onChange} compact /> : <label className="w-full h-44 rounded-2xl border-2 border-dashed border-[#E5D3A2]/40 bg-white/5 flex flex-col items-center justify-center p-3 cursor-pointer"><input type="file" accept={REFERENCE_FILE_ACCEPT} onChange={onChange} className="hidden" /><ImagePlus size={24} className="text-[#E5D3A2] mb-1" /><span className="text-[11px] font-bold uppercase">Selecionar da galeria</span></label>}</div>;
 }
 
 function PreviewImage({ src, alt, onRecrop, onChange, compact = false }: { src: string; alt: string; onRecrop: () => void; onChange: (event: React.ChangeEvent<HTMLInputElement>) => void; compact?: boolean }) {
-  return <div className={`relative rounded-2xl overflow-hidden border-2 border-[#E5D3A2] bg-black ${compact ? "h-44" : "aspect-3/4 max-h-72"}`}><img src={src} alt={alt} className="w-full h-full object-contain" /><div className="absolute top-2 right-2 flex gap-2"><button type="button" onClick={onRecrop} className="p-2 rounded-full bg-black/75 border border-white/20"><Crop size={14} /></button><label className="p-2 rounded-full bg-black/75 border border-white/20 cursor-pointer"><input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={onChange} className="hidden" /><RefreshCw size={14} /></label></div></div>;
+  return <div className={`relative rounded-2xl overflow-hidden border-2 border-[#E5D3A2] bg-black ${compact ? "h-44" : "aspect-3/4 max-h-72"}`}><img src={src} alt={alt} className="w-full h-full object-contain" /><div className="absolute top-2 right-2 flex gap-2"><button type="button" onClick={onRecrop} className="p-2 rounded-full bg-black/75 border border-white/20"><Crop size={14} /></button><label className="p-2 rounded-full bg-black/75 border border-white/20 cursor-pointer"><input type="file" accept={REFERENCE_FILE_ACCEPT} onChange={onChange} className="hidden" /><RefreshCw size={14} /></label></div></div>;
 }
