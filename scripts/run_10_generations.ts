@@ -368,7 +368,7 @@ async function generateRealista(data: any) {
 
   let fabricInstruction = "";
   let mannequinRef = "";
-  let croquiRef = "";
+  const croquiRef = "";
 
   if (mannequinUrl) {
     mannequinRef = `IMAGE 1 is a photorealistic dressmaking mannequin — it defines the exact body shape, silhouette and proportions to preserve.\nIMAGE 2 is a hand-drawn fashion croqui sketch of a ${lengthPrefix}${pecaEn}.`;

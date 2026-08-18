@@ -412,7 +412,7 @@ function Criar() {
               } else if (v === "Blazer") {
                 patch.saia = null;
                 patch.comprimento = null;
-                patch.manga = "Longa";
+                patch.manga = "Longa (Long Sleeve)";
               } else if (v === "Blusa" || v === "Macacão" || v === "Top") {
                 patch.saia = null;
                 patch.comprimento = null;

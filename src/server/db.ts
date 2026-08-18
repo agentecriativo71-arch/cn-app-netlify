@@ -1,13 +1,15 @@
 import pg from 'pg';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
+import type { ReferenceAnalysis, ReferencePiece } from '../lib/referenceUtils';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.VITE_SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
-const supabaseFallback = createClient(supabaseUrl, supabaseKey);
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseFallback = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 let pool: pg.Pool | null = null;
 const dbUrl = process.env.DATABASE_URL;
+let dbReady: Promise<unknown> = Promise.resolve();
 
 function shouldUseSsl(url: string): boolean {
   // Desabilita SSL se explicitamente indicado na URL
@@ -29,7 +31,7 @@ if (dbUrl) {
     ssl: useSsl ? { rejectUnauthorized: false } : false
   });
   
-  pool.query(`
+  dbReady = pool.query(`
     CREATE TABLE IF NOT EXISTS looks (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       ocasiao VARCHAR(255),
@@ -53,11 +55,27 @@ if (dbUrl) {
     CREATE TABLE IF NOT EXISTS upload_sessions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       nome_cliente VARCHAR(255),
+      ocasiao VARCHAR(255),
+      reference_piece VARCHAR(50),
       status VARCHAR(50) DEFAULT 'pending',
       croqui_url TEXT,
+      reference_analysis JSONB,
+      analysis_error_code VARCHAR(100),
+      vision_provider VARCHAR(50),
+      vision_model VARCHAR(100),
+      prompt_version VARCHAR(100),
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
       expires_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP + INTERVAL '15 minutes'
     );
+    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS ocasiao VARCHAR(255);
+    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS reference_piece VARCHAR(50);
+    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS reference_analysis JSONB;
+    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS analysis_error_code VARCHAR(100);
+    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS vision_provider VARCHAR(50);
+    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS vision_model VARCHAR(100);
+    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS prompt_version VARCHAR(100);
+    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
   `).catch(err => {
     console.error('[DB] Error verifying/creating tables:', err);
   });
@@ -89,6 +107,7 @@ export async function searchProducts(term: string): Promise<ProductSearchResult[
     const res = await pool.query(query, [`%${cleanTerm}%`]);
     return res.rows;
   } else {
+    if (!supabaseFallback) return [];
     const { data, error } = await supabaseFallback
       .from('products')
       .select('id, name, sku, image_url, pantone, tag')
@@ -127,6 +146,7 @@ export async function saveLook(data: any): Promise<string> {
     const res = await pool.query(query, values);
     return res.rows[0].id;
   } else {
+    if (!supabaseFallback) throw new Error('DATABASE_URL não configurado e Supabase fallback indisponível.');
     const { data: dbData, error } = await supabaseFallback
       .from('looks')
       .insert([data])
@@ -150,6 +170,7 @@ export async function updateLook(id: string, update: any): Promise<void> {
     const values = [id, ...Object.values(update)];
     await pool.query(query, values);
   } else {
+    if (!supabaseFallback) throw new Error('DATABASE_URL não configurado e Supabase fallback indisponível.');
     const { error } = await supabaseFallback
       .from('looks')
       .update(update)
@@ -162,23 +183,35 @@ export type UploadSession = {
   id: string;
   nome_cliente: string | null;
   ocasiao?: string | null;
+  reference_piece?: ReferencePiece | null;
   status: string;
   croqui_url: string | null;
   specs?: any;
+  reference_analysis?: ReferenceAnalysis | null;
+  analysis_error_code?: string | null;
+  vision_provider?: string | null;
+  vision_model?: string | null;
+  prompt_version?: string | null;
+  updated_at?: string;
   created_at?: string;
   expires_at?: string;
 };
 
 const memoryUploadSessions = new Map<string, UploadSession>();
 
-export async function createUploadSession(nomeCliente: string, ocasiao?: string): Promise<UploadSession> {
+export async function createUploadSession(nomeCliente: string, ocasiao?: string, referencePiece?: ReferencePiece | null): Promise<UploadSession> {
   const sessionId = randomUUID();
+  const createdAt = new Date();
   const session: UploadSession = {
     id: sessionId,
     nome_cliente: nomeCliente,
     ocasiao: ocasiao || null,
+    reference_piece: referencePiece || null,
     status: 'pending',
     croqui_url: null,
+    created_at: createdAt.toISOString(),
+    updated_at: createdAt.toISOString(),
+    expires_at: new Date(createdAt.getTime() + 15 * 60 * 1000).toISOString(),
   };
 
   if (process.env.NODE_ENV === 'test') {
@@ -187,30 +220,29 @@ export async function createUploadSession(nomeCliente: string, ocasiao?: string)
   }
 
   if (pool) {
+    await dbReady;
     const query = `
-      INSERT INTO upload_sessions (id, nome_cliente, status)
-      VALUES ($1, $2, 'pending')
-      RETURNING id, nome_cliente, status, croqui_url, created_at, expires_at;
+      INSERT INTO upload_sessions (id, nome_cliente, ocasiao, reference_piece, status)
+      VALUES ($1, $2, $3, $4, 'pending')
+      RETURNING id, nome_cliente, ocasiao, reference_piece, status, croqui_url, reference_analysis, analysis_error_code, vision_provider, vision_model, prompt_version, created_at, updated_at, expires_at;
     `;
-    const res = await pool.query(query, [sessionId, nomeCliente]);
-    const row = res.rows[0];
-    if (row) row.ocasiao = ocasiao || null;
-    return row;
+    const res = await pool.query(query, [sessionId, nomeCliente, ocasiao || null, referencePiece || null]);
+    return res.rows[0];
   } else {
-    try {
-      const { data, error } = await supabaseFallback
-        .from('upload_sessions')
-        .insert([{ id: sessionId, nome_cliente: nomeCliente, status: 'pending' }])
-        .select('id, nome_cliente, status, croqui_url, created_at, expires_at')
-        .single();
-      if (error || !data) throw error || new Error('No data');
-      data.ocasiao = ocasiao || null;
-      return data;
-    } catch {
-      memoryUploadSessions.set(sessionId, session);
-      return session;
-    }
+    memoryUploadSessions.set(sessionId, session);
+    return session;
   }
+}
+
+function isExpired(session: UploadSession): boolean {
+  if (!session.expires_at || ['uploaded', 'expired'].includes(session.status)) return false;
+  return new Date(session.expires_at).getTime() <= Date.now();
+}
+
+async function markSessionExpired(session: UploadSession): Promise<UploadSession> {
+  if (!isExpired(session)) return session;
+  await updateUploadSessionStatus(session.id, 'expired');
+  return { ...session, status: 'expired' };
 }
 
 export async function getUploadSession(id: string): Promise<UploadSession | null> {
@@ -219,34 +251,44 @@ export async function getUploadSession(id: string): Promise<UploadSession | null
   }
 
   if (pool) {
+    await dbReady;
     const query = `
-      SELECT id, nome_cliente, status, croqui_url, created_at, expires_at
+      SELECT id, nome_cliente, ocasiao, reference_piece, status, croqui_url, reference_analysis, analysis_error_code, vision_provider, vision_model, prompt_version, created_at, updated_at, expires_at
       FROM upload_sessions
       WHERE id = $1;
     `;
     const res = await pool.query(query, [id]);
-    return res.rows[0] || null;
+    return res.rows[0] ? markSessionExpired(res.rows[0]) : null;
   } else {
-    try {
-      const { data, error } = await supabaseFallback
-        .from('upload_sessions')
-        .select('id, nome_cliente, status, croqui_url, created_at, expires_at')
-        .eq('id', id)
-        .single();
-      if (error || !data) throw error || new Error('No data');
-      return data;
-    } catch {
-      return memoryUploadSessions.get(id) || null;
-    }
+    const session = memoryUploadSessions.get(id);
+    return session ? markSessionExpired(session) : null;
   }
 }
 
-export async function updateUploadSessionStatus(id: string, status: string, croquiUrl?: string | null, specs?: any): Promise<void> {
+export type UploadSessionPatch = {
+  status?: string;
+  croquiUrl?: string | null;
+  referenceAnalysis?: ReferenceAnalysis | null;
+  analysisErrorCode?: string | null;
+  visionProvider?: string | null;
+  visionModel?: string | null;
+  promptVersion?: string | null;
+};
+
+export async function updateUploadSession(id: string, patch: UploadSessionPatch): Promise<void> {
   const sess = memoryUploadSessions.get(id);
   if (sess) {
-    sess.status = status;
-    if (croquiUrl) sess.croqui_url = croquiUrl;
-    if (specs) sess.specs = specs;
+    if (patch.status) sess.status = patch.status;
+    if (patch.croquiUrl !== undefined) sess.croqui_url = patch.croquiUrl;
+    if (patch.referenceAnalysis !== undefined) {
+      sess.reference_analysis = patch.referenceAnalysis;
+      sess.specs = patch.referenceAnalysis;
+    }
+    if (patch.analysisErrorCode !== undefined) sess.analysis_error_code = patch.analysisErrorCode;
+    if (patch.visionProvider !== undefined) sess.vision_provider = patch.visionProvider;
+    if (patch.visionModel !== undefined) sess.vision_model = patch.visionModel;
+    if (patch.promptVersion !== undefined) sess.prompt_version = patch.promptVersion;
+    sess.updated_at = new Date().toISOString();
   }
 
   if (process.env.NODE_ENV === 'test') {
@@ -254,31 +296,53 @@ export async function updateUploadSessionStatus(id: string, status: string, croq
   }
 
   if (pool) {
-    const query = croquiUrl
-      ? `UPDATE upload_sessions SET status = $2, croqui_url = $3 WHERE id = $1;`
-      : `UPDATE upload_sessions SET status = $2 WHERE id = $1;`;
-    const params = croquiUrl ? [id, status, croquiUrl] : [id, status];
+    await dbReady;
+    const values: unknown[] = [id];
+    const assignments: string[] = [];
+    const add = (column: string, value: unknown) => {
+      values.push(value);
+      assignments.push(`${column} = $${values.length}`);
+    };
+    if (patch.status !== undefined) add('status', patch.status);
+    if (patch.croquiUrl !== undefined) add('croqui_url', patch.croquiUrl);
+    if (patch.referenceAnalysis !== undefined) add('reference_analysis', patch.referenceAnalysis ? JSON.stringify(patch.referenceAnalysis) : null);
+    if (patch.analysisErrorCode !== undefined) add('analysis_error_code', patch.analysisErrorCode);
+    if (patch.visionProvider !== undefined) add('vision_provider', patch.visionProvider);
+    if (patch.visionModel !== undefined) add('vision_model', patch.visionModel);
+    if (patch.promptVersion !== undefined) add('prompt_version', patch.promptVersion);
+    if (assignments.length === 0) return;
+    assignments.push('updated_at = CURRENT_TIMESTAMP');
     try {
-      await pool.query(query, params);
+      await pool.query(`UPDATE upload_sessions SET ${assignments.join(', ')} WHERE id = $1;`, values);
     } catch (err) {
       console.warn('[DB] Error updating upload_sessions status:', err);
     }
   } else {
-    try {
-      const updateData: any = { status };
-      if (croquiUrl) updateData.croqui_url = croquiUrl;
-      const { error } = await supabaseFallback
-        .from('upload_sessions')
-        .update(updateData)
-        .eq('id', id);
-      if (error) throw error;
-    } catch {
-      // Fallback already handled in memoryUploadSessions
-    }
+    // O projeto Supabase real não possui upload_sessions. Sem DATABASE_URL usamos apenas a memória local.
   }
 }
 
-export async function confirmUploadSession(id: string, croquiUrl: string, specs?: any): Promise<void> {
-  await updateUploadSessionStatus(id, 'uploaded', croquiUrl, specs);
+export async function updateUploadSessionStatus(id: string, status: string, croquiUrl?: string | null, specs?: ReferenceAnalysis): Promise<void> {
+  await updateUploadSession(id, { status, croquiUrl, referenceAnalysis: specs });
 }
 
+export async function confirmUploadSession(id: string, croquiUrl: string, specs?: ReferenceAnalysis): Promise<void> {
+  await updateUploadSession(id, { status: 'uploaded', croquiUrl, referenceAnalysis: specs });
+}
+
+export async function claimUploadSessionForGeneration(id: string): Promise<boolean> {
+  const session = await getUploadSession(id);
+  if (!session || session.status !== 'analysis_ready') return false;
+  if (process.env.NODE_ENV === 'test' || !pool) {
+    const memorySession = memoryUploadSessions.get(id);
+    if (!memorySession || memorySession.status !== 'analysis_ready') return false;
+    memorySession.status = 'generating';
+    return true;
+  }
+  await dbReady;
+  const result = await pool.query(
+    `UPDATE upload_sessions SET status = 'generating', updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND status = 'analysis_ready' AND expires_at > CURRENT_TIMESTAMP;`,
+    [id],
+  );
+  return result.rowCount === 1;
+}

@@ -3,9 +3,25 @@ import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import sirv from 'sirv';
 import serverEntry from './dist/server/server.js';
+import { cleanupExpiredReferenceImages } from './scripts/reference-image-cleanup.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const port = process.env.PORT || 3000;
+
+async function runReferenceCleanup() {
+  if (!process.env.VITE_SUPABASE_URL || !(process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY)) {
+    console.warn('[REFERENCE CLEANUP] Storage não configurado; limpeza automática ignorada.');
+    return;
+  }
+  try {
+    await cleanupExpiredReferenceImages({ dryRun: false });
+  } catch (error) {
+    console.error('[REFERENCE CLEANUP] Erro na limpeza automática:', error);
+  }
+}
+
+void runReferenceCleanup();
+setInterval(runReferenceCleanup, 60 * 60 * 1000).unref();
 
 const assets = sirv(join(__dirname, 'dist/client'), {
   maxAge: 31536000,

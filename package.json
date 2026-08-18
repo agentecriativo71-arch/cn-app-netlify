@@ -15,7 +15,10 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:vision:live": "vitest run src/__tests__/referenceVision.live.test.ts",
+    "cleanup:reference-images:dry-run": "node scripts/reference-image-cleanup.mjs --dry-run",
+    "cleanup:reference-images": "node scripts/reference-image-cleanup.mjs --execute"
   },
   "dependencies": {
     "@fal-ai/serverless-client": "^0.15.0",
@@ -59,11 +62,13 @@
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.575.0",
+    "openai": "7.5.0",
     "pg": "^8.21.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-day-picker": "^9.14.0",
     "react-dom": "^19.2.0",
+    "react-easy-crop": "6.2.3",
     "react-hook-form": "^7.71.2",
     "react-resizable-panels": "^4.6.5",
     "recharts": "^2.15.4",
