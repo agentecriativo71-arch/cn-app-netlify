@@ -833,6 +833,7 @@ async function analyzeReferenceImages(params: {
       retries: Math.max(0, analyzer.lastAttempts - 1),
       status: 'error',
       code: errorCodeForVision(error),
+      diagnosticCode: error instanceof ReferenceVisionError ? error.diagnosticCode : undefined,
     });
     throw error;
   }
@@ -923,7 +924,10 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
       const code = errorCodeForVision(error);
       // O erro pode conter detalhes do provedor ou ecoar parte da requisição.
       // Persistimos/logamos somente o código controlado para não expor conteúdo da imagem.
-      console.error('[REFERENCE ANALYSIS] Vision falhou:', { code });
+      console.error('[REFERENCE ANALYSIS] Vision falhou:', {
+        code,
+        diagnosticCode: error instanceof ReferenceVisionError ? error.diagnosticCode : undefined,
+      });
       await updateUploadSession(sessionId, {
         status: 'analysis_failed',
         analysisErrorCode: code,

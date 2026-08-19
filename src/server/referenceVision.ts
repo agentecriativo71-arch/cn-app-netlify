@@ -28,6 +28,7 @@ export type FalVisionClient = {
 };
 
 export type VisionProvider = "fal" | "openai";
+export type ReferenceVisionDiagnostic = "response_shape" | "invalid_json" | "contract_mismatch" | "source_role_mismatch";
 
 export type VisionAnalyzer = {
   analyze: (input: VisionInput) => Promise<ReferenceAnalysis>;
@@ -61,12 +62,14 @@ export type VisionAnalyzerOptions = {
 export class ReferenceVisionError extends Error {
   readonly code: "missing_api_key" | "invalid_response" | "provider_error" | "refusal" | "invalid_image";
   readonly retryable: boolean;
+  readonly diagnosticCode?: ReferenceVisionDiagnostic;
 
-  constructor(code: ReferenceVisionError["code"], message: string, options?: ErrorOptions, retryable = false) {
+  constructor(code: ReferenceVisionError["code"], message: string, options?: ErrorOptions, retryable = false, diagnosticCode?: ReferenceVisionDiagnostic) {
     super(message, options);
     this.name = "ReferenceVisionError";
     this.code = code;
     this.retryable = retryable;
+    this.diagnosticCode = diagnosticCode;
   }
 }
 
@@ -105,39 +108,80 @@ function outputText(response: { output_text?: string; output?: unknown }): strin
   throw new ReferenceVisionError("invalid_response", "A resposta do GPT-5.4 mini Vision não continha JSON estruturado.", undefined, true);
 }
 
+function textFromFalValue(value: unknown, depth = 0): string | null {
+  if (depth > 4 || value === null || value === undefined) return null;
+  if (typeof value === "string" && value.trim()) return value;
+  if (Array.isArray(value)) {
+    const parts = value.map((item) => textFromFalValue(item, depth + 1)).filter((item): item is string => Boolean(item));
+    return parts.length > 0 ? parts.join("\n") : null;
+  }
+  if (typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  for (const key of ["output", "output_text", "text", "content", "message", "result", "data"]) {
+    const text = textFromFalValue(record[key], depth + 1);
+    if (text) return text;
+  }
+  return null;
+}
+
 function falOutputText(response: unknown): string {
-  const candidate = response && typeof response === "object" ? response as { output?: unknown; data?: unknown } : {};
-  const data = candidate.data && typeof candidate.data === "object" ? candidate.data as { output?: unknown } : {};
-  const value = typeof candidate.output === "string" ? candidate.output : typeof data.output === "string" ? data.output : null;
-  if (value && value.trim()) return value;
-  throw new ReferenceVisionError("invalid_response", "A resposta do Gemini Vision na Fal não continha JSON estruturado.", undefined, true);
+  const value = textFromFalValue(response);
+  if (value) return value;
+  throw new ReferenceVisionError("invalid_response", "A resposta do Gemini Vision na Fal não continha texto analisável.", undefined, true, "response_shape");
 }
 
 function parseJsonText(raw: string): unknown {
   const trimmed = raw.trim();
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  return JSON.parse(fenced ? fenced[1] : trimmed);
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const candidates = [fenced?.[1]?.trim(), trimmed].filter((candidate): candidate is string => Boolean(candidate));
+  let lastError: unknown;
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  const objectStart = trimmed.indexOf("{");
+  const objectEnd = trimmed.lastIndexOf("}");
+  if (objectStart >= 0 && objectEnd > objectStart) {
+    try {
+      return JSON.parse(trimmed.slice(objectStart, objectEnd + 1));
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("A resposta não continha um objeto JSON.");
 }
 
 function enforceSourceRoleContract(analysis: ReferenceAnalysis, mode: VisionInput["mode"]): ReferenceAnalysis {
   const allowed = mode === "single" ? ["single"] : ["top", "bottom"];
   const observations = [analysis.peca, analysis.comprimento, analysis.decote, analysis.possuiManga, analysis.manga, analysis.saia, analysis.rendaDecisao, analysis.renda, ...Object.values(analysis.detalhesTecnicos)];
   const invalid = observations.map((observation) => observation.sourceRole).some((role) => role !== null && !allowed.includes(role));
-  if (invalid) throw new ReferenceVisionError("invalid_response", "A resposta não preservou os papéis das imagens de referência.");
+  if (invalid) throw new ReferenceVisionError("invalid_response", "A resposta não preservou os papéis das imagens de referência.", undefined, false, "source_role_mismatch");
   return analysis;
 }
 
-function parseResponse(raw: string, sourceRole: ReferenceSourceRole, mode: VisionInput["mode"]): ReferenceAnalysis {
+function parseResponse(raw: string, sourceRole: ReferenceSourceRole, mode: VisionInput["mode"], options: { normalizePartial?: boolean } = {}): ReferenceAnalysis {
   try {
     const parsed = parseJsonText(raw);
-    // A resposta bruta também precisa passar pelo schema estrito. Sem esta etapa,
-    // a normalização poderia descartar campos extras e mascarar uma resposta
-    // incompatível antes do retry controlado.
-    const strictParsed = referenceAnalysisSchema.parse(parsed);
-    return enforceSourceRoleContract(validateReferenceAnalysisForMode(normalizeReferenceAnalysis(strictParsed, sourceRole, mode), mode), mode);
+    if (parsed && typeof parsed === "object" && "schemaVersion" in parsed && parsed.schemaVersion !== REFERENCE_ANALYSIS_VERSION) {
+      throw new Error("A versão do contrato de análise não é compatível.");
+    }
+
+    // OpenAI recebe Structured Outputs e continua exigindo resposta estrita.
+    // Fal/OpenRouter fornece texto livre; neste caminho, normalização permite
+    // campos ausentes como null, mas mantém rejeição do catálogo/roles.
+    const normalized = options.normalizePartial ? normalizeReferenceAnalysis(parsed, sourceRole, mode) : referenceAnalysisSchema.parse(parsed);
+    const validated = validateReferenceAnalysisForMode(normalized, mode);
+    return enforceSourceRoleContract(validated, mode);
   } catch (error) {
     if (error instanceof ReferenceVisionError) throw error;
-    throw new ReferenceVisionError("invalid_response", "A resposta do GPT-5.4 mini Vision não respeitou o contrato de análise.", { cause: error }, true);
+    const diagnosticCode = error instanceof SyntaxError ? "invalid_json" : "contract_mismatch";
+    throw new ReferenceVisionError("invalid_response", "A resposta do Vision não respeitou o contrato de análise.", { cause: error }, true, diagnosticCode);
   }
 }
 
@@ -281,7 +325,7 @@ export class FalGeminiReferenceVisionAnalyzer {
             max_tokens: this.maxOutputTokens,
           },
         });
-        return parseResponse(falOutputText(response), sourceRole, input.mode);
+        return parseResponse(falOutputText(response), sourceRole, input.mode, { normalizePartial: true });
       } catch (error) {
         const normalizedError = error instanceof ReferenceVisionError
           ? error

@@ -191,8 +191,11 @@ function normalizeFocus(raw: unknown, mode: ReferenceMode): ReferenceFocus[] {
   }
   return values.map((value, index) => {
     const candidate = value && typeof value === "object" ? value as Record<string, unknown> : {};
-    const role = candidate.role as ReferenceSourceRole;
-    const status = candidate.status as ReferenceFocusStatus;
+    // Modelos de texto podem omitir metadados de foco. Quando isso ocorrer,
+    // preservamos a posição esperada e marcamos foco insuficiente; nunca
+    // promovemos observação incompleta para geração automática.
+    const role = (candidate.role === undefined ? roles[index] : candidate.role) as ReferenceSourceRole;
+    const status = (candidate.status === undefined ? "insufficient_visibility" : candidate.status) as ReferenceFocusStatus;
     if (!REFERENCE_SOURCE_ROLES.includes(role) || !REFERENCE_FOCUS_STATUSES.includes(status)) throw new Error("Foco fora do contrato permitido.");
     return {
       role,

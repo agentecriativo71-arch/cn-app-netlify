@@ -140,6 +140,55 @@ describe("Fal Gemini Vision adapter", () => {
     expect(analyzer.providerName).toBe("fal");
   });
 
+  it("normaliza resposta parcial sem inventar elementos técnicos", async () => {
+    const partialResponse = JSON.stringify({
+      mode: "single",
+      focus: [{
+        role: "single",
+        targetDescription: "Vestido central",
+        candidateCount: 1,
+        confidence: 0.95,
+        evidence: "Uma peça predominante no recorte.",
+      }],
+      peca: observed("Vestido"),
+      comprimento: observed("Midi"),
+    });
+    const subscribe = vi.fn().mockResolvedValue({ output: `Aqui está a análise:\n\n\`\`\`json\n${partialResponse}\n\`\`\`` });
+    const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
+
+    const result = await analyzer.analyze({ mode: "single", targetPiece: "Vestido", imageDataUrls: ["data:image/jpeg;base64,crop"] });
+
+    expect(result.schemaVersion).toBe(REFERENCE_ANALYSIS_VERSION);
+    expect(result.peca.value).toBe("Vestido");
+    expect(result.focus[0].status).toBe("insufficient_visibility");
+    expect(result.decote.value).toBeNull();
+    expect(result.manga.value).toBeNull();
+    expect(result.detalhesTecnicos.corpete.value).toBeNull();
+  });
+
+  it("continua rejeitando nomes de elementos fora do catálogo", async () => {
+    const invalid = JSON.parse(validVisionJson());
+    invalid.manga = observed("Manga Longa");
+    const subscribe = vi.fn().mockResolvedValue({ output: JSON.stringify(invalid) });
+    const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
+
+    await expect(analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).rejects.toMatchObject({ code: "invalid_response", diagnosticCode: "contract_mismatch" });
+  });
+
+  it("classifica resposta Fal sem texto como falha de formato", async () => {
+    const subscribe = vi.fn().mockResolvedValue({ usage: { total_tokens: 10 } });
+    const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
+
+    await expect(analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).rejects.toMatchObject({ code: "invalid_response", diagnosticCode: "response_shape" });
+  });
+
+  it("aceita envelope de resultado do cliente Fal sem armazenar a resposta bruta", async () => {
+    const subscribe = vi.fn().mockResolvedValue({ result: { data: { output: validVisionJson() } } });
+    const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
+
+    await expect(analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).resolves.toMatchObject({ schemaVersion: REFERENCE_ANALYSIS_VERSION });
+  });
+
   it("envia imagens compostas na ordem top e bottom", async () => {
     const subscribe = vi.fn().mockResolvedValue({ output: validVisionJson("composite") });
     const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
