@@ -44,7 +44,8 @@ export type ReferenceVisionDiagnostic =
   | "invalid_details_shape"
   | "missing_required_field"
   | "invalid_mode"
-  | "invalid_confidence";
+  | "invalid_confidence"
+  | "focus_order_mismatch";
 
 export function resolveVisionModel(provider: VisionProvider, explicitModel?: string): string {
   if (explicitModel) return explicitModel;
@@ -247,25 +248,38 @@ function normalizeProviderCatalogAliases(input: unknown): unknown {
 
 const LEGACY_VISIBLE_EVIDENCE = "Evidência visual sinalizada pelo provedor; descrição textual não fornecida.";
 const CANONICAL_DETAIL_KEYS = new Set(["corpete", "cintura", "caimento", "volume", "barra", "transparencia", "tecido", "costas", "fechamento"]);
+const COMPOSITE_TOP_FIELDS = new Set(["peca", "decote", "possuiManga", "manga", "rendaDecisao", "renda", "corpete", "cintura"]);
+const COMPOSITE_BOTTOM_FIELDS = new Set(["comprimento", "saia", "caimento", "volume", "barra"]);
+
+function defaultLegacySourceRole(field: string, mode: VisionInput["mode"], fallbackRole: ReferenceSourceRole): ReferenceSourceRole {
+  if (mode !== "composite") return "single";
+  if (COMPOSITE_TOP_FIELDS.has(field)) return "top";
+  if (COMPOSITE_BOTTOM_FIELDS.has(field)) return "bottom";
+  return fallbackRole;
+}
 
 function evidenceFromProvider(candidate: Record<string, unknown>): string | null {
   if (typeof candidate.evidence === "string" && candidate.evidence.trim()) return candidate.evidence;
   return candidate.visibleEvidence === true ? LEGACY_VISIBLE_EVIDENCE : null;
 }
 
-function normalizeLegacyObservedShape(raw: unknown, sourceRole: ReferenceSourceRole): unknown {
+function normalizeLegacyObservedShape(raw: unknown, sourceRole: ReferenceSourceRole, mode: VisionInput["mode"], field: string): unknown {
+  const fallbackRole = defaultLegacySourceRole(field, mode, sourceRole);
   if (raw === null || raw === undefined) return raw;
   if (typeof raw !== "object") {
-    if (typeof raw === "boolean") return { value: raw, confidence: 0, evidence: null, sourceRole };
+    if (typeof raw === "boolean") return { value: raw, confidence: 0, evidence: null, sourceRole: fallbackRole };
     return raw;
   }
   const candidate = { ...(raw as Record<string, unknown>) };
   if ("value" in candidate || "visibleEvidence" in candidate) {
+    const candidateSourceRole = candidate.sourceRole === undefined || (mode === "composite" && candidate.sourceRole === "single")
+      ? fallbackRole
+      : candidate.sourceRole;
     return {
       ...candidate,
       confidence: typeof candidate.confidence === "number" ? candidate.confidence : 0,
       evidence: evidenceFromProvider(candidate),
-      sourceRole: candidate.sourceRole === undefined ? sourceRole : candidate.sourceRole,
+      sourceRole: candidateSourceRole,
     };
   }
   return candidate;
@@ -275,7 +289,7 @@ function isProviderScalar(value: unknown): value is string | boolean | null {
   return typeof value === "string" || typeof value === "boolean" || value === null;
 }
 
-function collectProviderExtras(raw: unknown, path: string, fallbackRole: ReferenceSourceRole, extras: ReferenceProviderExtra[]): void {
+function collectProviderExtras(raw: unknown, path: string, fallbackRole: ReferenceSourceRole, extras: ReferenceProviderExtra[], mode: VisionInput["mode"]): void {
   if (raw === null || raw === undefined) return;
   if (typeof raw !== "object") {
     if (isProviderScalar(raw)) extras.push({ path, value: raw, confidence: null, evidence: null, sourceRole: fallbackRole });
@@ -288,7 +302,7 @@ function collectProviderExtras(raw: unknown, path: string, fallbackRole: Referen
     const confidence = typeof candidate.confidence === "number" && Number.isFinite(candidate.confidence) && candidate.confidence >= 0 && candidate.confidence <= 1
       ? candidate.confidence
       : null;
-    const source = candidate.sourceRole === "single" || candidate.sourceRole === "top" || candidate.sourceRole === "bottom"
+    const source = candidate.sourceRole === "top" || candidate.sourceRole === "bottom"
       ? candidate.sourceRole
       : fallbackRole;
     extras.push({
@@ -302,7 +316,7 @@ function collectProviderExtras(raw: unknown, path: string, fallbackRole: Referen
     return;
   }
 
-  for (const [key, value] of Object.entries(candidate)) collectProviderExtras(value, `${path}.${key}`, fallbackRole, extras);
+  for (const [key, value] of Object.entries(candidate)) collectProviderExtras(value, `${path}.${key}`, fallbackRole, extras, mode);
 }
 
 function adaptLegacyProviderResponse(input: unknown, sourceRole: ReferenceSourceRole, mode: VisionInput["mode"]): { input: unknown; providerExtras: ReferenceProviderExtra[] } {
@@ -322,7 +336,7 @@ function adaptLegacyProviderResponse(input: unknown, sourceRole: ReferenceSource
       status = candidateCount > 1 ? "ambiguous" : candidateCount === 0 || !visibleEvidence ? "insufficient_visibility" : "identified";
     }
     return {
-      role: candidate.role === undefined ? roles[index] : candidate.role,
+      role: mode === "composite" && (candidate.role === undefined || candidate.role === "single") ? roles[index] : candidate.role === undefined ? roles[index] : candidate.role,
       status,
       targetDescription: typeof candidate.targetDescription === "string" ? candidate.targetDescription : null,
       candidateCount,
@@ -332,10 +346,10 @@ function adaptLegacyProviderResponse(input: unknown, sourceRole: ReferenceSource
   });
 
   for (const field of ["peca", "comprimento", "decote", "manga", "saia", "renda"] as const) {
-    raw[field] = normalizeLegacyObservedShape(raw[field], sourceRole);
+    raw[field] = normalizeLegacyObservedShape(raw[field], sourceRole, mode, field);
   }
-  raw.possuiManga = normalizeLegacyObservedShape(raw.possuiManga, sourceRole);
-  raw.rendaDecisao = normalizeLegacyObservedShape(raw.rendaDecisao, sourceRole);
+  raw.possuiManga = normalizeLegacyObservedShape(raw.possuiManga, sourceRole, mode, "possuiManga");
+  raw.rendaDecisao = normalizeLegacyObservedShape(raw.rendaDecisao, sourceRole, mode, "rendaDecisao");
 
   const providerExtras: ReferenceProviderExtra[] = [];
   const rawDetails = raw.detalhesTecnicos && typeof raw.detalhesTecnicos === "object" ? raw.detalhesTecnicos as Record<string, unknown> : {};
@@ -343,14 +357,14 @@ function adaptLegacyProviderResponse(input: unknown, sourceRole: ReferenceSource
   for (const key of CANONICAL_DETAIL_KEYS) {
     const value = rawDetails[key];
     if (value && typeof value === "object" && "value" in (value as Record<string, unknown>)) {
-      canonicalDetails[key] = normalizeLegacyObservedShape(value, sourceRole);
+      canonicalDetails[key] = normalizeLegacyObservedShape(value, sourceRole, mode, key);
     } else {
       canonicalDetails[key] = undefined;
-      if (value !== undefined) collectProviderExtras(value, `detalhesTecnicos.${key}`, sourceRole, providerExtras);
+      if (value !== undefined) collectProviderExtras(value, `detalhesTecnicos.${key}`, defaultLegacySourceRole(key, mode, sourceRole), providerExtras, mode);
     }
   }
   for (const [key, value] of Object.entries(rawDetails)) {
-    if (!CANONICAL_DETAIL_KEYS.has(key)) collectProviderExtras(value, `detalhesTecnicos.${key}`, sourceRole, providerExtras);
+    if (!CANONICAL_DETAIL_KEYS.has(key)) collectProviderExtras(value, `detalhesTecnicos.${key}`, defaultLegacySourceRole(key, mode, sourceRole), providerExtras, mode);
   }
   raw.detalhesTecnicos = canonicalDetails;
   return { input: raw, providerExtras };
@@ -371,12 +385,13 @@ function diagnosticCodeForNormalization(error: unknown): ReferenceVisionDiagnost
   if (/confian/i.test(message)) return "invalid_confidence";
   if (/Papel de imagem/.test(message) || /papéis das imagens/.test(message)) return "source_role_mismatch";
   if (/Modo/.test(message)) return "invalid_mode";
+  if (/ordem dos focos/.test(message)) return "focus_order_mismatch";
   if (/detalhesTecnicos/.test(message)) return "invalid_details_shape";
   if (/required|obrigat/i.test(message)) return "missing_required_field";
   return "contract_mismatch";
 }
 
-function parseResponse(raw: string, sourceRole: ReferenceSourceRole, mode: VisionInput["mode"], options: { normalizePartial?: boolean } = {}): ReferenceVisionResult {
+function parseResponse(raw: string, sourceRole: ReferenceSourceRole, mode: VisionInput["mode"], options: { normalizePartial?: boolean; retryOnContractMismatch?: boolean } = {}): ReferenceVisionResult {
   try {
     const parsed = parseJsonText(raw);
     if (parsed && typeof parsed === "object" && "schemaVersion" in parsed && parsed.schemaVersion !== REFERENCE_ANALYSIS_VERSION) {
@@ -393,9 +408,14 @@ function parseResponse(raw: string, sourceRole: ReferenceSourceRole, mode: Visio
     const analysis = { ...enforceSourceRoleContract(validated, mode), providerExtras: adapted.providerExtras };
     return { analysis, providerExtras: adapted.providerExtras };
   } catch (error) {
-    if (error instanceof ReferenceVisionError) throw error;
+    if (error instanceof ReferenceVisionError) {
+      if (options.retryOnContractMismatch === false && error.code === "invalid_response") {
+        throw new ReferenceVisionError(error.code, error.message, { cause: error }, false, error.diagnosticCode);
+      }
+      throw error;
+    }
     const diagnosticCode = error instanceof SyntaxError ? "invalid_json" : diagnosticCodeForNormalization(error);
-    throw new ReferenceVisionError("invalid_response", "A resposta do Vision não respeitou o contrato de análise.", { cause: error }, true, diagnosticCode);
+    throw new ReferenceVisionError("invalid_response", "A resposta do Vision não respeitou o contrato de análise.", { cause: error }, options.retryOnContractMismatch !== false, diagnosticCode);
   }
 }
 
@@ -539,7 +559,7 @@ export class FalGeminiReferenceVisionAnalyzer {
             max_tokens: this.maxOutputTokens,
           },
         });
-        return parseResponse(falOutputText(response), sourceRole, input.mode, { normalizePartial: true });
+        return parseResponse(falOutputText(response), sourceRole, input.mode, { normalizePartial: true, retryOnContractMismatch: false });
       } catch (error) {
         const normalizedError = error instanceof ReferenceVisionError
           ? error

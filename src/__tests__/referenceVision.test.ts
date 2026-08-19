@@ -329,6 +329,37 @@ describe("Fal Gemini Vision adapter", () => {
     expect(result.analysis.focus.map((item) => item.role)).toEqual(["top", "bottom"]);
   });
 
+  it("corrige fontes legadas single/ausentes conforme top e bottom", async () => {
+    const legacyComposite = JSON.parse(validVisionJson("composite"));
+    legacyComposite.focus = legacyComposite.focus.map((focus: Record<string, unknown>) => ({ ...focus, role: "single" }));
+    for (const field of ["peca", "comprimento", "decote", "possuiManga", "manga", "saia", "rendaDecisao", "renda"]) {
+      if (legacyComposite[field] && typeof legacyComposite[field] === "object") delete legacyComposite[field].sourceRole;
+    }
+    for (const detail of Object.values(legacyComposite.detalhesTecnicos) as Array<Record<string, unknown>>) delete detail.sourceRole;
+
+    const subscribe = vi.fn().mockResolvedValue({ output: JSON.stringify(legacyComposite) });
+    const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
+    const result = await analyzer.analyze({ mode: "composite", imageDataUrls: ["data:image/jpeg;base64,top", "data:image/jpeg;base64,bottom"] });
+
+    expect(result.analysis.focus.map((item) => item.role)).toEqual(["top", "bottom"]);
+    expect(result.analysis.decote.sourceRole).toBe("top");
+    expect(result.analysis.manga.sourceRole).toBe("top");
+    expect(result.analysis.comprimento.sourceRole).toBe("bottom");
+    expect(result.analysis.saia.sourceRole).toBe("bottom");
+    expect(result.analysis.detalhesTecnicos.corpete.sourceRole).toBe("top");
+    expect(result.analysis.detalhesTecnicos.caimento.sourceRole).toBe("bottom");
+  });
+
+  it("não repete erro determinístico de contrato no Fal", async () => {
+    const invalid = JSON.parse(validVisionJson("composite"));
+    invalid.focus[0].status = "status_inexistente";
+    const subscribe = vi.fn().mockResolvedValue({ output: JSON.stringify(invalid) });
+    const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 2 });
+
+    await expect(analyzer.analyze({ mode: "composite", imageDataUrls: ["data:image/jpeg;base64,top", "data:image/jpeg;base64,bottom"] })).rejects.toMatchObject({ code: "invalid_response", retryable: false, diagnosticCode: "legacy_focus_status" });
+    expect(subscribe).toHaveBeenCalledTimes(1);
+  });
+
   it("faz retry de falha transitória sem trocar para outro provedor", async () => {
     const subscribe = vi.fn()
       .mockRejectedValueOnce(Object.assign(new Error("Fal indisponível"), { status: 503 }))
