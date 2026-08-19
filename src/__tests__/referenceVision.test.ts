@@ -26,14 +26,14 @@ function validVisionJson(mode: "single" | "composite" = "single") {
   });
 }
 
-describe("OpenAI GPT-5 Vision adapter", () => {
-  it("envia imagem, configuração GPT-5 e schema estrito", async () => {
+describe("OpenAI GPT-5.4 mini Vision adapter", () => {
+  it("envia imagem, configuração GPT-5.4 mini e schema estrito", async () => {
     const create = vi.fn().mockResolvedValue({ output_text: validVisionJson() });
-    const analyzer = new OpenAIReferenceVisionAnalyzer({ client: { responses: { create } }, model: "gpt-5", maxAttempts: 1 });
+    const analyzer = new OpenAIReferenceVisionAnalyzer({ client: { responses: { create } }, model: "gpt-5.4-mini", maxAttempts: 1 });
     const result = await analyzer.analyze({ mode: "single", occasion: "Festa", targetPiece: "Vestido", imageDataUrls: ["data:image/jpeg;base64,crop"] });
     const payload = create.mock.calls[0][0] as Record<string, any>;
     const content = payload.input[0].content;
-    expect(payload.model).toBe("gpt-5");
+    expect(payload.model).toBe("gpt-5.4-mini");
     expect(payload.store).toBe(false);
     expect(payload.reasoning).toEqual({ effort: "low" });
     expect(payload.max_output_tokens).toBe(1800);

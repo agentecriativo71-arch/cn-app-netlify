@@ -8,8 +8,9 @@ vi.mock("@tanstack/react-start", () => ({
   createServerFn: () => ({ handler: (handler: (context: unknown) => unknown) => handler }),
 }));
 vi.mock("../server/referenceVision", () => ({
+  DEFAULT_OPENAI_VISION_MODEL: "gpt-5.4-mini",
   ReferenceVisionError: class ReferenceVisionError extends Error {},
-  createReferenceVisionAnalyzer: () => ({ analyze: analyzeMock, modelName: "gpt-5", lastAttempts: 1 }),
+  createReferenceVisionAnalyzer: () => ({ analyze: analyzeMock, modelName: "gpt-5.4-mini", lastAttempts: 1 }),
 }));
 
 import { pollUploadSessionFn, retryReferenceGenerationFn, uploadReferenceFilesFn } from "../server/api";

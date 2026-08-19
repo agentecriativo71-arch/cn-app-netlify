@@ -16,7 +16,7 @@ const fixtureCases = [
   { name: "sem roupa identificável", files: ["no-identifiable-garment.jpg"], mode: "single" as const, targetPiece: "Vestido" as const },
 ];
 
-describe("GPT-5 Vision live (opt-in)", () => {
+describe("GPT-5.4 mini Vision live (opt-in)", () => {
   it.skipIf(!enabled)("exige todos os fixtures sintéticos/licenciados declarados", () => {
     for (const fixture of fixtureCases) {
       for (const file of fixture.files) {

@@ -2,9 +2,9 @@
 
 O fluxo de referência exige que o cliente recorte a pessoa ou a peça desejada no navegador. A imagem original permanece no aparelho e não é enviada pelo aplicativo.
 
-Somente o recorte confirmado é enviado ao GPT-5 Vision para análise. O recorte não é gravado no Supabase Storage, em disco, no PostgreSQL ou nos logs da aplicação. Também não é enviado ao Fal/Seedream. A geração recebe apenas as especificações textuais validadas pelo catálogo. A edição posterior pode receber somente o croqui já gerado.
+Somente o recorte confirmado é enviado ao GPT-5.4 mini Vision para análise. O recorte não é gravado no Supabase Storage, em disco, no PostgreSQL ou nos logs da aplicação. Também não é enviado ao Fal/Seedream. A geração recebe apenas as especificações textuais validadas pelo catálogo. A edição posterior pode receber somente o croqui já gerado.
 
-A sessão persiste a ocasião, o tipo de peça selecionado (`reference_piece`), o estado, a análise estruturada, códigos de erro, provedor/modelo Vision, versão do prompt e timestamps. O tipo escolhido no totem é enviado como contexto do GPT-5; a decisão final compara esse alvo com a peça observada.
+A sessão persiste a ocasião, o tipo de peça selecionado (`reference_piece`), o estado, a análise estruturada, códigos de erro, provedor/modelo Vision, versão do prompt e timestamps. O tipo escolhido no totem é enviado como contexto do GPT-5.4 mini; a decisão final compara esse alvo com a peça observada.
 
 O aplicativo usa `store:false` na Responses API. Isso evita estado persistente intencional da resposta, mas a política do provedor pode manter logs de monitoramento pelo período aplicável à conta. Consulte os controles de dados da [OpenAI](https://developers.openai.com/api/docs/guides/your-data#default-usage-policies-by-endpoint) antes da publicação e documente eventual Zero Data Retention contratado.
 

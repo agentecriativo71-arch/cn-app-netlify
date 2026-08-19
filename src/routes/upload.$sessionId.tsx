@@ -189,7 +189,7 @@ function UploadModeloMobile() {
       <main className="flex-1 flex flex-col items-center justify-center py-4 space-y-4">
         <p className="text-xs text-center text-white/70">A IA procura o tipo <span className="text-[#E5D3A2] font-bold">{referencePiece || "selecionado no totem"}</span>. Recorte a pessoa ou roupa principal para deixar esse foco claro, mesmo que haja outras pessoas ou objetos na foto.</p>
         {!compositeAllowed && <p className="text-[10px] text-center text-white/45">O modo “cima + baixo” é reservado para Vestido. Para este tipo de peça, envie uma foto geral.</p>}
-        <p className="text-[10px] leading-relaxed text-center text-white/45 max-w-sm">Privacidade: a foto original permanece neste aparelho. Somente o recorte confirmado será analisado pelo GPT-5 e não será armazenado pelo aplicativo.</p>
+        <p className="text-[10px] leading-relaxed text-center text-white/45 max-w-sm">Privacidade: a foto original permanece neste aparelho. Somente o recorte confirmado será analisado pelo GPT-5.4 mini e não será armazenado pelo aplicativo.</p>
         {mode === "single" ? <SingleSlot preview={singleCrop} onChange={(event) => handleFileChange(event, "single")} onRecrop={() => setCropTarget("single")} /> : <div className="grid grid-cols-2 gap-3 w-full"><CompositeSlot label="1. Busto / cima" preview={topCrop} onChange={(event) => handleFileChange(event, "top")} onRecrop={() => setCropTarget("top")} /><CompositeSlot label="2. Saia / baixo" preview={bottomCrop} onChange={(event) => handleFileChange(event, "bottom")} onRecrop={() => setCropTarget("bottom")} /></div>}
         {errorMsg && <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs text-center w-full">{errorMsg}</div>}
       </main>
@@ -205,7 +205,7 @@ function CenteredMessage({ children }: { children: React.ReactNode }) { return <
 
 function SingleSlot({ preview, onChange, onRecrop }: { preview: string | null; onChange: (event: React.ChangeEvent<HTMLInputElement>) => void; onRecrop: () => void }) {
   if (!preview) return <label className="w-full h-64 rounded-3xl border-2 border-dashed border-[#E5D3A2]/50 bg-white/5 flex flex-col items-center justify-center p-6 text-center cursor-pointer"><input type="file" accept={REFERENCE_FILE_ACCEPT} onChange={onChange} className="hidden" /><ImagePlus size={32} className="text-[#E5D3A2] mb-3" /><span className="text-sm font-bold uppercase">Tirar foto ou escolher da galeria</span><span className="text-[11px] text-white/50">O recorte será enviado, não a foto original</span></label>;
-  return <div className="w-full space-y-3"><PreviewImage src={preview} alt="Recorte do modelo" onRecrop={onRecrop} onChange={onChange} /><p className="text-[11px] text-center text-white/60">Apenas este recorte será enviado ao GPT-5 Vision.</p></div>;
+  return <div className="w-full space-y-3"><PreviewImage src={preview} alt="Recorte do modelo" onRecrop={onRecrop} onChange={onChange} /><p className="text-[11px] text-center text-white/60">Apenas este recorte será enviado ao GPT-5.4 mini Vision.</p></div>;
 }
 
 function CompositeSlot({ label, preview, onChange, onRecrop }: { label: string; preview: string | null; onChange: (event: React.ChangeEvent<HTMLInputElement>) => void; onRecrop: () => void }) {

@@ -13,7 +13,7 @@ import {
   type ReferencePiece,
 } from '../lib/referenceUtils';
 import { decideReferenceAnalysis } from '../lib/referenceDecision';
-import { createReferenceVisionAnalyzer, ReferenceVisionError } from './referenceVision';
+import { createReferenceVisionAnalyzer, DEFAULT_OPENAI_VISION_MODEL, ReferenceVisionError } from './referenceVision';
 import { validateReferenceImages, ReferenceInputError } from './referenceInput';
 import { assertReferenceGenerationTextOnly, buildReferenceSeedreamInput } from './referenceGeneration';
 
@@ -881,7 +881,7 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
       console.info('[REFERENCE ANALYSIS] decisão', {
         status: decision.status,
         code: decision.code,
-        model: process.env.OPENAI_VISION_MODEL || 'gpt-5',
+        model: process.env.OPENAI_VISION_MODEL || DEFAULT_OPENAI_VISION_MODEL,
         promptVersion: REFERENCE_ANALYSIS_VERSION,
         focusConfidence: analysis.focus.reduce((sum, focus) => sum + focus.confidence, 0) / analysis.focus.length,
       });
@@ -890,7 +890,7 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
         referenceAnalysis: analysis,
         analysisErrorCode: decision.code,
         visionProvider: 'openai',
-        visionModel: process.env.OPENAI_VISION_MODEL || 'gpt-5',
+        visionModel: process.env.OPENAI_VISION_MODEL || DEFAULT_OPENAI_VISION_MODEL,
         promptVersion: REFERENCE_ANALYSIS_VERSION,
       });
       if (decision.status !== 'analysis_ready') return { status: decision.status, code: decision.code, retryable: decision.retryable, message: decision.message };
@@ -912,8 +912,8 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
       const code = errorCodeForVision(error);
       // O erro pode conter detalhes do provedor ou ecoar parte da requisição.
       // Persistimos/logamos somente o código controlado para não expor conteúdo da imagem.
-      console.error('[REFERENCE ANALYSIS] GPT-5 Vision falhou:', { code });
-      await updateUploadSession(sessionId, { status: 'analysis_failed', analysisErrorCode: code, visionProvider: 'openai', visionModel: process.env.OPENAI_VISION_MODEL || 'gpt-5', promptVersion: REFERENCE_ANALYSIS_VERSION });
+      console.error('[REFERENCE ANALYSIS] GPT-5.4 mini Vision falhou:', { code });
+      await updateUploadSession(sessionId, { status: 'analysis_failed', analysisErrorCode: code, visionProvider: 'openai', visionModel: process.env.OPENAI_VISION_MODEL || DEFAULT_OPENAI_VISION_MODEL, promptVersion: REFERENCE_ANALYSIS_VERSION });
       return {
         status: 'analysis_failed',
         code,
