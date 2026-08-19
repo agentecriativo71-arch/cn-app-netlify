@@ -7,7 +7,8 @@ import {
   resolveVisionMaxOutputTokens,
   resolveVisionModel,
 } from "../server/referenceVision";
-import { REFERENCE_ANALYSIS_VERSION } from "../lib/referenceUtils";
+import { REFERENCE_ANALYSIS_VERSION, REFERENCE_PROMPT_VERSION } from "../lib/referenceUtils";
+import geminiLegacyFixture from "./fixtures/gemini-legacy-reference-response.json";
 
 const observed = (value: unknown, sourceRole: "single" | "top" | "bottom" | null = "single") => ({ value, confidence: 0.9, evidence: "Visível no recorte.", sourceRole });
 const detail = (sourceRole: "single" | "top" | "bottom" | null = "single") => observed("Detalhe visível", sourceRole);
@@ -97,7 +98,7 @@ describe("OpenAI GPT-5.4 mini Vision adapter", () => {
     expect(payload.text.format.schema.additionalProperties).toBe(false);
     expect(content.find((item: any) => item.type === "input_image")).toMatchObject({ type: "input_image", image_url: "data:image/jpeg;base64,crop", detail: "medium" });
     expect(content[0].text).toContain("Vestido");
-    expect(result.manga.value).toBeNull();
+    expect(result.analysis.manga.value).toBeNull();
   });
 
   it("envia duas imagens na ordem top e bottom em uma única requisição", async () => {
@@ -112,7 +113,7 @@ describe("OpenAI GPT-5.4 mini Vision adapter", () => {
     expect(images[1].image_url).toContain("bottom");
     expect(payload.input[0].content[1].text).toContain("ROLE: top");
     expect(payload.input[0].content[3].text).toContain("ROLE: bottom");
-    expect(result.mode).toBe("composite");
+    expect(result.analysis.mode).toBe("composite");
   });
 
   it("rejeita resposta composta que perde a ordem dos focos", async () => {
@@ -131,7 +132,7 @@ describe("OpenAI GPT-5.4 mini Vision adapter", () => {
   it("faz retry para resposta estrutural inválida, mas não para recusa", async () => {
     const invalidThenValid = vi.fn().mockResolvedValueOnce({ output_text: "modelo genérico" }).mockResolvedValueOnce({ output_text: validVisionJson() });
     const analyzer = new OpenAIReferenceVisionAnalyzer({ client: { responses: { create: invalidThenValid } }, maxAttempts: 2 });
-    await expect(analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).resolves.toMatchObject({ schemaVersion: REFERENCE_ANALYSIS_VERSION });
+    await expect(analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).resolves.toMatchObject({ analysis: { schemaVersion: REFERENCE_ANALYSIS_VERSION } });
     expect(invalidThenValid).toHaveBeenCalledTimes(2);
 
     const refusal = vi.fn().mockResolvedValue({ output: [{ type: "message", content: [{ type: "refusal", refusal: "não posso" }] }] });
@@ -154,12 +155,57 @@ describe("OpenAI GPT-5.4 mini Vision adapter", () => {
     const create = vi.fn().mockResolvedValueOnce({ output_text: JSON.stringify(extra) }).mockResolvedValueOnce({ output_text: validVisionJson() });
     const analyzer = new OpenAIReferenceVisionAnalyzer({ client: { responses: { create } }, maxAttempts: 2 });
 
-    await expect(analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).resolves.toMatchObject({ schemaVersion: REFERENCE_ANALYSIS_VERSION });
+    await expect(analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).resolves.toMatchObject({ analysis: { schemaVersion: REFERENCE_ANALYSIS_VERSION } });
     expect(create).toHaveBeenCalledTimes(2);
   });
 });
 
 describe("Fal Gemini Vision adapter", () => {
+  it("converte o output real do Gemini para o contrato canônico e preserva extras", async () => {
+    const subscribe = vi.fn().mockResolvedValue(geminiLegacyFixture);
+    const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
+
+    const result = await analyzer.analyze({ mode: "single", targetPiece: "Vestido", imageDataUrls: ["data:image/jpeg;base64,crop"] });
+
+    expect(result.analysis.focus[0].status).toBe("identified");
+    expect(result.analysis.peca.value).toBe("Vestido");
+    expect(result.analysis.decote.value).toBe("Quadrado (Square)");
+    expect(result.analysis.manga.value).toBe("Longa (Long Sleeve)");
+    expect(result.analysis.possuiManga).toMatchObject({ value: true, confidence: 0 });
+    expect(result.analysis.rendaDecisao).toMatchObject({ value: false, confidence: 0 });
+    expect(result.analysis.focus[0].evidence).toContain("Evidência visual");
+    expect(result.analysis.providerExtras).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "detalhesTecnicos.manga.punho", value: "Ajustado", confidence: 0.9 }),
+      expect.objectContaining({ path: "detalhesTecnicos.cintura.faixa", value: "Sim", confidence: 0.9 }),
+    ]));
+  });
+
+  it("não promove resposta legado ambígua ou sem evidência para identificação", async () => {
+    const legacy = JSON.parse(geminiLegacyFixture.output.replace(/^```json\s*|\s*```$/g, ""));
+    legacy.focus[0].candidateCount = 2;
+    const ambiguous = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe: vi.fn().mockResolvedValue({ output: JSON.stringify(legacy) }) }, apiKey: "fal-test-key", maxAttempts: 1 });
+    await expect(ambiguous.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).resolves.toMatchObject({ analysis: { focus: [{ status: "ambiguous" }] } });
+
+    const noEvidence = JSON.parse(geminiLegacyFixture.output.replace(/^```json\s*|\s*```$/g, ""));
+    noEvidence.focus[0].visibleEvidence = false;
+    const insufficient = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe: vi.fn().mockResolvedValue({ output: JSON.stringify(noEvidence) }) }, apiKey: "fal-test-key", maxAttempts: 1 });
+    await expect(insufficient.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).resolves.toMatchObject({ analysis: { focus: [{ status: "insufficient_visibility" }] } });
+  });
+
+  it("marca o prompt v2 e proíbe contrato legado", async () => {
+    const subscribe = vi.fn().mockResolvedValue({ output: validVisionJson() });
+    const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
+
+    await analyzer.analyze({ mode: "single", targetPiece: "Vestido", imageDataUrls: ["data:image/jpeg;base64,crop"] });
+    const input = (subscribe.mock.calls[0][1] as Record<string, any>).input;
+
+    expect(input.prompt).toContain(REFERENCE_PROMPT_VERSION);
+    expect(input.prompt).toContain('"status": "identified"');
+    expect(input.prompt).toContain('"detalhesTecnicos"');
+    expect(input.prompt).toContain("Do not return visibleEvidence");
+    expect(input.prompt).toContain("Do not return status ready");
+  });
+
   it("envia imagem ao endpoint Vision da Fal com configuração rápida e contrato atual", async () => {
     const subscribe = vi.fn().mockResolvedValue({ output: validVisionJson() });
     const analyzer = new FalGeminiReferenceVisionAnalyzer({
@@ -186,7 +232,7 @@ describe("Fal Gemini Vision adapter", () => {
     });
     expect(options.input.prompt).toContain("Vestido");
     expect(options.input.system_prompt).toContain("JSON");
-    expect(result.manga.value).toBeNull();
+    expect(result.analysis.manga.value).toBeNull();
     expect(analyzer.providerName).toBe("fal");
   });
 
@@ -208,12 +254,12 @@ describe("Fal Gemini Vision adapter", () => {
 
     const result = await analyzer.analyze({ mode: "single", targetPiece: "Vestido", imageDataUrls: ["data:image/jpeg;base64,crop"] });
 
-    expect(result.schemaVersion).toBe(REFERENCE_ANALYSIS_VERSION);
-    expect(result.peca.value).toBe("Vestido");
-    expect(result.focus[0].status).toBe("insufficient_visibility");
-    expect(result.decote.value).toBeNull();
-    expect(result.manga.value).toBeNull();
-    expect(result.detalhesTecnicos.corpete.value).toBeNull();
+    expect(result.analysis.schemaVersion).toBe(REFERENCE_ANALYSIS_VERSION);
+    expect(result.analysis.peca.value).toBe("Vestido");
+    expect(result.analysis.focus[0].status).toBe("insufficient_visibility");
+    expect(result.analysis.decote.value).toBeNull();
+    expect(result.analysis.manga.value).toBeNull();
+    expect(result.analysis.detalhesTecnicos.corpete.value).toBeNull();
   });
 
   it("não aceita elemento sem correspondência no catálogo", async () => {
@@ -224,8 +270,8 @@ describe("Fal Gemini Vision adapter", () => {
 
     const result = await analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] });
 
-    expect(result.manga.value).toBeNull();
-    expect(result.manga.confidence).toBe(0);
+    expect(result.analysis.manga.value).toBeNull();
+    expect(result.analysis.manga.confidence).toBe(0);
   });
 
   it("converte aliases determinísticos para os nomes exatos do catálogo", async () => {
@@ -238,8 +284,8 @@ describe("Fal Gemini Vision adapter", () => {
 
     const result = await analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] });
 
-    expect(result.manga.value).toBe("Longa (Long Sleeve)");
-    expect(result.decote.value).toBe("Ombro a Ombro");
+    expect(result.analysis.manga.value).toBe("Longa (Long Sleeve)");
+    expect(result.analysis.decote.value).toBe("Ombro a Ombro");
   });
 
   it("classifica resposta Fal sem texto como falha de formato", async () => {
@@ -253,7 +299,7 @@ describe("Fal Gemini Vision adapter", () => {
     const subscribe = vi.fn().mockResolvedValue({ result: { data: { output: validVisionJson() } } });
     const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
 
-    await expect(analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).resolves.toMatchObject({ schemaVersion: REFERENCE_ANALYSIS_VERSION });
+    await expect(analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).resolves.toMatchObject({ analysis: { schemaVersion: REFERENCE_ANALYSIS_VERSION } });
   });
 
   it("envia imagens compostas na ordem top e bottom", async () => {
@@ -271,13 +317,25 @@ describe("Fal Gemini Vision adapter", () => {
     expect(input.prompt).toContain("IMAGE 2 is role \"bottom\"");
   });
 
+  it("preenche foco composto ausente como insuficiente sem inventar observações", async () => {
+    const partial = JSON.parse(validVisionJson("composite"));
+    partial.focus = [partial.focus[0]];
+    const subscribe = vi.fn().mockResolvedValue({ output: JSON.stringify(partial) });
+    const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
+
+    const result = await analyzer.analyze({ mode: "composite", imageDataUrls: ["data:image/jpeg;base64,top", "data:image/jpeg;base64,bottom"] });
+
+    expect(result.analysis.focus.map((item) => item.status)).toEqual(["identified", "insufficient_visibility"]);
+    expect(result.analysis.focus.map((item) => item.role)).toEqual(["top", "bottom"]);
+  });
+
   it("faz retry de falha transitória sem trocar para outro provedor", async () => {
     const subscribe = vi.fn()
       .mockRejectedValueOnce(Object.assign(new Error("Fal indisponível"), { status: 503 }))
       .mockResolvedValueOnce({ output: validVisionJson() });
     const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 2 });
 
-    await expect(analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).resolves.toMatchObject({ schemaVersion: REFERENCE_ANALYSIS_VERSION });
+    await expect(analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).resolves.toMatchObject({ analysis: { schemaVersion: REFERENCE_ANALYSIS_VERSION } });
     expect(subscribe).toHaveBeenCalledTimes(2);
     expect(analyzer.providerName).toBe("fal");
   });

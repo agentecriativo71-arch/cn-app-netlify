@@ -120,6 +120,33 @@ describe("Contrato reference-analysis-v1", () => {
     expect(referenceAnalysisToCroquiSpecs(lowTechnical).comentario).not.toContain("tecido não confirmado");
   });
 
+  it("envia extras legados para geração sem transformar punho ajustado em elástico", () => {
+    const analysis = normalizeReferenceAnalysis({
+      ...analysisInput(),
+      providerExtras: [
+        { path: "detalhesTecnicos.manga.punho", value: "Ajustado", confidence: 0.9, evidence: "Punho visível.", sourceRole: "single", visibleEvidence: true },
+      ],
+    }, "single", "single");
+
+    const specs = referenceAnalysisToCroquiSpecs(analysis);
+    expect(specs.comentario).toContain("detalhesTecnicos.manga.punho: Ajustado");
+    expect(specs.comentario).toContain("não adicionar elástico no punho");
+  });
+
+  it("só instrui elástico quando extra explícito tem confiança suficiente", () => {
+    const analysis = normalizeReferenceAnalysis({
+      ...analysisInput(),
+      providerExtras: [
+        { path: "detalhesTecnicos.manga.punho", value: "Ajustado", confidence: 0.9, evidence: "Punho visível.", sourceRole: "single" },
+        { path: "detalhesTecnicos.manga.elastico", value: true, confidence: 0.9, evidence: "Elástico visível.", sourceRole: "single" },
+      ],
+    }, "single", "single");
+
+    const specs = referenceAnalysisToCroquiSpecs(analysis);
+    expect(specs.comentario).toContain("detalhesTecnicos.manga.elastico: true");
+    expect(specs.comentario).not.toContain("não adicionar elástico no punho");
+  });
+
   it("valida ordem dos focos e sintetiza composição como vestido", () => {
     const composite = normalizeReferenceAnalysis(analysisInput("composite"), "top", "composite");
     const validated = validateReferenceAnalysisForMode(composite, "composite");

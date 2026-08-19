@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import * as fal from "@fal-ai/serverless-client";
 import {
   REFERENCE_ANALYSIS_VERSION,
+  REFERENCE_PROMPT_VERSION,
   CATALOG_ELEMENTS,
   buildVisionPromptForCompositeReference,
   buildVisionPromptForSingleReference,
@@ -10,6 +11,7 @@ import {
   referenceAnalysisSchema,
   validateReferenceAnalysisForMode,
   type ReferenceAnalysis,
+  type ReferenceProviderExtra,
   type ReferencePiece,
   type ReferenceSourceRole,
 } from "../lib/referenceUtils";
@@ -30,7 +32,19 @@ export type FalVisionClient = {
 };
 
 export type VisionProvider = "fal" | "openai";
-export type ReferenceVisionDiagnostic = "response_shape" | "invalid_json" | "contract_mismatch" | "source_role_mismatch";
+export type ReferenceVisionDiagnostic =
+  | "response_shape"
+  | "invalid_json"
+  | "contract_mismatch"
+  | "source_role_mismatch"
+  | "legacy_focus_status"
+  | "legacy_observed_shape"
+  | "missing_evidence"
+  | "invalid_catalog_value"
+  | "invalid_details_shape"
+  | "missing_required_field"
+  | "invalid_mode"
+  | "invalid_confidence";
 
 export function resolveVisionModel(provider: VisionProvider, explicitModel?: string): string {
   if (explicitModel) return explicitModel;
@@ -45,10 +59,15 @@ export function resolveVisionMaxOutputTokens(provider: VisionProvider, explicitV
 }
 
 export type VisionAnalyzer = {
-  analyze: (input: VisionInput) => Promise<ReferenceAnalysis>;
+  analyze: (input: VisionInput) => Promise<ReferenceVisionResult>;
   modelName: string;
   providerName: VisionProvider;
   lastAttempts: number;
+};
+
+export type ReferenceVisionResult = {
+  analysis: ReferenceAnalysis;
+  providerExtras: ReferenceProviderExtra[];
 };
 
 export type VisionInput = {
@@ -226,6 +245,117 @@ function normalizeProviderCatalogAliases(input: unknown): unknown {
   return raw;
 }
 
+const LEGACY_VISIBLE_EVIDENCE = "Evidência visual sinalizada pelo provedor; descrição textual não fornecida.";
+const CANONICAL_DETAIL_KEYS = new Set(["corpete", "cintura", "caimento", "volume", "barra", "transparencia", "tecido", "costas", "fechamento"]);
+
+function evidenceFromProvider(candidate: Record<string, unknown>): string | null {
+  if (typeof candidate.evidence === "string" && candidate.evidence.trim()) return candidate.evidence;
+  return candidate.visibleEvidence === true ? LEGACY_VISIBLE_EVIDENCE : null;
+}
+
+function normalizeLegacyObservedShape(raw: unknown, sourceRole: ReferenceSourceRole): unknown {
+  if (raw === null || raw === undefined) return raw;
+  if (typeof raw !== "object") {
+    if (typeof raw === "boolean") return { value: raw, confidence: 0, evidence: null, sourceRole };
+    return raw;
+  }
+  const candidate = { ...(raw as Record<string, unknown>) };
+  if ("value" in candidate || "visibleEvidence" in candidate) {
+    return {
+      ...candidate,
+      confidence: typeof candidate.confidence === "number" ? candidate.confidence : 0,
+      evidence: evidenceFromProvider(candidate),
+      sourceRole: candidate.sourceRole === undefined ? sourceRole : candidate.sourceRole,
+    };
+  }
+  return candidate;
+}
+
+function isProviderScalar(value: unknown): value is string | boolean | null {
+  return typeof value === "string" || typeof value === "boolean" || value === null;
+}
+
+function collectProviderExtras(raw: unknown, path: string, fallbackRole: ReferenceSourceRole, extras: ReferenceProviderExtra[]): void {
+  if (raw === null || raw === undefined) return;
+  if (typeof raw !== "object") {
+    if (isProviderScalar(raw)) extras.push({ path, value: raw, confidence: null, evidence: null, sourceRole: fallbackRole });
+    return;
+  }
+
+  const candidate = raw as Record<string, unknown>;
+  if ("value" in candidate) {
+    const value = isProviderScalar(candidate.value) ? candidate.value : typeof candidate.value === "number" ? String(candidate.value) : null;
+    const confidence = typeof candidate.confidence === "number" && Number.isFinite(candidate.confidence) && candidate.confidence >= 0 && candidate.confidence <= 1
+      ? candidate.confidence
+      : null;
+    const source = candidate.sourceRole === "single" || candidate.sourceRole === "top" || candidate.sourceRole === "bottom"
+      ? candidate.sourceRole
+      : fallbackRole;
+    extras.push({
+      path,
+      value,
+      confidence,
+      evidence: evidenceFromProvider(candidate),
+      sourceRole: source,
+      ...(typeof candidate.visibleEvidence === "boolean" ? { visibleEvidence: candidate.visibleEvidence } : {}),
+    });
+    return;
+  }
+
+  for (const [key, value] of Object.entries(candidate)) collectProviderExtras(value, `${path}.${key}`, fallbackRole, extras);
+}
+
+function adaptLegacyProviderResponse(input: unknown, sourceRole: ReferenceSourceRole, mode: VisionInput["mode"]): { input: unknown; providerExtras: ReferenceProviderExtra[] } {
+  if (!input || typeof input !== "object") return { input, providerExtras: [] };
+  const raw = { ...(input as Record<string, unknown>) };
+  const roles: ReferenceSourceRole[] = mode === "single" ? ["single"] : ["top", "bottom"];
+  const focus = Array.isArray(raw.focus) ? raw.focus : [];
+  const focusEntries = focus.length > 0 && focus.length < roles.length
+    ? [...focus, ...Array.from({ length: roles.length - focus.length }, () => undefined)]
+    : focus;
+  raw.focus = focusEntries.map((value, index) => {
+    const candidate = value && typeof value === "object" ? { ...(value as Record<string, unknown>) } : {};
+    const candidateCount = typeof candidate.candidateCount === "number" && candidate.candidateCount >= 0 ? Math.floor(candidate.candidateCount) : 0;
+    const visibleEvidence = candidate.visibleEvidence === true || typeof candidate.evidence === "string";
+    let status = candidate.status;
+    if (status === "ready") {
+      status = candidateCount > 1 ? "ambiguous" : candidateCount === 0 || !visibleEvidence ? "insufficient_visibility" : "identified";
+    }
+    return {
+      role: candidate.role === undefined ? roles[index] : candidate.role,
+      status,
+      targetDescription: typeof candidate.targetDescription === "string" ? candidate.targetDescription : null,
+      candidateCount,
+      confidence: typeof candidate.confidence === "number" ? candidate.confidence : 0,
+      evidence: evidenceFromProvider(candidate),
+    };
+  });
+
+  for (const field of ["peca", "comprimento", "decote", "manga", "saia", "renda"] as const) {
+    raw[field] = normalizeLegacyObservedShape(raw[field], sourceRole);
+  }
+  raw.possuiManga = normalizeLegacyObservedShape(raw.possuiManga, sourceRole);
+  raw.rendaDecisao = normalizeLegacyObservedShape(raw.rendaDecisao, sourceRole);
+
+  const providerExtras: ReferenceProviderExtra[] = [];
+  const rawDetails = raw.detalhesTecnicos && typeof raw.detalhesTecnicos === "object" ? raw.detalhesTecnicos as Record<string, unknown> : {};
+  const canonicalDetails: Record<string, unknown> = {};
+  for (const key of CANONICAL_DETAIL_KEYS) {
+    const value = rawDetails[key];
+    if (value && typeof value === "object" && "value" in (value as Record<string, unknown>)) {
+      canonicalDetails[key] = normalizeLegacyObservedShape(value, sourceRole);
+    } else {
+      canonicalDetails[key] = undefined;
+      if (value !== undefined) collectProviderExtras(value, `detalhesTecnicos.${key}`, sourceRole, providerExtras);
+    }
+  }
+  for (const [key, value] of Object.entries(rawDetails)) {
+    if (!CANONICAL_DETAIL_KEYS.has(key)) collectProviderExtras(value, `detalhesTecnicos.${key}`, sourceRole, providerExtras);
+  }
+  raw.detalhesTecnicos = canonicalDetails;
+  return { input: raw, providerExtras };
+}
+
 function enforceSourceRoleContract(analysis: ReferenceAnalysis, mode: VisionInput["mode"]): ReferenceAnalysis {
   const allowed = mode === "single" ? ["single"] : ["top", "bottom"];
   const observations = [analysis.peca, analysis.comprimento, analysis.decote, analysis.possuiManga, analysis.manga, analysis.saia, analysis.rendaDecisao, analysis.renda, ...Object.values(analysis.detalhesTecnicos)];
@@ -234,7 +364,19 @@ function enforceSourceRoleContract(analysis: ReferenceAnalysis, mode: VisionInpu
   return analysis;
 }
 
-function parseResponse(raw: string, sourceRole: ReferenceSourceRole, mode: VisionInput["mode"], options: { normalizePartial?: boolean } = {}): ReferenceAnalysis {
+function diagnosticCodeForNormalization(error: unknown): ReferenceVisionDiagnostic {
+  const message = error instanceof Error ? error.message : "";
+  if (/Foco fora/.test(message)) return "legacy_focus_status";
+  if (/catálogo/.test(message)) return "invalid_catalog_value";
+  if (/confian/i.test(message)) return "invalid_confidence";
+  if (/Papel de imagem/.test(message) || /papéis das imagens/.test(message)) return "source_role_mismatch";
+  if (/Modo/.test(message)) return "invalid_mode";
+  if (/detalhesTecnicos/.test(message)) return "invalid_details_shape";
+  if (/required|obrigat/i.test(message)) return "missing_required_field";
+  return "contract_mismatch";
+}
+
+function parseResponse(raw: string, sourceRole: ReferenceSourceRole, mode: VisionInput["mode"], options: { normalizePartial?: boolean } = {}): ReferenceVisionResult {
   try {
     const parsed = parseJsonText(raw);
     if (parsed && typeof parsed === "object" && "schemaVersion" in parsed && parsed.schemaVersion !== REFERENCE_ANALYSIS_VERSION) {
@@ -244,13 +386,15 @@ function parseResponse(raw: string, sourceRole: ReferenceSourceRole, mode: Visio
     // OpenAI recebe Structured Outputs e continua exigindo resposta estrita.
     // Fal/OpenRouter fornece texto livre; neste caminho, normalização permite
     // campos ausentes como null, mas mantém rejeição do catálogo/roles.
-    const providerInput = options.normalizePartial ? normalizeProviderCatalogAliases(parsed) : parsed;
-    const normalized = options.normalizePartial ? normalizeReferenceAnalysis(providerInput, sourceRole, mode) : referenceAnalysisSchema.parse(parsed);
+    const adapted = options.normalizePartial ? adaptLegacyProviderResponse(parsed, sourceRole, mode) : { input: parsed, providerExtras: [] };
+    const providerInput = options.normalizePartial ? normalizeProviderCatalogAliases(adapted.input) : adapted.input;
+    const normalized = options.normalizePartial ? normalizeReferenceAnalysis(providerInput, sourceRole, mode) : referenceAnalysisSchema.parse(providerInput);
     const validated = validateReferenceAnalysisForMode(normalized, mode);
-    return enforceSourceRoleContract(validated, mode);
+    const analysis = { ...enforceSourceRoleContract(validated, mode), providerExtras: adapted.providerExtras };
+    return { analysis, providerExtras: adapted.providerExtras };
   } catch (error) {
     if (error instanceof ReferenceVisionError) throw error;
-    const diagnosticCode = error instanceof SyntaxError ? "invalid_json" : "contract_mismatch";
+    const diagnosticCode = error instanceof SyntaxError ? "invalid_json" : diagnosticCodeForNormalization(error);
     throw new ReferenceVisionError("invalid_response", "A resposta do Vision não respeitou o contrato de análise.", { cause: error }, true, diagnosticCode);
   }
 }
@@ -293,7 +437,7 @@ export class OpenAIReferenceVisionAnalyzer {
   get modelName(): string { return this.model; }
   get lastAttempts(): number { return this.attemptsUsed; }
 
-  async analyze(input: VisionInput): Promise<ReferenceAnalysis> {
+  async analyze(input: VisionInput): Promise<ReferenceVisionResult> {
     this.attemptsUsed = 0;
     if (input.imageDataUrls.length !== (input.mode === "composite" ? 2 : 1)) {
       throw new ReferenceVisionError("invalid_response", "A quantidade de imagens não corresponde ao modo de referência.");
@@ -369,7 +513,7 @@ export class FalGeminiReferenceVisionAnalyzer {
   get modelName(): string { return this.model; }
   get lastAttempts(): number { return this.attemptsUsed; }
 
-  async analyze(input: VisionInput): Promise<ReferenceAnalysis> {
+  async analyze(input: VisionInput): Promise<ReferenceVisionResult> {
     this.attemptsUsed = 0;
     if (input.imageDataUrls.length !== (input.mode === "composite" ? 2 : 1)) {
       throw new ReferenceVisionError("invalid_response", "A quantidade de imagens não corresponde ao modo de referência.");

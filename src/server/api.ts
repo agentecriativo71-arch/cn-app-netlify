@@ -5,7 +5,7 @@ import { saveLook, updateLook, searchProducts, createUploadSession, getUploadSes
 import { getBackgroundInstruction, getMannequinUrl, buildSleevelessInstruction, buildMannequinSurfaceInstruction, SLEEVELESS_DECOTES } from '../lib/noivaUtils';
 import { buildCatalogElementPromptFragment } from '../lib/garmentPrompt';
 import {
-  REFERENCE_ANALYSIS_VERSION,
+  REFERENCE_PROMPT_VERSION,
   REFERENCE_PIECES,
   referenceAnalysisToCroquiSpecs,
   validateReferenceAnalysisForMode,
@@ -13,7 +13,7 @@ import {
   type ReferencePiece,
 } from '../lib/referenceUtils';
 import { decideReferenceAnalysis } from '../lib/referenceDecision';
-import { createReferenceVisionAnalyzer, ReferenceVisionError, resolveVisionModel, type VisionProvider } from './referenceVision';
+import { createReferenceVisionAnalyzer, ReferenceVisionError, resolveVisionModel, type ReferenceVisionResult, type VisionProvider } from './referenceVision';
 import { validateReferenceImages, ReferenceInputError } from './referenceInput';
 import { assertReferenceGenerationTextOnly, buildReferenceSeedreamInput } from './referenceGeneration';
 
@@ -804,29 +804,31 @@ async function analyzeReferenceImages(params: {
   ocasiao?: string;
   targetPiece?: ReferencePiece | null;
   imageDataUrls: string[];
-}): Promise<ReferenceAnalysis> {
+}): Promise<ReferenceVisionResult> {
   const analyzer = createReferenceVisionAnalyzer();
   const startedAt = Date.now();
   try {
-    const analysis = await analyzer.analyze({ mode: params.mode, occasion: params.ocasiao, targetPiece: params.targetPiece, imageDataUrls: params.imageDataUrls });
-    const focusConfidence = analysis.focus.reduce((sum, focus) => sum + focus.confidence, 0) / analysis.focus.length;
+    const result = await analyzer.analyze({ mode: params.mode, occasion: params.ocasiao, targetPiece: params.targetPiece, imageDataUrls: params.imageDataUrls });
+    const focusConfidence = result.analysis.focus.reduce((sum, focus) => sum + focus.confidence, 0) / result.analysis.focus.length;
     console.info('[REFERENCE VISION] concluída', {
       model: analyzer.modelName,
       provider: analyzer.providerName,
-      promptVersion: REFERENCE_ANALYSIS_VERSION,
+      promptVersion: REFERENCE_PROMPT_VERSION,
       mode: params.mode,
       imageCount: params.imageDataUrls.length,
       durationMs: Date.now() - startedAt,
       retries: Math.max(0, analyzer.lastAttempts - 1),
       status: 'success',
+      responseContract: result.providerExtras.length > 0 ? 'legacy-adapted' : 'canonical',
+      providerExtrasCount: result.providerExtras.length,
       focusConfidence,
     });
-    return analysis;
+    return result;
   } catch (error) {
     console.warn('[REFERENCE VISION] falhou', {
       model: analyzer.modelName,
       provider: analyzer.providerName,
-      promptVersion: REFERENCE_ANALYSIS_VERSION,
+      promptVersion: REFERENCE_PROMPT_VERSION,
       mode: params.mode,
       imageCount: params.imageDataUrls.length,
       durationMs: Date.now() - startedAt,
@@ -885,14 +887,15 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
       const validatedImages = validateReferenceImages(mode, submittedImages);
       const imageDataUrls = validatedImages.map((image) => image.dataUrl);
       await updateUploadSessionStatus(sessionId, 'analyzing');
-      const analysis = validateReferenceAnalysisForMode(await analyzeReferenceImages({ mode, ocasiao: occasion, targetPiece: currentSession.reference_piece, imageDataUrls }), mode);
+      const visionResult = await analyzeReferenceImages({ mode, ocasiao: occasion, targetPiece: currentSession.reference_piece, imageDataUrls });
+      const analysis = validateReferenceAnalysisForMode(visionResult.analysis, mode);
       const decision = decideReferenceAnalysis(analysis, currentSession.reference_piece);
       console.info('[REFERENCE ANALYSIS] decisão', {
         status: decision.status,
         code: decision.code,
         provider: visionMetadata.provider,
         model: visionMetadata.model,
-        promptVersion: REFERENCE_ANALYSIS_VERSION,
+        promptVersion: REFERENCE_PROMPT_VERSION,
         focusConfidence: analysis.focus.reduce((sum, focus) => sum + focus.confidence, 0) / analysis.focus.length,
       });
       await updateUploadSession(sessionId, {
@@ -901,7 +904,7 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
         analysisErrorCode: decision.code,
         visionProvider: visionMetadata.provider,
         visionModel: visionMetadata.model,
-        promptVersion: REFERENCE_ANALYSIS_VERSION,
+        promptVersion: REFERENCE_PROMPT_VERSION,
       });
       if (decision.status !== 'analysis_ready') return { status: decision.status, code: decision.code, retryable: decision.retryable, message: decision.message };
       try {
@@ -931,7 +934,7 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
         analysisErrorCode: code,
         visionProvider: visionMetadata.provider,
         visionModel: visionMetadata.model,
-        promptVersion: REFERENCE_ANALYSIS_VERSION,
+        promptVersion: REFERENCE_PROMPT_VERSION,
       });
       return {
         status: 'analysis_failed',

@@ -2,6 +2,7 @@ import { z } from "zod";
 import elementosRaw from "./elementos_vestuario.json";
 
 export const REFERENCE_ANALYSIS_VERSION = "reference-analysis-v1" as const;
+export const REFERENCE_PROMPT_VERSION = "reference-analysis-v2" as const;
 export const REFERENCE_PIECES = ["Vestido", "Macacão", "Saia", "Blusa", "Calça", "Top", "Short/Bermuda", "Blazer"] as const;
 export const REFERENCE_LENGTHS = ["Curto", "Médio", "Midi", "Longo"] as const;
 export const REFERENCE_SOURCE_ROLES = ["single", "top", "bottom"] as const;
@@ -15,6 +16,15 @@ export type ReferenceLength = (typeof REFERENCE_LENGTHS)[number];
 export type ReferenceSourceRole = (typeof REFERENCE_SOURCE_ROLES)[number];
 export type ReferenceFocusStatus = (typeof REFERENCE_FOCUS_STATUSES)[number];
 export type ReferenceMode = (typeof REFERENCE_MODES)[number];
+
+export type ReferenceProviderExtra = {
+  path: string;
+  value: string | boolean | null;
+  confidence: number | null;
+  evidence: string | null;
+  sourceRole: ReferenceSourceRole | null;
+  visibleEvidence?: boolean;
+};
 
 type CatalogElement = {
   categoria: "manga" | "saia" | "decote" | "renda";
@@ -44,6 +54,14 @@ export const observedValueSchema = <T extends z.ZodTypeAny>(valueSchema: T) => z
 }).strict();
 
 const technicalDetailSchema = observedValueSchema(z.string().nullable());
+const providerExtraSchema = z.object({
+  path: z.string().min(1),
+  value: z.union([z.string(), z.boolean(), z.null()]),
+  confidence: z.number().min(0).max(1).nullable(),
+  evidence: z.string().nullable(),
+  sourceRole: z.enum(REFERENCE_SOURCE_ROLES).nullable(),
+  visibleEvidence: z.boolean().optional(),
+}).strict();
 
 export const referenceFocusSchema = z.object({
   role: z.enum(REFERENCE_SOURCE_ROLES),
@@ -77,6 +95,8 @@ export const referenceAnalysisSchema = z.object({
     costas: technicalDetailSchema,
     fechamento: technicalDetailSchema,
   }).strict(),
+  // Campo interno de compatibilidade/auditoria. Não faz parte do JSON Schema enviado ao modelo.
+  providerExtras: z.array(providerExtraSchema).optional(),
 }).strict();
 
 export type ObservedValue<T> = {
@@ -114,8 +134,14 @@ function catalogBlock(): string {
 }
 
 function sharedVisionInstructions(ocasiao: string | undefined, mode: ReferenceMode, targetPiece?: ReferencePiece | null): string {
+  const focusContract = mode === "single"
+    ? `[{ "role": "single", "status": "identified", "targetDescription": "short visible description or null", "candidateCount": 1, "confidence": 0.0, "evidence": "short visible evidence or null" }]`
+    : `[
+    { "role": "top", "status": "identified", "targetDescription": "short visible description or null", "candidateCount": 1, "confidence": 0.0, "evidence": "short visible evidence or null" },
+    { "role": "bottom", "status": "identified", "targetDescription": "short visible description or null", "candidateCount": 1, "confidence": 0.0, "evidence": "short visible evidence or null" }
+  ]`;
   return `You are a senior fashion designer and patternmaker analyzing a clothing reference for a technical croqui.
-This is ${REFERENCE_ANALYSIS_VERSION}. Return only JSON matching the strict schema.
+This is ${REFERENCE_PROMPT_VERSION}, using canonical contract ${REFERENCE_ANALYSIS_VERSION}. Return only JSON matching the exact contract below.
 The analysis mode is "${mode}". ${targetPiece ? `The user selected this garment type at the totem: "${targetPiece}". Treat it as the expected garment scope.` : "No garment type was selected in the session; do not invent one."} ${ocasiao ? `The intended occasion persisted in the session is: ${ocasiao}.` : "The occasion must not be invented."}
 
 FOCUS, PRIVACY AND IMAGE INSTRUCTIONS:
@@ -138,7 +164,40 @@ OBSERVATION RULES:
 CATALOG CONTRACT WITH DIRETRIZES:
 ${catalogBlock()}
 
-Return all required fields, including detalhesTecnicos. Unsupported or not-visible details must be null with confidence 0 and evidence null.`;
+EXACT JSON CONTRACT (all keys are required; use null only where the contract permits it):
+{
+  "schemaVersion": "${REFERENCE_ANALYSIS_VERSION}",
+  "mode": "${mode}",
+  "focus": ${focusContract},
+  "peca": { "value": "Vestido", "confidence": 0.0, "evidence": "...", "sourceRole": "${mode === "single" ? "single" : "top"}" },
+  "comprimento": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+  "decote": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+  "possuiManga": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+  "manga": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+  "saia": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+  "rendaDecisao": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+  "renda": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+  "detalhesTecnicos": {
+    "corpete": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+    "cintura": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+    "caimento": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+    "volume": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+    "barra": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+    "transparencia": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+    "tecido": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+    "costas": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null },
+    "fechamento": { "value": null, "confidence": 0.0, "evidence": null, "sourceRole": null }
+  }
+}
+
+CONTRACT PROHIBITIONS:
+- Do not return visibleEvidence. The only evidence key is textual evidence or null.
+- Do not return status ready. Allowed statuses are identified, ambiguous, not_found and insufficient_visibility.
+- Do not return primitive booleans for possuiManga or rendaDecisao; each must be an object with value, confidence, evidence and sourceRole.
+- Do not return nested alternative categories inside detalhesTecnicos. Use exactly its nine keys above.
+- Do not return markdown or a JSON code fence, comments, explanatory text or any key outside this contract.
+
+Return all required fields. Unsupported or not-visible details must be null with confidence 0 and evidence null.`;
 }
 
 export function buildVisionPromptForSingleReference(ocasiao?: string, targetPiece?: ReferencePiece | null): string {
@@ -243,6 +302,7 @@ export function normalizeReferenceAnalysis(input: unknown, sourceRole: Reference
       volume: normalizeDetail(details.volume), barra: normalizeDetail(details.barra), transparencia: normalizeDetail(details.transparencia),
       tecido: normalizeDetail(details.tecido), costas: normalizeDetail(details.costas), fechamento: normalizeDetail(details.fechamento),
     },
+    providerExtras: Array.isArray(raw.providerExtras) ? raw.providerExtras as ReferenceProviderExtra[] : undefined,
   };
   if (normalized.possuiManga.value === false) normalized.manga = { ...normalized.manga, value: null };
   if (mode === "composite" && normalized.peca.value !== null) normalized.peca = { ...normalized.peca, value: "Vestido", evidence: normalized.peca.evidence || "Composição top + bottom sintetizada como vestido." };
@@ -342,10 +402,20 @@ function optionalObservationForGeneration<T>(observation: ObservedValue<T>): T |
 }
 
 export function referenceAnalysisToCroquiSpecs(analysis: ReferenceAnalysis, ocasiao?: string): CroquiGenerationSpecs {
-  const details = Object.entries(analysis.detalhesTecnicos)
+  const technicalDetails = Object.entries(analysis.detalhesTecnicos)
     .filter(([, observation]) => observation.value && observation.confidence >= REFERENCE_CATALOG_CONFIDENCE_THRESHOLD)
     .map(([label, observation]) => `${label}: ${observation.value}`)
-    .join(". ");
+  const providerDetails = (analysis.providerExtras || [])
+    .filter((extra) => extra.value !== null && (extra.confidence === null || extra.confidence >= REFERENCE_CATALOG_CONFIDENCE_THRESHOLD))
+    .map((extra) => `${extra.path}: ${String(extra.value)}`);
+  const details = [...technicalDetails, ...providerDetails];
+  const hasAdjustedCuff = (analysis.providerExtras || []).some((extra) =>
+    extra.path.toLowerCase().endsWith(".punho") && typeof extra.value === "string" && extra.value.toLowerCase().includes("ajustado"),
+  );
+  const hasExplicitElastic = (analysis.providerExtras || []).some((extra) =>
+    extra.path.toLowerCase().endsWith(".elastico") && extra.value === true && (extra.confidence === null || extra.confidence >= REFERENCE_CATALOG_CONFIDENCE_THRESHOLD),
+  );
+  if (hasAdjustedCuff && !hasExplicitElastic) details.push("manga: punho ajustado; não adicionar elástico no punho");
   const specs: CroquiGenerationSpecs = {
     peca: analysis.peca.value || "",
     comprimento: optionalObservationForGeneration(analysis.comprimento),
@@ -355,7 +425,7 @@ export function referenceAnalysisToCroquiSpecs(analysis: ReferenceAnalysis, ocas
     saia: catalogValueForGeneration(analysis.saia),
     renda: catalogValueForGeneration(analysis.renda),
     ocasiao,
-    comentario: details,
+    comentario: details.join(". "),
     referenceAnalysis: analysis,
   };
   if (analysis.rendaDecisao.value !== null && analysis.rendaDecisao.confidence >= REFERENCE_CATALOG_CONFIDENCE_THRESHOLD) specs.rendaDecisao = analysis.rendaDecisao.value;

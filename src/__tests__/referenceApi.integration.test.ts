@@ -38,11 +38,14 @@ async function executeServerFn(fn: any, data: unknown) {
 
 describe("fluxo público de referência", () => {
   beforeEach(() => {
-    analyzeMock.mockReset().mockResolvedValue(validAnalysis());
+    analyzeMock.mockReset().mockResolvedValue({ analysis: validAnalysis(), providerExtras: [] });
     subscribeMock.mockReset().mockResolvedValue({ images: [{ url: "https://fal.test/croqui.png" }] });
   });
 
   it("persiste a análise, recupera a ocasião e envia somente texto ao Seedream", async () => {
+    const analysis = validAnalysis();
+    analysis.providerExtras = [{ path: "detalhesTecnicos.manga.punho", value: "Ajustado", confidence: 0.9, evidence: "Punho visível.", sourceRole: "single" }];
+    analyzeMock.mockResolvedValueOnce({ analysis, providerExtras: analysis.providerExtras });
     const session = await createUploadSession("Cliente", "Festa", "Vestido");
     expect(session.reference_piece).toBe("Vestido");
     const analyzed = await executeServerFn(uploadReferenceFilesFn, { sessionId: session.id, mode: "single", images: [{ role: "single", dataUrl: jpeg }] });
@@ -55,15 +58,19 @@ describe("fluxo público de referência", () => {
     expect(polled.session.ocasiao).toBe("Festa");
     expect(polled.session.vision_provider).toBe("fal");
     expect(polled.session.vision_model).toBe("google/gemini-2.5-flash");
+    expect(polled.session.reference_analysis.providerExtras).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "detalhesTecnicos.manga.punho", value: "Ajustado" }),
+    ]));
     expect(JSON.stringify(polled.session)).not.toContain("data:image");
 
     expect(subscribeMock).toHaveBeenCalledWith("fal-ai/bytedance/seedream/v4/text-to-image", expect.objectContaining({ input: expect.not.objectContaining({ image_urls: expect.anything() }) }));
     expect(JSON.stringify(subscribeMock.mock.calls[0][1].input)).not.toContain("data:image");
+    expect(JSON.stringify(subscribeMock.mock.calls[0][1].input)).toContain("não adicionar elástico no punho");
     expect((await executeServerFn(pollUploadSessionFn, { sessionId: session.id })).session.status).toBe("uploaded");
   });
 
   it("não gera croqui quando o foco é ambíguo", async () => {
-    analyzeMock.mockResolvedValueOnce({ ...validAnalysis(), focus: [{ ...validAnalysis().focus[0], status: "ambiguous", confidence: 0.4 }] });
+    analyzeMock.mockResolvedValueOnce({ analysis: { ...validAnalysis(), focus: [{ ...validAnalysis().focus[0], status: "ambiguous", confidence: 0.4 }] }, providerExtras: [] });
     const session = await createUploadSession("Cliente ambíguo", "Festa");
     const result = await executeServerFn(uploadReferenceFilesFn, { sessionId: session.id, mode: "single", images: [{ role: "single", dataUrl: jpeg }] });
 

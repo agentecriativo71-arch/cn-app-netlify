@@ -35,9 +35,9 @@ describe("Gemini Vision na Fal live (opt-in)", () => {
         const mime = extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : "image/jpeg";
         return `data:${mime};base64,${bytes.toString("base64")}`;
       });
-      const analysis = await analyzer.analyze({ mode: fixture.mode, targetPiece: fixture.targetPiece, imageDataUrls });
-      expect(analysis.schemaVersion, fixture.name).toBe(REFERENCE_ANALYSIS_VERSION);
-      expect(analysis.focus, fixture.name).toHaveLength(fixture.mode === "composite" ? 2 : 1);
+      const result = await analyzer.analyze({ mode: fixture.mode, targetPiece: fixture.targetPiece, imageDataUrls });
+      expect(result.analysis.schemaVersion, fixture.name).toBe(REFERENCE_ANALYSIS_VERSION);
+      expect(result.analysis.focus, fixture.name).toHaveLength(fixture.mode === "composite" ? 2 : 1);
     }
   });
 });
