@@ -156,12 +156,12 @@ describe("Contrato reference-analysis-v1", () => {
     expect(referenceAnalysisToCroquiSpecs(validated).peca).toBe("Vestido");
   });
 
-  it("não permite trocar a origem top/bottom dos elementos compostos", () => {
-    const invalidTop = normalizeReferenceAnalysis({ ...analysisInput("composite"), decote: observed("V (V-Neck)", "bottom") }, "top", "composite");
-    const invalidBottom = normalizeReferenceAnalysis({ ...analysisInput("composite"), saia: observed("Evasê", "top") }, "top", "composite");
+  it("permite evidência visível de qualquer recorte no modo composto", () => {
+    const topEvidence = normalizeReferenceAnalysis({ ...analysisInput("composite"), decote: observed("V (V-Neck)", "bottom") }, "top", "composite");
+    const bottomEvidence = normalizeReferenceAnalysis({ ...analysisInput("composite"), saia: observed("Evasê", "top") }, "top", "composite");
 
-    expect(() => validateReferenceAnalysisForMode(invalidTop, "composite")).toThrow(/decote.*top/i);
-    expect(() => validateReferenceAnalysisForMode(invalidBottom, "composite")).toThrow(/saia.*bottom/i);
+    expect(validateReferenceAnalysisForMode(topEvidence, "composite").decote.sourceRole).toBe("bottom");
+    expect(validateReferenceAnalysisForMode(bottomEvidence, "composite").saia.sourceRole).toBe("top");
   });
 
   it("expõe schema estrito com campos exatos e obrigatórios", () => {

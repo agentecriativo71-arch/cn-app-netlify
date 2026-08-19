@@ -159,7 +159,7 @@ OBSERVATION RULES:
 - Catalog fields must use the exact Portuguese catalog name before the colon below, never an alias.
 - possuiManga=false means the arms/shoulders are visibly bare; true means a sleeve is visible; null means unknown. true with manga.value=null means a visible sleeve has no safe catalog match. manga.value=null is never converted to sleeveless.
 - rendaDecisao=true requires visible lace evidence. Do not call embroidery, floral print, texture or generic decoration lace.
-- For composite mode, synthesize the requested result as one Vestido: use top only for decote, possuiManga, corpete and upper waist; use bottom only for saia, comprimento, volume, barra and lower caimento. Manga is a garment-level field and may be evidenced by either crop; preserve the sourceRole that contains the visible sleeve evidence. Do not assume the same fabric, color or person between the two images.
+- For composite mode, synthesize the requested result as one Vestido. Prefer top for decote, possuiManga, corpete and upper waist, and prefer bottom for saia, comprimento, volume, barra and lower caimento. These are guidance only: if either crop visibly supports a field, use that evidence and preserve its actual sourceRole. Manga is a garment-level field and may be evidenced by either crop. Do not assume the same fabric, color or person between the two images.
 
 CATALOG CONTRACT WITH DIRETRIZES:
 ${catalogBlock()}
@@ -373,22 +373,6 @@ export function validateReferenceAnalysisForMode(input: unknown, mode: Reference
   const observations = [analysis.peca, analysis.comprimento, analysis.decote, analysis.possuiManga, analysis.manga, analysis.saia, analysis.rendaDecisao, analysis.renda, ...Object.values(analysis.detalhesTecnicos)];
   if (observations.some((observation) => observation.sourceRole !== null && !allowedRoles.has(observation.sourceRole))) {
     throw new Error("A resposta não preservou os papéis das imagens de referência.");
-  }
-  if (mode === "composite") {
-    const topOnly: Array<[string, ObservedValue<unknown>]> = [
-      ["decote", analysis.decote], ["possuiManga", analysis.possuiManga],
-      ["corpete", analysis.detalhesTecnicos.corpete], ["cintura", analysis.detalhesTecnicos.cintura],
-    ];
-    const bottomOnly: Array<[string, ObservedValue<unknown>]> = [
-      ["comprimento", analysis.comprimento], ["saia", analysis.saia], ["caimento", analysis.detalhesTecnicos.caimento],
-      ["volume", analysis.detalhesTecnicos.volume], ["barra", analysis.detalhesTecnicos.barra],
-    ];
-    for (const [field, observation] of topOnly) {
-      if (observation.sourceRole !== null && observation.sourceRole !== "top") throw new Error(`O campo ${field} deve vir do recorte top.`);
-    }
-    for (const [field, observation] of bottomOnly) {
-      if (observation.sourceRole !== null && observation.sourceRole !== "bottom") throw new Error(`O campo ${field} deve vir do recorte bottom.`);
-    }
   }
   return analysis;
 }

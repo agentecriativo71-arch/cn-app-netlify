@@ -335,6 +335,27 @@ describe("Fal Gemini Vision adapter", () => {
     expect(result.analysis.renda).toMatchObject({ value: "Sobreposição (Overlay)", sourceRole: "top" });
   });
 
+  it("aceita detalhes da saia evidenciados no recorte top da resposta composta do Fal", async () => {
+    const falCompositeOutput = JSON.parse(validVisionJson("composite"));
+    falCompositeOutput.possuiManga = observed(true, "top");
+    falCompositeOutput.manga = observed("Curta", "top");
+    falCompositeOutput.saia = observed("Babada", "top");
+    falCompositeOutput.detalhesTecnicos.caimento = detail("top");
+    falCompositeOutput.detalhesTecnicos.volume = detail("top");
+    falCompositeOutput.detalhesTecnicos.barra = detail("top");
+
+    const subscribe = vi.fn().mockResolvedValue({ output: JSON.stringify(falCompositeOutput) });
+    const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
+
+    const result = await analyzer.analyze({ mode: "composite", imageDataUrls: ["data:image/jpeg;base64,top", "data:image/jpeg;base64,bottom"] });
+
+    expect(result.analysis.manga).toMatchObject({ value: "Curta (Short Sleeve)", sourceRole: "top" });
+    expect(result.analysis.saia).toMatchObject({ value: "Babada", sourceRole: "top" });
+    expect(result.analysis.detalhesTecnicos.caimento.sourceRole).toBe("top");
+    expect(result.analysis.detalhesTecnicos.volume.sourceRole).toBe("top");
+    expect(result.analysis.detalhesTecnicos.barra.sourceRole).toBe("top");
+  });
+
   it("preenche foco composto ausente como insuficiente sem inventar observações", async () => {
     const partial = JSON.parse(validVisionJson("composite"));
     partial.focus = [partial.focus[0]];
