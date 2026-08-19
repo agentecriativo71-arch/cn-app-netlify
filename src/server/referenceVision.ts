@@ -16,6 +16,7 @@ import {
 export const DEFAULT_OPENAI_VISION_MODEL = "gpt-5.4-mini";
 export const FAL_VISION_ENDPOINT = "openrouter/router/vision";
 export const DEFAULT_FAL_VISION_MODEL = "google/gemini-2.5-flash";
+export const DEFAULT_VISION_MAX_OUTPUT_TOKENS = 1800;
 
 type ResponsesClient = {
   responses: {
@@ -29,6 +30,18 @@ export type FalVisionClient = {
 
 export type VisionProvider = "fal" | "openai";
 export type ReferenceVisionDiagnostic = "response_shape" | "invalid_json" | "contract_mismatch" | "source_role_mismatch";
+
+export function resolveVisionModel(provider: VisionProvider, explicitModel?: string): string {
+  if (explicitModel) return explicitModel;
+  return process.env.VISION_MODEL || (provider === "fal" ? process.env.FAL_VISION_MODEL : process.env.OPENAI_VISION_MODEL) || (provider === "fal" ? DEFAULT_FAL_VISION_MODEL : DEFAULT_OPENAI_VISION_MODEL);
+}
+
+export function resolveVisionMaxOutputTokens(provider: VisionProvider, explicitValue?: number): number {
+  if (explicitValue) return explicitValue;
+  const configuredValue = process.env.VISION_MAX_OUTPUT_TOKENS || (provider === "fal" ? process.env.FAL_VISION_MAX_OUTPUT_TOKENS : process.env.OPENAI_VISION_MAX_OUTPUT_TOKENS);
+  const parsedValue = Number(configuredValue || DEFAULT_VISION_MAX_OUTPUT_TOKENS);
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : DEFAULT_VISION_MAX_OUTPUT_TOKENS;
+}
 
 export type VisionAnalyzer = {
   analyze: (input: VisionInput) => Promise<ReferenceAnalysis>;
@@ -211,13 +224,13 @@ export class OpenAIReferenceVisionAnalyzer {
       throw new ReferenceVisionError("missing_api_key", "OPENAI_API_KEY não configurada para o Vision.");
     }
     this.client = client || createDefaultClient(apiKey as string);
-    this.model = options.model || process.env.OPENAI_VISION_MODEL || DEFAULT_OPENAI_VISION_MODEL;
+    this.model = resolveVisionModel("openai", options.model);
     this.maxAttempts = Math.max(1, Math.min(options.maxAttempts || 2, 2));
     this.retryDelayMs = Math.max(0, options.retryDelayMs || 0);
     // GPT-5.4 mini continua usando contrato estruturado; low/medium reduz latência.
     this.reasoningEffort = options.reasoningEffort || process.env.OPENAI_VISION_REASONING_EFFORT || "low";
     this.detail = options.detail || (process.env.OPENAI_VISION_DETAIL as VisionAnalyzerOptions["detail"] || "medium");
-    this.maxOutputTokens = options.maxOutputTokens || Number(process.env.OPENAI_VISION_MAX_OUTPUT_TOKENS || 1800);
+    this.maxOutputTokens = resolveVisionMaxOutputTokens("openai", options.maxOutputTokens);
   }
 
   get modelName(): string { return this.model; }
@@ -288,10 +301,10 @@ export class FalGeminiReferenceVisionAnalyzer {
       throw new ReferenceVisionError("missing_api_key", "FAL_KEY não configurada para o Gemini Vision.");
     }
     this.client = options.falClient || (isFalVisionClient(options.client) ? options.client : createDefaultFalClient());
-    this.model = options.model || process.env.FAL_VISION_MODEL || DEFAULT_FAL_VISION_MODEL;
+    this.model = resolveVisionModel("fal", options.model);
     this.maxAttempts = Math.max(1, Math.min(options.maxAttempts || 2, 2));
     this.retryDelayMs = Math.max(0, options.retryDelayMs || 0);
-    this.maxOutputTokens = options.maxOutputTokens || Number(process.env.FAL_VISION_MAX_OUTPUT_TOKENS || 1800);
+    this.maxOutputTokens = resolveVisionMaxOutputTokens("fal", options.maxOutputTokens);
     this.temperature = options.temperature ?? Number(process.env.FAL_VISION_TEMPERATURE || 0);
     this.reasoning = options.reasoning ?? process.env.FAL_VISION_REASONING === "true";
   }

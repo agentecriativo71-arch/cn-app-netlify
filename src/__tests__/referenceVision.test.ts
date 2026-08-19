@@ -4,11 +4,29 @@ import {
   OpenAIReferenceVisionAnalyzer,
   ReferenceVisionError,
   createReferenceVisionAnalyzer,
+  resolveVisionMaxOutputTokens,
+  resolveVisionModel,
 } from "../server/referenceVision";
 import { REFERENCE_ANALYSIS_VERSION } from "../lib/referenceUtils";
 
 const observed = (value: unknown, sourceRole: "single" | "top" | "bottom" | null = "single") => ({ value, confidence: 0.9, evidence: "Visível no recorte.", sourceRole });
 const detail = (sourceRole: "single" | "top" | "bottom" | null = "single") => observed("Detalhe visível", sourceRole);
+
+function withEnvironment(values: Record<string, string | undefined>, callback: () => void) {
+  const previous = Object.fromEntries(Object.keys(values).map((key) => [key, process.env[key]]));
+  try {
+    for (const [key, value] of Object.entries(values)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    callback();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
 
 function validVisionJson(mode: "single" | "composite" = "single") {
   const focus = mode === "single"
@@ -30,6 +48,38 @@ function validVisionJson(mode: "single" | "composite" = "single") {
     },
   });
 }
+
+describe("configuração compartilhada do Vision", () => {
+  it("prioriza VISION_MODEL e VISION_MAX_OUTPUT_TOKENS, mantendo fallback legado", () => {
+    withEnvironment({
+      VISION_MODEL: "modelo-geral",
+      FAL_VISION_MODEL: "modelo-fal-legado",
+      OPENAI_VISION_MODEL: "modelo-openai-legado",
+      VISION_MAX_OUTPUT_TOKENS: "2400",
+      FAL_VISION_MAX_OUTPUT_TOKENS: "1900",
+      OPENAI_VISION_MAX_OUTPUT_TOKENS: "2100",
+    }, () => {
+      expect(resolveVisionModel("fal")).toBe("modelo-geral");
+      expect(resolveVisionModel("openai")).toBe("modelo-geral");
+      expect(resolveVisionMaxOutputTokens("fal")).toBe(2400);
+      expect(resolveVisionMaxOutputTokens("openai")).toBe(2400);
+    });
+
+    withEnvironment({
+      VISION_MODEL: undefined,
+      FAL_VISION_MODEL: "modelo-fal-legado",
+      OPENAI_VISION_MODEL: "modelo-openai-legado",
+      VISION_MAX_OUTPUT_TOKENS: undefined,
+      FAL_VISION_MAX_OUTPUT_TOKENS: "1900",
+      OPENAI_VISION_MAX_OUTPUT_TOKENS: "2100",
+    }, () => {
+      expect(resolveVisionModel("fal")).toBe("modelo-fal-legado");
+      expect(resolveVisionModel("openai")).toBe("modelo-openai-legado");
+      expect(resolveVisionMaxOutputTokens("fal")).toBe(1900);
+      expect(resolveVisionMaxOutputTokens("openai")).toBe(2100);
+    });
+  });
+});
 
 describe("OpenAI GPT-5.4 mini Vision adapter", () => {
   it("envia imagem, configuração GPT-5.4 mini e schema estrito", async () => {

@@ -13,7 +13,7 @@ import {
   type ReferencePiece,
 } from '../lib/referenceUtils';
 import { decideReferenceAnalysis } from '../lib/referenceDecision';
-import { createReferenceVisionAnalyzer, DEFAULT_FAL_VISION_MODEL, DEFAULT_OPENAI_VISION_MODEL, ReferenceVisionError } from './referenceVision';
+import { createReferenceVisionAnalyzer, ReferenceVisionError, resolveVisionModel, type VisionProvider } from './referenceVision';
 import { validateReferenceImages, ReferenceInputError } from './referenceInput';
 import { assertReferenceGenerationTextOnly, buildReferenceSeedreamInput } from './referenceGeneration';
 
@@ -857,11 +857,9 @@ function errorCodeForVision(error: unknown): string {
   return 'vision_failed';
 }
 
-function configuredVisionMetadata(): { provider: string; model: string } {
-  const provider = process.env.VISION_PROVIDER === 'openai' ? 'openai' : 'fal';
-  return provider === 'openai'
-    ? { provider, model: process.env.OPENAI_VISION_MODEL || DEFAULT_OPENAI_VISION_MODEL }
-    : { provider, model: process.env.FAL_VISION_MODEL || DEFAULT_FAL_VISION_MODEL };
+function configuredVisionMetadata(): { provider: VisionProvider; model: string } {
+  const provider: VisionProvider = process.env.VISION_PROVIDER === 'openai' ? 'openai' : 'fal';
+  return { provider, model: resolveVisionModel(provider) };
 }
 
 export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })

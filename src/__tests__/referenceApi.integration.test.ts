@@ -11,6 +11,7 @@ vi.mock("../server/referenceVision", () => ({
   DEFAULT_FAL_VISION_MODEL: "google/gemini-2.5-flash",
   DEFAULT_OPENAI_VISION_MODEL: "gpt-5.4-mini",
   ReferenceVisionError: class ReferenceVisionError extends Error {},
+  resolveVisionModel: () => "google/gemini-2.5-flash",
   createReferenceVisionAnalyzer: () => ({ analyze: analyzeMock, providerName: "fal", modelName: "google/gemini-2.5-flash", lastAttempts: 1 }),
 }));
 
