@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { OpenAIReferenceVisionAnalyzer, ReferenceVisionError } from "../server/referenceVision";
+import {
+  FalGeminiReferenceVisionAnalyzer,
+  OpenAIReferenceVisionAnalyzer,
+  ReferenceVisionError,
+  createReferenceVisionAnalyzer,
+} from "../server/referenceVision";
 import { REFERENCE_ANALYSIS_VERSION } from "../lib/referenceUtils";
 
 const observed = (value: unknown, sourceRole: "single" | "top" | "bottom" | null = "single") => ({ value, confidence: 0.9, evidence: "Visível no recorte.", sourceRole });
@@ -101,5 +106,71 @@ describe("OpenAI GPT-5.4 mini Vision adapter", () => {
 
     await expect(analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).resolves.toMatchObject({ schemaVersion: REFERENCE_ANALYSIS_VERSION });
     expect(create).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("Fal Gemini Vision adapter", () => {
+  it("envia imagem ao endpoint Vision da Fal com configuração rápida e contrato atual", async () => {
+    const subscribe = vi.fn().mockResolvedValue({ output: validVisionJson() });
+    const analyzer = new FalGeminiReferenceVisionAnalyzer({
+      client: { subscribe },
+      apiKey: "fal-test-key",
+      maxAttempts: 1,
+    });
+
+    const result = await analyzer.analyze({
+      mode: "single",
+      occasion: "Festa",
+      targetPiece: "Vestido",
+      imageDataUrls: ["data:image/jpeg;base64,crop"],
+    });
+    const [endpoint, options] = subscribe.mock.calls[0] as [string, Record<string, any>];
+
+    expect(endpoint).toBe("openrouter/router/vision");
+    expect(options.input).toMatchObject({
+      model: "google/gemini-2.5-flash",
+      image_urls: ["data:image/jpeg;base64,crop"],
+      temperature: 0,
+      reasoning: false,
+      max_tokens: 1800,
+    });
+    expect(options.input.prompt).toContain("Vestido");
+    expect(options.input.system_prompt).toContain("JSON");
+    expect(result.manga.value).toBeNull();
+    expect(analyzer.providerName).toBe("fal");
+  });
+
+  it("envia imagens compostas na ordem top e bottom", async () => {
+    const subscribe = vi.fn().mockResolvedValue({ output: validVisionJson("composite") });
+    const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
+
+    await analyzer.analyze({ mode: "composite", imageDataUrls: ["data:image/jpeg;base64,top", "data:image/jpeg;base64,bottom"] });
+
+    const input = (subscribe.mock.calls[0][1] as Record<string, any>).input;
+    expect(input.image_urls).toEqual([
+      "data:image/jpeg;base64,top",
+      "data:image/jpeg;base64,bottom",
+    ]);
+    expect(input.prompt).toContain("IMAGE 1 is role \"top\"");
+    expect(input.prompt).toContain("IMAGE 2 is role \"bottom\"");
+  });
+
+  it("faz retry de falha transitória sem trocar para outro provedor", async () => {
+    const subscribe = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error("Fal indisponível"), { status: 503 }))
+      .mockResolvedValueOnce({ output: validVisionJson() });
+    const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 2 });
+
+    await expect(analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).resolves.toMatchObject({ schemaVersion: REFERENCE_ANALYSIS_VERSION });
+    expect(subscribe).toHaveBeenCalledTimes(2);
+    expect(analyzer.providerName).toBe("fal");
+  });
+
+  it("factory usa Fal por padrão e OpenAI somente quando explicitamente selecionado", () => {
+    const falAnalyzer = createReferenceVisionAnalyzer({ provider: "fal", falClient: { subscribe: vi.fn() }, apiKey: "fal-test-key" });
+    const openAiAnalyzer = createReferenceVisionAnalyzer({ provider: "openai", client: { responses: { create: vi.fn() } }, apiKey: "openai-test-key" });
+
+    expect(falAnalyzer.providerName).toBe("fal");
+    expect(openAiAnalyzer.providerName).toBe("openai");
   });
 });

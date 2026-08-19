@@ -5,7 +5,7 @@ import { createReferenceVisionAnalyzer } from "../server/referenceVision";
 import { REFERENCE_ANALYSIS_VERSION } from "../lib/referenceUtils";
 
 const fixtureDirectory = process.env.VISION_LIVE_FIXTURE_DIR;
-const enabled = Boolean(process.env.OPENAI_API_KEY && fixtureDirectory);
+const enabled = Boolean(process.env.FAL_KEY && fixtureDirectory);
 const fixtureCases = [
   { name: "pessoa única", files: ["single.jpg"], mode: "single" as const, targetPiece: "Vestido" as const },
   { name: "grupo com alvo recortado", files: ["group-focused-crop.jpg"], mode: "single" as const, targetPiece: "Vestido" as const },
@@ -16,7 +16,7 @@ const fixtureCases = [
   { name: "sem roupa identificável", files: ["no-identifiable-garment.jpg"], mode: "single" as const, targetPiece: "Vestido" as const },
 ];
 
-describe("GPT-5.4 mini Vision live (opt-in)", () => {
+describe("Gemini Vision na Fal live (opt-in)", () => {
   it.skipIf(!enabled)("exige todos os fixtures sintéticos/licenciados declarados", () => {
     for (const fixture of fixtureCases) {
       for (const file of fixture.files) {
@@ -26,7 +26,7 @@ describe("GPT-5.4 mini Vision live (opt-in)", () => {
   });
 
   it.skipIf(!enabled)("analisa cada fixture local somente como recorte", async () => {
-    const analyzer = createReferenceVisionAnalyzer({ maxAttempts: 2 });
+    const analyzer = createReferenceVisionAnalyzer({ provider: "fal", apiKey: process.env.FAL_KEY, maxAttempts: 2 });
     for (const fixture of fixtureCases) {
       const imageDataUrls = fixture.files.map((file) => {
         const path = `${fixtureDirectory}/${file}`;

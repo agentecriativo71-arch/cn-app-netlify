@@ -8,9 +8,10 @@ vi.mock("@tanstack/react-start", () => ({
   createServerFn: () => ({ handler: (handler: (context: unknown) => unknown) => handler }),
 }));
 vi.mock("../server/referenceVision", () => ({
+  DEFAULT_FAL_VISION_MODEL: "google/gemini-2.5-flash",
   DEFAULT_OPENAI_VISION_MODEL: "gpt-5.4-mini",
   ReferenceVisionError: class ReferenceVisionError extends Error {},
-  createReferenceVisionAnalyzer: () => ({ analyze: analyzeMock, modelName: "gpt-5.4-mini", lastAttempts: 1 }),
+  createReferenceVisionAnalyzer: () => ({ analyze: analyzeMock, providerName: "fal", modelName: "google/gemini-2.5-flash", lastAttempts: 1 }),
 }));
 
 import { pollUploadSessionFn, retryReferenceGenerationFn, uploadReferenceFilesFn } from "../server/api";
@@ -51,6 +52,8 @@ describe("fluxo público de referência", () => {
     const polled = await executeServerFn(pollUploadSessionFn, { sessionId: session.id });
     expect(polled.session.reference_analysis).toMatchObject({ schemaVersion: REFERENCE_ANALYSIS_VERSION });
     expect(polled.session.ocasiao).toBe("Festa");
+    expect(polled.session.vision_provider).toBe("fal");
+    expect(polled.session.vision_model).toBe("google/gemini-2.5-flash");
     expect(JSON.stringify(polled.session)).not.toContain("data:image");
 
     expect(subscribeMock).toHaveBeenCalledWith("fal-ai/bytedance/seedream/v4/text-to-image", expect.objectContaining({ input: expect.not.objectContaining({ image_urls: expect.anything() }) }));
