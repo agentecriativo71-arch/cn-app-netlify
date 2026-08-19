@@ -216,13 +216,30 @@ describe("Fal Gemini Vision adapter", () => {
     expect(result.detalhesTecnicos.corpete.value).toBeNull();
   });
 
-  it("continua rejeitando nomes de elementos fora do catálogo", async () => {
+  it("não aceita elemento sem correspondência no catálogo", async () => {
     const invalid = JSON.parse(validVisionJson());
-    invalid.manga = observed("Manga Longa");
+    invalid.manga = observed("Manga Inexistente");
     const subscribe = vi.fn().mockResolvedValue({ output: JSON.stringify(invalid) });
     const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
 
-    await expect(analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] })).rejects.toMatchObject({ code: "invalid_response", diagnosticCode: "contract_mismatch" });
+    const result = await analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] });
+
+    expect(result.manga.value).toBeNull();
+    expect(result.manga.confidence).toBe(0);
+  });
+
+  it("converte aliases determinísticos para os nomes exatos do catálogo", async () => {
+    const aliased = JSON.parse(validVisionJson());
+    aliased.possuiManga = observed(true);
+    aliased.manga = observed("Manga Longa");
+    aliased.decote = observed("Off-Shoulder Neckline");
+    const subscribe = vi.fn().mockResolvedValue({ output: JSON.stringify(aliased) });
+    const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
+
+    const result = await analyzer.analyze({ mode: "single", imageDataUrls: ["data:image/jpeg;base64,crop"] });
+
+    expect(result.manga.value).toBe("Longa (Long Sleeve)");
+    expect(result.decote.value).toBe("Ombro a Ombro");
   });
 
   it("classifica resposta Fal sem texto como falha de formato", async () => {

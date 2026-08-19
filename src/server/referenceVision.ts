@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import * as fal from "@fal-ai/serverless-client";
 import {
   REFERENCE_ANALYSIS_VERSION,
+  CATALOG_ELEMENTS,
   buildVisionPromptForCompositeReference,
   buildVisionPromptForSingleReference,
   getReferenceAnalysisJsonSchema,
@@ -170,6 +171,61 @@ function parseJsonText(raw: string): unknown {
   throw lastError instanceof Error ? lastError : new Error("A resposta não continha um objeto JSON.");
 }
 
+type CatalogField = "decote" | "manga" | "saia" | "renda";
+
+function catalogComparisonKey(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[()\-/]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function catalogValueAliases(field: CatalogField, value: string): string[] {
+  const key = catalogComparisonKey(value);
+  const labelsByField: Record<CatalogField, string[]> = {
+    decote: ["decote", "neckline", "neck"],
+    manga: ["manga", "sleeve"],
+    saia: ["saia", "skirt"],
+    renda: ["renda", "lace"],
+  };
+  const withoutFieldLabel = labelsByField[field].reduce((current, label) => current.replace(new RegExp(`^${label}\\s+`), ""), key);
+  return [...new Set([key, withoutFieldLabel])];
+}
+
+function resolveCatalogValueAlias(field: CatalogField, value: string): string | null {
+  const requestedAliases = new Set(catalogValueAliases(field, value));
+  const candidates = CATALOG_ELEMENTS.filter((item) => item.categoria === field);
+  for (const candidate of candidates) {
+    const candidateAliases = [
+      ...catalogValueAliases(field, candidate.nome),
+      ...catalogValueAliases(field, candidate.nome_en),
+      ...catalogValueAliases(field, candidate.nome.split("(")[0].trim()),
+    ];
+    if (candidateAliases.some((alias) => requestedAliases.has(alias))) return candidate.nome;
+  }
+  return null;
+}
+
+function normalizeProviderCatalogAliases(input: unknown): unknown {
+  if (!input || typeof input !== "object") return input;
+  const raw = { ...(input as Record<string, unknown>) };
+  const fields: CatalogField[] = ["decote", "manga", "saia", "renda"];
+  for (const field of fields) {
+    const observation = raw[field];
+    if (!observation || typeof observation !== "object") continue;
+    const candidate = observation as Record<string, unknown>;
+    if (typeof candidate.value !== "string") continue;
+    const canonicalValue = resolveCatalogValueAlias(field, candidate.value);
+    raw[field] = canonicalValue
+      ? { ...candidate, value: canonicalValue }
+      : { ...candidate, value: null, confidence: 0, evidence: null, sourceRole: null };
+  }
+  return raw;
+}
+
 function enforceSourceRoleContract(analysis: ReferenceAnalysis, mode: VisionInput["mode"]): ReferenceAnalysis {
   const allowed = mode === "single" ? ["single"] : ["top", "bottom"];
   const observations = [analysis.peca, analysis.comprimento, analysis.decote, analysis.possuiManga, analysis.manga, analysis.saia, analysis.rendaDecisao, analysis.renda, ...Object.values(analysis.detalhesTecnicos)];
@@ -188,7 +244,8 @@ function parseResponse(raw: string, sourceRole: ReferenceSourceRole, mode: Visio
     // OpenAI recebe Structured Outputs e continua exigindo resposta estrita.
     // Fal/OpenRouter fornece texto livre; neste caminho, normalização permite
     // campos ausentes como null, mas mantém rejeição do catálogo/roles.
-    const normalized = options.normalizePartial ? normalizeReferenceAnalysis(parsed, sourceRole, mode) : referenceAnalysisSchema.parse(parsed);
+    const providerInput = options.normalizePartial ? normalizeProviderCatalogAliases(parsed) : parsed;
+    const normalized = options.normalizePartial ? normalizeReferenceAnalysis(providerInput, sourceRole, mode) : referenceAnalysisSchema.parse(parsed);
     const validated = validateReferenceAnalysisForMode(normalized, mode);
     return enforceSourceRoleContract(validated, mode);
   } catch (error) {
