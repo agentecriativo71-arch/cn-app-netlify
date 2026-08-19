@@ -35,12 +35,12 @@ describe("OpenAI GPT-5 Vision adapter", () => {
     const content = payload.input[0].content;
     expect(payload.model).toBe("gpt-5");
     expect(payload.store).toBe(false);
-    expect(payload.reasoning).toEqual({ effort: "medium" });
-    expect(payload.max_output_tokens).toBe(3000);
+    expect(payload.reasoning).toEqual({ effort: "low" });
+    expect(payload.max_output_tokens).toBe(1800);
     expect(payload).not.toHaveProperty("temperature");
     expect(payload.text.format.strict).toBe(true);
     expect(payload.text.format.schema.additionalProperties).toBe(false);
-    expect(content.find((item: any) => item.type === "input_image")).toMatchObject({ type: "input_image", image_url: "data:image/jpeg;base64,crop", detail: "high" });
+    expect(content.find((item: any) => item.type === "input_image")).toMatchObject({ type: "input_image", image_url: "data:image/jpeg;base64,crop", detail: "medium" });
     expect(content[0].text).toContain("Vestido");
     expect(result.manga.value).toBeNull();
   });
@@ -52,7 +52,7 @@ describe("OpenAI GPT-5 Vision adapter", () => {
     const payload = create.mock.calls[0][0] as Record<string, any>;
     const images = payload.input[0].content.filter((item: any) => item.type === "input_image");
     expect(images).toHaveLength(2);
-    expect(images.every((image: any) => image.detail === "high")).toBe(true);
+    expect(images.every((image: any) => image.detail === "medium")).toBe(true);
     expect(images[0].image_url).toContain("top");
     expect(images[1].image_url).toContain("bottom");
     expect(payload.input[0].content[1].text).toContain("ROLE: top");

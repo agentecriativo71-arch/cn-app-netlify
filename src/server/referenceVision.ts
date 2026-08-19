@@ -124,9 +124,10 @@ export class OpenAIReferenceVisionAnalyzer {
     this.model = options.model || process.env.OPENAI_VISION_MODEL || "gpt-5";
     this.maxAttempts = Math.max(1, Math.min(options.maxAttempts || 2, 2));
     this.retryDelayMs = Math.max(0, options.retryDelayMs || 0);
-    this.reasoningEffort = options.reasoningEffort || process.env.OPENAI_VISION_REASONING_EFFORT || "medium";
-    this.detail = options.detail || (process.env.OPENAI_VISION_DETAIL as VisionAnalyzerOptions["detail"] || "high");
-    this.maxOutputTokens = options.maxOutputTokens || Number(process.env.OPENAI_VISION_MAX_OUTPUT_TOKENS || 3000);
+    // GPT-5 continua principal; low/medium reduz latência sem trocar contrato estruturado.
+    this.reasoningEffort = options.reasoningEffort || process.env.OPENAI_VISION_REASONING_EFFORT || "low";
+    this.detail = options.detail || (process.env.OPENAI_VISION_DETAIL as VisionAnalyzerOptions["detail"] || "medium");
+    this.maxOutputTokens = options.maxOutputTokens || Number(process.env.OPENAI_VISION_MAX_OUTPUT_TOKENS || 1800);
   }
 
   get modelName(): string { return this.model; }

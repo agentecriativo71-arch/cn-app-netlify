@@ -12,7 +12,7 @@ vi.mock("../server/referenceVision", () => ({
   createReferenceVisionAnalyzer: () => ({ analyze: analyzeMock, modelName: "gpt-5", lastAttempts: 1 }),
 }));
 
-import { confirmReferenceGenerationFn, pollUploadSessionFn, retryReferenceGenerationFn, uploadReferenceFilesFn } from "../server/api";
+import { pollUploadSessionFn, retryReferenceGenerationFn, uploadReferenceFilesFn } from "../server/api";
 import { createUploadSession } from "../server/db";
 import { normalizeReferenceAnalysis, REFERENCE_ANALYSIS_VERSION } from "../lib/referenceUtils";
 
@@ -44,7 +44,7 @@ describe("fluxo público de referência", () => {
     expect(session.reference_piece).toBe("Vestido");
     const analyzed = await executeServerFn(uploadReferenceFilesFn, { sessionId: session.id, mode: "single", images: [{ role: "single", dataUrl: jpeg }] });
 
-    expect(analyzed.status).toBe("analysis_ready");
+    expect(analyzed.status).toBe("uploaded");
     expect(analyzeMock).toHaveBeenCalledWith(expect.objectContaining({ mode: "single", occasion: "Festa", targetPiece: "Vestido", imageDataUrls: [jpeg] }));
 
     const polled = await executeServerFn(pollUploadSessionFn, { sessionId: session.id });
@@ -52,8 +52,6 @@ describe("fluxo público de referência", () => {
     expect(polled.session.ocasiao).toBe("Festa");
     expect(JSON.stringify(polled.session)).not.toContain("data:image");
 
-    const generated = await executeServerFn(confirmReferenceGenerationFn, { sessionId: session.id });
-    expect(generated.success).toBe(true);
     expect(subscribeMock).toHaveBeenCalledWith("fal-ai/bytedance/seedream/v4/text-to-image", expect.objectContaining({ input: expect.not.objectContaining({ image_urls: expect.anything() }) }));
     expect(JSON.stringify(subscribeMock.mock.calls[0][1].input)).not.toContain("data:image");
     expect((await executeServerFn(pollUploadSessionFn, { sessionId: session.id })).session.status).toBe("uploaded");
@@ -71,9 +69,8 @@ describe("fluxo público de referência", () => {
   it("permite retry da geração sem chamar Vision novamente", async () => {
     subscribeMock.mockRejectedValueOnce(new Error("falha Seedream")).mockResolvedValueOnce({ images: [{ url: "https://fal.test/retry.png" }] });
     const session = await createUploadSession("Cliente retry", "Festa");
-    await executeServerFn(uploadReferenceFilesFn, { sessionId: session.id, mode: "single", images: [{ role: "single", dataUrl: jpeg }] });
-
-    await expect(executeServerFn(confirmReferenceGenerationFn, { sessionId: session.id })).rejects.toThrow("falha Seedream");
+    const analyzed = await executeServerFn(uploadReferenceFilesFn, { sessionId: session.id, mode: "single", images: [{ role: "single", dataUrl: jpeg }] });
+    expect(analyzed.status).toBe("generation_failed");
     expect((await executeServerFn(pollUploadSessionFn, { sessionId: session.id })).session.status).toBe("generation_failed");
     await executeServerFn(retryReferenceGenerationFn, { sessionId: session.id });
 

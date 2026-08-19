@@ -1,9 +1,9 @@
 import { createServerFn } from '@tanstack/react-start';
 import * as fal from '@fal-ai/serverless-client';
 import { createClient } from '@supabase/supabase-js';
-import elementosRaw from '../lib/elementos_vestuario.json';
 import { saveLook, updateLook, searchProducts, createUploadSession, getUploadSession, confirmUploadSession, updateUploadSession, updateUploadSessionStatus, claimUploadSessionForGeneration } from './db';
 import { getBackgroundInstruction, getMannequinUrl, buildSleevelessInstruction, buildMannequinSurfaceInstruction, SLEEVELESS_DECOTES } from '../lib/noivaUtils';
+import { buildCatalogElementPromptFragment } from '../lib/garmentPrompt';
 import {
   REFERENCE_ANALYSIS_VERSION,
   REFERENCE_PIECES,
@@ -16,65 +16,6 @@ import { decideReferenceAnalysis } from '../lib/referenceDecision';
 import { createReferenceVisionAnalyzer, ReferenceVisionError } from './referenceVision';
 import { validateReferenceImages, ReferenceInputError } from './referenceInput';
 import { assertReferenceGenerationTextOnly, buildReferenceSeedreamInput } from './referenceGeneration';
-
-// Map nome -> element for fast O(1) lookup
-type Elemento = {
-  id: number;
-  nome: string;
-  nome_en: string;
-  categoria: string;
-  diretrizes: string;
-  description_en: string;
-  image_url: string | null;
-};
-const ELEMENT_MAP = new Map<string, Elemento>(
-  (elementosRaw as Elemento[]).map(e => [e.nome, e])
-);
-
-function getElementSpecs(nome: string | null | undefined): { catalogName: string; nameEn: string; descEn: string } | null {
-  if (!nome) return null;
-  const el = ELEMENT_MAP.get(nome);
-  if (!el) return { catalogName: nome, nameEn: nome, descEn: '' };
-  return {
-    catalogName: el.nome,
-    nameEn: el.nome_en || el.nome,
-    descEn: el.description_en || ''
-  };
-}
-
-function buildElementPromptFragment(specs: {
-  decote?: string | null;
-  manga?: string | null;
-  saia?: string | null;
-  renda?: string | null;
-  peca?: string | null;
-  possuiManga?: boolean | null;
-}): string {
-  const parts: string[] = [];
-
-  const dSpec = getElementSpecs(specs.decote);
-  if (dSpec) parts.push(`NECKLINE STYLE — catalog name "${dSpec.catalogName}" (${dSpec.nameEn}): ${dSpec.descEn}`);
-
-  const mSpec = getElementSpecs(specs.manga);
-  if (mSpec) {
-    parts.push(`SLEEVE STYLE — catalog name "${mSpec.catalogName}" (${mSpec.nameEn}): ${mSpec.descEn}`);
-  } else if (specs.possuiManga === false) {
-    parts.push(`SLEEVE STYLE — Sleeveless: The garment is completely sleeveless with no sleeves, leaving the arms fully bare`);
-  } else if (specs.possuiManga === true) {
-    parts.push(`SLEEVE STYLE — A sleeve is visibly present in the reference, but no exact catalog category was confirmed. Preserve only the visible sleeve construction described in the technical notes; do not invent a catalog name.`);
-  } else if (specs.possuiManga === undefined && (specs.peca === "Vestido" || specs.peca === "Blusa" || specs.peca === "Macacão")) {
-    parts.push(`SLEEVE STYLE — Sleeveless: The garment is completely sleeveless with no sleeves, leaving the arms fully bare`);
-  }
-
-  const sSpec = getElementSpecs(specs.saia);
-  if (sSpec) parts.push(`SKIRT/BOTTOM STYLE — catalog name "${sSpec.catalogName}" (${sSpec.nameEn}): ${sSpec.descEn}`);
-
-  const rSpec = getElementSpecs(specs.renda);
-  if (rSpec) parts.push(`LACE DETAIL — catalog name "${rSpec.catalogName}" (${rSpec.nameEn}): ${rSpec.descEn}`);
-
-  if (parts.length === 0) return "";
-  return ` GARMENT ELEMENT SPECIFICATIONS (follow these descriptions precisely): ${parts.join(". ")}.`;
-}
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -190,7 +131,7 @@ Style: hand-drawn black pencil on white paper. No color, no photo, no background
   const pecaEn = PECA_EN[peca as keyof typeof PECA_EN] || peca || 'garment';
   const comprimentoEn = comprimento ? (COMPRIMENTO_EN[comprimento as keyof typeof COMPRIMENTO_EN] || comprimento) : '';
 
-  const elementFragment = buildElementPromptFragment({ decote, manga, possuiManga, saia, renda, peca });
+  const elementFragment = buildCatalogElementPromptFragment({ decote, manga, possuiManga, saia, renda, peca });
   const isBottom = isBottomGarment(pecaEn, peca || '');
   const isTop = isTopGarment(pecaEn, peca || '');
   const hemInstruction = comprimento ? (COMPRIMENTO_HEM[comprimento as keyof typeof COMPRIMENTO_HEM] || '') : '';
@@ -442,7 +383,7 @@ No illustrations, no sketches, no cartoons.`;
       const mannequinUrl = getMannequinUrl(biotipo);
 
       const comprimentoEn = comprimento ? (COMPRIMENTO_EN[comprimento as keyof typeof COMPRIMENTO_EN] || comprimento) : '';
-      const elementFragment = buildElementPromptFragment({ decote, manga, saia, renda, peca });
+      const elementFragment = buildCatalogElementPromptFragment({ decote, manga, saia, renda, peca });
       const isBottom = isBottomGarment(pecaEn, peca || '');
       const isTop = isTopGarment(pecaEn, peca || '');
       const hemInstruction = comprimento ? (COMPRIMENTO_HEM[comprimento as keyof typeof COMPRIMENTO_HEM] || '') : '';
@@ -903,6 +844,7 @@ export type AnalyzeReferenceRequest = {
 };
 
 export type AnalyzeReferenceResponse =
+  | { status: 'uploaded' | 'generation_failed'; analysis: ReferenceAnalysis; croquiUrl?: string; code?: string; retryable?: boolean; message?: string }
   | { status: 'analysis_ready'; analysis: ReferenceAnalysis }
   | { status: 'needs_recrop' | 'unsupported_garment' | 'analysis_failed'; code: string; retryable: boolean; message: string };
 
@@ -952,7 +894,20 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
         promptVersion: REFERENCE_ANALYSIS_VERSION,
       });
       if (decision.status !== 'analysis_ready') return { status: decision.status, code: decision.code, retryable: decision.retryable, message: decision.message };
-      return { status: decision.status, analysis };
+      try {
+        const generated = await generateReferenceCroqui(sessionId);
+        return { status: 'uploaded', analysis: generated.analysis, croquiUrl: generated.croquiUrl };
+      } catch {
+        // A análise continua persistida; geração pode ser repetida sem chamar Vision novamente.
+        console.warn('[REFERENCE ANALYSIS] geração automática falhou:', { code: 'generation_failed' });
+        return {
+          status: 'generation_failed',
+          analysis,
+          code: 'generation_failed',
+          retryable: true,
+          message: 'A referência foi analisada, mas o croqui não pôde ser gerado. Tente novamente no totem.',
+        };
+      }
     } catch (error) {
       const code = errorCodeForVision(error);
       // O erro pode conter detalhes do provedor ou ecoar parte da requisição.

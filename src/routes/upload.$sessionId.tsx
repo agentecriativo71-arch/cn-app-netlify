@@ -151,6 +151,10 @@ function UploadModeloMobile() {
         setErrorMsg(result.message || "Não foi possível analisar os recortes. Tente novamente.");
         return;
       }
+      if (result.status === "generation_failed") {
+        setErrorMsg(result.message || "A referência foi analisada, mas o croqui não pôde ser gerado. Tente novamente no totem.");
+        return;
+      }
       clearLocalImages();
       setStatus("success");
     } catch (error) {
@@ -163,7 +167,7 @@ function UploadModeloMobile() {
 
   if (status === "loading") return <CenteredMessage><Loader2 size={32} className="animate-spin text-[#E5D3A2]" /><p>Carregando sessão de upload...</p></CenteredMessage>;
   if (status === "invalid") return <CenteredMessage><div className="w-16 h-16 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center border border-red-500/40">✕</div><h2 className="text-xl font-bold">Sessão inválida ou expirada</h2><p>Solicite um novo QR Code no totem.</p></CenteredMessage>;
-  if (status === "success" || status === "already_uploaded") return <CenteredMessage><div className="w-20 h-20 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/40"><CheckCircle2 size={48} /></div><h2 className="text-2xl font-extrabold uppercase">Referência recebida</h2><p>{nomeCliente ? `Obrigado, ${nomeCliente}! ` : ""}O recorte foi analisado. Confirme o resumo no totem para gerar o croqui.</p></CenteredMessage>;
+  if (status === "success" || status === "already_uploaded") return <CenteredMessage><div className="w-20 h-20 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/40"><CheckCircle2 size={48} /></div><h2 className="text-2xl font-extrabold uppercase">Referência recebida</h2><p>{nomeCliente ? `Obrigado, ${nomeCliente}! ` : ""}O croqui está sendo preparado automaticamente no totem.</p></CenteredMessage>;
 
   const cropImage = cropTarget ? originalForTarget[cropTarget] : null;
 

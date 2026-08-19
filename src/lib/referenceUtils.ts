@@ -22,6 +22,7 @@ type CatalogElement = {
   nome_en: string;
   diretrizes: string;
   description_en: string;
+  generation_prompt_en?: string;
 };
 
 export const CATALOG_ELEMENTS = elementosRaw as CatalogElement[];
