@@ -4,13 +4,14 @@ import { useLook } from "@/lib/store";
 import { NomeModal } from "@/components/NomeModal";
 import { CroquiModoModal } from "@/components/CroquiModoModal";
 import { useVideoStore } from "@/lib/videoStore";
+import { CRISPIM_AI_LABEL } from "@/lib/brandCopy";
 
 export const Route = createFileRoute("/")(  {
   component: Home,
   head: () => ({
     meta: [
       { title: "C&N Tecidos — Agente Criativo" },
-      { name: "description", content: "Crie seu look com o Crispim, a IA da C&N Tecidos. Croqui e foto realista em segundos." },
+      { name: "description", content: `Crie seu look com a ${CRISPIM_AI_LABEL}. Croqui e foto realista em segundos.` },
     ],
   }),
 });

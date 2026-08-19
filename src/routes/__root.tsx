@@ -11,6 +11,7 @@ import {
 import appCss from "../styles.css?url";
 import logoUrl from "../assets/logo.jpg?url";
 import { VideoBackground } from "@/components/VideoBackground";
+import { CRISPIM_AI_LABEL } from "@/lib/brandCopy";
 
 function NotFoundComponent() {
   return (
@@ -75,13 +76,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "C&N Tecidos — Agente Criativo" },
-      { name: "description", content: "Crie seu look com o Crispim, IA da C&N Tecidos. Croqui e foto realista em segundos." },
+      { name: "description", content: `Crie seu look com a ${CRISPIM_AI_LABEL}. Croqui e foto realista em segundos.` },
       { name: "theme-color", content: "#1A6B2F" },
       { property: "og:title", content: "C&N Tecidos — Agente Criativo" },
-      { property: "og:description", content: "Crie seu look com o Crispim, IA da C&N Tecidos. Croqui e foto realista em segundos." },
+      { property: "og:description", content: `Crie seu look com a ${CRISPIM_AI_LABEL}. Croqui e foto realista em segundos.` },
       { property: "og:type", content: "website" },
       { name: "twitter:title", content: "C&N Tecidos — Agente Criativo" },
-      { name: "twitter:description", content: "Crie seu look com o Crispim, IA da C&N Tecidos. Croqui e foto realista em segundos." },
+      { name: "twitter:description", content: `Crie seu look com a ${CRISPIM_AI_LABEL}. Croqui e foto realista em segundos.` },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
