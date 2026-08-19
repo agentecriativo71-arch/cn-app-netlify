@@ -159,7 +159,7 @@ OBSERVATION RULES:
 - Catalog fields must use the exact Portuguese catalog name before the colon below, never an alias.
 - possuiManga=false means the arms/shoulders are visibly bare; true means a sleeve is visible; null means unknown. true with manga.value=null means a visible sleeve has no safe catalog match. manga.value=null is never converted to sleeveless.
 - rendaDecisao=true requires visible lace evidence. Do not call embroidery, floral print, texture or generic decoration lace.
-- For composite mode, synthesize the requested result as one Vestido: use top only for decote, possuiManga, manga, corpete and upper waist; use bottom only for saia, comprimento, volume, barra and lower caimento. Do not assume the same fabric, color or person between the two images.
+- For composite mode, synthesize the requested result as one Vestido: use top only for decote, possuiManga, corpete and upper waist; use bottom only for saia, comprimento, volume, barra and lower caimento. Manga is a garment-level field and may be evidenced by either crop; preserve the sourceRole that contains the visible sleeve evidence. Do not assume the same fabric, color or person between the two images.
 
 CATALOG CONTRACT WITH DIRETRIZES:
 ${catalogBlock()}
@@ -376,7 +376,7 @@ export function validateReferenceAnalysisForMode(input: unknown, mode: Reference
   }
   if (mode === "composite") {
     const topOnly: Array<[string, ObservedValue<unknown>]> = [
-      ["decote", analysis.decote], ["possuiManga", analysis.possuiManga], ["manga", analysis.manga],
+      ["decote", analysis.decote], ["possuiManga", analysis.possuiManga],
       ["corpete", analysis.detalhesTecnicos.corpete], ["cintura", analysis.detalhesTecnicos.cintura],
     ];
     const bottomOnly: Array<[string, ObservedValue<unknown>]> = [

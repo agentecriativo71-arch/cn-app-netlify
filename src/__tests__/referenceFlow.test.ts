@@ -66,6 +66,7 @@ describe("Contrato reference-analysis-v1", () => {
     expect(prompt).toContain('IMAGE 1 is role "top"');
     expect(prompt).toContain('IMAGE 2 is role "bottom"');
     expect(prompt.indexOf("IMAGE 1")).toBeLessThan(prompt.indexOf("IMAGE 2"));
+    expect(prompt).toContain("Manga is a garment-level field and may be evidenced by either crop");
     expect(prompt).toContain("same fabric, color or person");
   });
 
