@@ -4,8 +4,10 @@ import {
   CATALOG_VALUES,
   REFERENCE_ANALYSIS_VERSION,
   buildVisionPromptForCompositeReference,
+  buildVisionPromptForReferencePart,
   buildVisionPromptForSingleReference,
   getReferenceAnalysisJsonSchema,
+  mergeCompositeReferenceAnalyses,
   normalizeReferenceAnalysis,
   referenceAnalysisSchema,
   referenceAnalysisToCroquiSpecs,
@@ -68,6 +70,17 @@ describe("Contrato reference-analysis-v1", () => {
     expect(prompt.indexOf("IMAGE 1")).toBeLessThan(prompt.indexOf("IMAGE 2"));
     expect(prompt).toContain("Manga is a garment-level field and may be evidenced by either crop");
     expect(prompt).toContain("same fabric, color or person");
+  });
+
+  it("delimita escopo superior e inferior nos prompts de análise por parte", () => {
+    const topPrompt = buildVisionPromptForReferencePart("top", "Festa", "Vestido");
+    const bottomPrompt = buildVisionPromptForReferencePart("bottom", "Festa", "Vestido");
+    expect(topPrompt).toContain("upper garment crop");
+    expect(topPrompt).toContain("decote, manga, possuiManga, corpete, cintura");
+    expect(bottomPrompt).toContain("lower garment crop");
+    expect(bottomPrompt).toContain("comprimento, saia, caimento, volume, barra");
+    expect(topPrompt).toContain("never infer");
+    expect(bottomPrompt).toContain("never infer");
   });
 
   it("rejeita aliases fora do catálogo e propriedades extras", () => {
@@ -156,12 +169,85 @@ describe("Contrato reference-analysis-v1", () => {
     expect(referenceAnalysisToCroquiSpecs(validated).peca).toBe("Vestido");
   });
 
-  it("permite evidência visível de qualquer recorte no modo composto", () => {
+  it("rejeita evidência atribuída ao papel errado no modo composto", () => {
     const topEvidence = normalizeReferenceAnalysis({ ...analysisInput("composite"), decote: observed("V (V-Neck)", "bottom") }, "top", "composite");
     const bottomEvidence = normalizeReferenceAnalysis({ ...analysisInput("composite"), saia: observed("Evasê", "top") }, "top", "composite");
 
-    expect(validateReferenceAnalysisForMode(topEvidence, "composite").decote.sourceRole).toBe("bottom");
-    expect(validateReferenceAnalysisForMode(bottomEvidence, "composite").saia.sourceRole).toBe("top");
+    expect(() => validateReferenceAnalysisForMode(topEvidence, "composite")).toThrow("campo superior");
+    expect(() => validateReferenceAnalysisForMode(bottomEvidence, "composite")).toThrow("campo inferior");
+  });
+
+  it("funde duas análises sem permitir que a parte inferior sobrescreva a superior", () => {
+    const top = normalizeReferenceAnalysis({
+      ...analysisInput(),
+      peca: observed("Vestido"),
+      decote: observed("Quadrado (Square)", "single"),
+      possuiManga: observed(true),
+      manga: observed("Longa (Long Sleeve)"),
+      saia: observed(null),
+    }, "single", "single");
+    const bottom = normalizeReferenceAnalysis({
+      ...analysisInput(),
+      peca: observed("Vestido"),
+      decote: observed("V (V-Neck)"),
+      possuiManga: observed(false),
+      manga: observed(null),
+      saia: observed("Evasê"),
+      comprimento: observed("Midi"),
+    }, "single", "single");
+
+    const merged = mergeCompositeReferenceAnalyses({ top, bottom, targetPiece: "Vestido" });
+
+    expect(merged.mode).toBe("composite");
+    expect(merged.focus.map((item) => item.role)).toEqual(["top", "bottom"]);
+    expect(merged.decote).toMatchObject({ value: "Quadrado (Square)", sourceRole: "top" });
+    expect(merged.possuiManga).toMatchObject({ value: true, sourceRole: "top" });
+    expect(merged.manga).toMatchObject({ value: "Longa (Long Sleeve)", sourceRole: "top" });
+    expect(merged.saia).toMatchObject({ value: "Evasê", sourceRole: "bottom" });
+    expect(merged.comprimento).toMatchObject({ value: "Midi", sourceRole: "bottom" });
+  });
+
+  it("mantém campos ausentes nulos e marca origem dos extras", () => {
+    const top = normalizeReferenceAnalysis({
+      ...analysisInput(),
+      providerExtras: [{ path: "detalhesTecnicos.manga.punho", value: "Ajustado", confidence: 0.9, evidence: "Punho visível.", sourceRole: "single" }],
+    }, "single", "single");
+    const bottom = normalizeReferenceAnalysis({
+      ...analysisInput(),
+      decote: observed(null),
+      manga: observed(null),
+      possuiManga: observed(null),
+      providerExtras: [{ path: "detalhesTecnicos.saia.camadas", value: "Sim", confidence: 0.9, evidence: "Camadas visíveis.", sourceRole: "single" }],
+    }, "single", "single");
+
+    const merged = mergeCompositeReferenceAnalyses({ top, bottom, targetPiece: "Vestido" });
+
+    expect(merged.decote.value).toBe("V (V-Neck)");
+    expect(merged.providerExtras).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "top.detalhesTecnicos.manga.punho", sourceRole: "top" }),
+      expect.objectContaining({ path: "bottom.detalhesTecnicos.saia.camadas", sourceRole: "bottom" }),
+    ]));
+  });
+
+  it("não usa bottom como fallback para campos exclusivos de top", () => {
+    const top = normalizeReferenceAnalysis({
+      ...analysisInput(),
+      decote: observed(null),
+      possuiManga: observed(null),
+      manga: observed(null),
+    }, "single", "single");
+    const bottom = normalizeReferenceAnalysis({
+      ...analysisInput(),
+      decote: observed("Quadrado (Square)"),
+      possuiManga: observed(true),
+      manga: observed("Longa (Long Sleeve)"),
+    }, "single", "single");
+
+    const merged = mergeCompositeReferenceAnalyses({ top, bottom, targetPiece: "Vestido" });
+
+    expect(merged.decote.value).toBeNull();
+    expect(merged.possuiManga.value).toBeNull();
+    expect(merged.manga.value).toBeNull();
   });
 
   it("expõe schema estrito com campos exatos e obrigatórios", () => {

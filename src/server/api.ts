@@ -7,6 +7,9 @@ import { buildCatalogElementPromptFragment } from '../lib/garmentPrompt';
 import {
   REFERENCE_PROMPT_VERSION,
   REFERENCE_PIECES,
+  buildVisionPromptForReferencePart,
+  mergeCompositeReferenceAnalyses,
+  relabelReferenceAnalysisPart,
   referenceAnalysisToCroquiSpecs,
   validateReferenceAnalysisForMode,
   type ReferenceAnalysis,
@@ -805,6 +808,64 @@ async function analyzeReferenceImages(params: {
   targetPiece?: ReferencePiece | null;
   imageDataUrls: string[];
 }): Promise<ReferenceVisionResult> {
+  if (params.mode === 'composite') {
+    const roles = ['top', 'bottom'] as const;
+    const startedAt = Date.now();
+    const parts = await Promise.all(roles.map(async (role, index) => {
+      const analyzer = createReferenceVisionAnalyzer();
+      const partStartedAt = Date.now();
+      try {
+        const result = await analyzer.analyze({
+          mode: 'single',
+          occasion: params.ocasiao,
+          targetPiece: params.targetPiece,
+          imageDataUrls: [params.imageDataUrls[index]],
+          prompt: buildVisionPromptForReferencePart(role, params.ocasiao, params.targetPiece),
+        });
+        const analysis = relabelReferenceAnalysisPart(result.analysis, role);
+        console.info('[REFERENCE VISION] parte concluída', {
+          model: analyzer.modelName,
+          provider: analyzer.providerName,
+          promptVersion: REFERENCE_PROMPT_VERSION,
+          mode: 'composite',
+          role,
+          imageCount: 1,
+          durationMs: Date.now() - partStartedAt,
+          retries: Math.max(0, analyzer.lastAttempts - 1),
+          status: 'success',
+          responseContract: result.providerExtras.length > 0 ? 'legacy-adapted' : 'canonical',
+          providerExtrasCount: result.providerExtras.length,
+        });
+        return { analysis, providerExtras: analysis.providerExtras || [] };
+      } catch (error) {
+        console.warn('[REFERENCE VISION] parte falhou', {
+          model: analyzer.modelName,
+          provider: analyzer.providerName,
+          promptVersion: REFERENCE_PROMPT_VERSION,
+          mode: 'composite',
+          role,
+          imageCount: 1,
+          durationMs: Date.now() - partStartedAt,
+          retries: Math.max(0, analyzer.lastAttempts - 1),
+          status: 'error',
+          code: errorCodeForVision(error),
+          diagnosticCode: error instanceof ReferenceVisionError ? error.diagnosticCode : undefined,
+        });
+        throw error;
+      }
+    }));
+    const analysis = mergeCompositeReferenceAnalyses({ top: parts[0].analysis, bottom: parts[1].analysis, targetPiece: params.targetPiece });
+    console.info('[REFERENCE VISION] composta concluída', {
+      mode: 'composite',
+      imageCount: 2,
+      durationMs: Date.now() - startedAt,
+      status: 'success',
+      responseContract: 'parallel-parts-merged',
+      providerExtrasCount: analysis.providerExtras?.length || 0,
+    });
+    return { analysis, providerExtras: analysis.providerExtras || [] };
+  }
+
   const analyzer = createReferenceVisionAnalyzer();
   const startedAt = Date.now();
   try {

@@ -69,6 +69,47 @@ describe("fluxo público de referência", () => {
     expect((await executeServerFn(pollUploadSessionFn, { sessionId: session.id })).session.status).toBe("uploaded");
   });
 
+  it("analisa top e bottom em paralelo e funde cada parte na propriedade correta", async () => {
+    const topImage = "data:image/jpeg;base64,/9j/AQ==";
+    const bottomImage = "data:image/jpeg;base64,/9j/Ag==";
+    analyzeMock.mockImplementation(async ({ imageDataUrls, prompt }: { imageDataUrls: string[]; prompt: string }) => {
+      const isTop = imageDataUrls[0] === topImage;
+      const analysis = validAnalysis();
+      analysis.decote = { ...analysis.decote, value: isTop ? "Quadrado (Square)" : "V (V-Neck)" };
+      analysis.possuiManga = { ...analysis.possuiManga, value: isTop };
+      analysis.manga = { ...analysis.manga, value: isTop ? "Longa (Long Sleeve)" : null };
+      analysis.saia = { ...analysis.saia, value: isTop ? null : "Evasê" };
+      analysis.comprimento = { ...analysis.comprimento, value: isTop ? null : "Midi" };
+      expect(prompt).toContain(isTop ? "upper garment crop" : "lower garment crop");
+      return { analysis, providerExtras: [] };
+    });
+
+    const session = await createUploadSession("Cliente composto", "Festa", "Vestido");
+    const result = await executeServerFn(uploadReferenceFilesFn, {
+      sessionId: session.id,
+      mode: "composite",
+      images: [{ role: "top", dataUrl: topImage }, { role: "bottom", dataUrl: bottomImage }],
+    });
+
+    expect(result.status).toBe("uploaded");
+    expect(analyzeMock).toHaveBeenCalledTimes(2);
+    expect(result.analysis).toMatchObject({
+      mode: "composite",
+      decote: { value: "Quadrado (Square)", sourceRole: "top" },
+      possuiManga: { value: true, sourceRole: "top" },
+      manga: { value: "Longa (Long Sleeve)", sourceRole: "top" },
+      saia: { value: "Evasê", sourceRole: "bottom" },
+      comprimento: { value: "Midi", sourceRole: "bottom" },
+    });
+
+    const generationInput = subscribeMock.mock.calls[0][1].input as { prompt: string; image_urls?: unknown };
+    expect(generationInput.prompt).toContain("PARTE SUPERIOR");
+    expect(generationInput.prompt).toContain("PARTE INFERIOR");
+    expect(generationInput.prompt).toContain("Quadrado (Square)");
+    expect(generationInput.prompt).toContain("Evasê");
+    expect(generationInput).not.toHaveProperty("image_urls");
+  });
+
   it("não gera croqui quando o foco é ambíguo", async () => {
     analyzeMock.mockResolvedValueOnce({ analysis: { ...validAnalysis(), focus: [{ ...validAnalysis().focus[0], status: "ambiguous", confidence: 0.4 }] }, providerExtras: [] });
     const session = await createUploadSession("Cliente ambíguo", "Festa");

@@ -318,7 +318,7 @@ describe("Fal Gemini Vision adapter", () => {
     expect(input.prompt).toContain("IMAGE 2 is role \"bottom\"");
   });
 
-  it("aceita manga evidenciada no recorte bottom da resposta composta do Fal", async () => {
+  it("rejeita manga atribuída ao recorte bottom em resposta composta", async () => {
     const falCompositeOutput = JSON.parse(validVisionJson("composite"));
     falCompositeOutput.schemaVersion = "reference-analysis-v1";
     falCompositeOutput.possuiManga = observed(true, "top");
@@ -329,13 +329,11 @@ describe("Fal Gemini Vision adapter", () => {
     const subscribe = vi.fn().mockResolvedValue({ output: JSON.stringify(falCompositeOutput) });
     const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
 
-    const result = await analyzer.analyze({ mode: "composite", imageDataUrls: ["data:image/jpeg;base64,top", "data:image/jpeg;base64,bottom"] });
-
-    expect(result.analysis.manga).toMatchObject({ value: "Longa (Long Sleeve)", sourceRole: "bottom" });
-    expect(result.analysis.renda).toMatchObject({ value: "Sobreposição (Overlay)", sourceRole: "top" });
+    await expect(analyzer.analyze({ mode: "composite", imageDataUrls: ["data:image/jpeg;base64,top", "data:image/jpeg;base64,bottom"] }))
+      .rejects.toThrow("contrato de análise");
   });
 
-  it("aceita detalhes da saia evidenciados no recorte top da resposta composta do Fal", async () => {
+  it("rejeita detalhes da saia atribuídos ao recorte top em resposta composta", async () => {
     const falCompositeOutput = JSON.parse(validVisionJson("composite"));
     falCompositeOutput.possuiManga = observed(true, "top");
     falCompositeOutput.manga = observed("Curta", "top");
@@ -347,13 +345,8 @@ describe("Fal Gemini Vision adapter", () => {
     const subscribe = vi.fn().mockResolvedValue({ output: JSON.stringify(falCompositeOutput) });
     const analyzer = new FalGeminiReferenceVisionAnalyzer({ client: { subscribe }, apiKey: "fal-test-key", maxAttempts: 1 });
 
-    const result = await analyzer.analyze({ mode: "composite", imageDataUrls: ["data:image/jpeg;base64,top", "data:image/jpeg;base64,bottom"] });
-
-    expect(result.analysis.manga).toMatchObject({ value: "Curta (Short Sleeve)", sourceRole: "top" });
-    expect(result.analysis.saia).toMatchObject({ value: "Babada", sourceRole: "top" });
-    expect(result.analysis.detalhesTecnicos.caimento.sourceRole).toBe("top");
-    expect(result.analysis.detalhesTecnicos.volume.sourceRole).toBe("top");
-    expect(result.analysis.detalhesTecnicos.barra.sourceRole).toBe("top");
+    await expect(analyzer.analyze({ mode: "composite", imageDataUrls: ["data:image/jpeg;base64,top", "data:image/jpeg;base64,bottom"] }))
+      .rejects.toThrow("contrato de análise");
   });
 
   it("preenche foco composto ausente como insuficiente sem inventar observações", async () => {

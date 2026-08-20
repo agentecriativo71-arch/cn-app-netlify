@@ -76,6 +76,7 @@ export type VisionInput = {
   occasion?: string;
   targetPiece?: ReferencePiece | null;
   imageDataUrls: string[];
+  prompt?: string;
 };
 
 export type VisionAnalyzerOptions = {
@@ -463,9 +464,9 @@ export class OpenAIReferenceVisionAnalyzer {
       throw new ReferenceVisionError("invalid_response", "A quantidade de imagens não corresponde ao modo de referência.");
     }
 
-    const prompt = input.mode === "composite"
+    const prompt = input.prompt || (input.mode === "composite"
       ? buildVisionPromptForCompositeReference(input.occasion, input.targetPiece)
-      : buildVisionPromptForSingleReference(input.occasion, input.targetPiece);
+      : buildVisionPromptForSingleReference(input.occasion, input.targetPiece));
     const sourceRole = input.mode === "composite" ? "top" : "single";
     let lastError: unknown;
 
@@ -539,9 +540,9 @@ export class FalGeminiReferenceVisionAnalyzer {
       throw new ReferenceVisionError("invalid_response", "A quantidade de imagens não corresponde ao modo de referência.");
     }
 
-    const prompt = input.mode === "composite"
+    const prompt = input.prompt || (input.mode === "composite"
       ? buildVisionPromptForCompositeReference(input.occasion, input.targetPiece)
-      : buildVisionPromptForSingleReference(input.occasion, input.targetPiece);
+      : buildVisionPromptForSingleReference(input.occasion, input.targetPiece));
     const sourceRole = input.mode === "composite" ? "top" : "single";
     let lastError: unknown;
 

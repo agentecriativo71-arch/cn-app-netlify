@@ -2,7 +2,7 @@ import { z } from "zod";
 import elementosRaw from "./elementos_vestuario.json";
 
 export const REFERENCE_ANALYSIS_VERSION = "reference-analysis-v1" as const;
-export const REFERENCE_PROMPT_VERSION = "reference-analysis-v2" as const;
+export const REFERENCE_PROMPT_VERSION = "reference-analysis-v3-parts" as const;
 export const REFERENCE_PIECES = ["Vestido", "Macacão", "Saia", "Blusa", "Calça", "Top", "Short/Bermuda", "Blazer"] as const;
 export const REFERENCE_LENGTHS = ["Curto", "Médio", "Midi", "Longo"] as const;
 export const REFERENCE_SOURCE_ROLES = ["single", "top", "bottom"] as const;
@@ -218,6 +218,20 @@ COMPOSITE IMAGE INPUT:
 - Analyze both crops jointly, but never swap roles or combine two different people into one person. If either role is ambiguous or insufficiently visible, report that status.`;
 }
 
+export function buildVisionPromptForReferencePart(role: "top" | "bottom", ocasiao?: string, targetPiece?: ReferencePiece | null): string {
+  const scope = role === "top"
+    ? "Analyze only the upper garment crop. Observe decote, manga, possuiManga, corpete, cintura and visible upper construction. Keep comprimento, saia, volume and barra null unless they are directly visible in this crop; never infer them."
+    : "Analyze only the lower garment crop. Observe comprimento, saia, caimento, volume, barra and visible lower construction. Keep decote, manga, possuiManga and corpete null unless they are directly visible in this crop; never infer them.";
+  return `${sharedVisionInstructions(ocasiao, "single", targetPiece)}
+
+PART-SCOPED INPUT:
+- This is the ${role} crop of a two-photo Vestido reference.
+- The crop role is authoritative: ${role}.
+- ${scope}
+- Return focus role "single" and sourceRole "single"; the server will attach the authoritative role after validation.
+- Do not use knowledge from a missing garment region to fill any field.`;
+}
+
 function normalizeConfidence(value: unknown): number {
   if (value === undefined) return 0;
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
@@ -362,6 +376,18 @@ export function validateReferenceAnalysis(input: unknown): ReferenceAnalysis {
   return referenceAnalysisSchema.parse(input);
 }
 
+export function relabelReferenceAnalysisPart(analysis: ReferenceAnalysis, role: "top" | "bottom"): ReferenceAnalysis {
+  const observedFields = ["peca", "comprimento", "decote", "possuiManga", "manga", "saia", "rendaDecisao", "renda"] as const;
+  const relabeled = { ...analysis } as ReferenceAnalysis;
+  for (const field of observedFields) relabeled[field] = { ...relabeled[field], sourceRole: role } as never;
+  relabeled.detalhesTecnicos = Object.fromEntries(
+    Object.entries(analysis.detalhesTecnicos).map(([key, observation]) => [key, { ...observation, sourceRole: role }]),
+  ) as ReferenceAnalysis["detalhesTecnicos"];
+  relabeled.focus = [{ ...analysis.focus[0], role }];
+  relabeled.providerExtras = (analysis.providerExtras || []).map((extra) => ({ ...extra, sourceRole: role }));
+  return relabeled;
+}
+
 export function validateReferenceAnalysisForMode(input: unknown, mode: ReferenceMode): ReferenceAnalysis {
   const analysis = validateReferenceAnalysis(input);
   if (analysis.mode !== mode) throw new Error("O modo da análise não corresponde às imagens recebidas.");
@@ -373,6 +399,16 @@ export function validateReferenceAnalysisForMode(input: unknown, mode: Reference
   const observations = [analysis.peca, analysis.comprimento, analysis.decote, analysis.possuiManga, analysis.manga, analysis.saia, analysis.rendaDecisao, analysis.renda, ...Object.values(analysis.detalhesTecnicos)];
   if (observations.some((observation) => observation.sourceRole !== null && !allowedRoles.has(observation.sourceRole))) {
     throw new Error("A resposta não preservou os papéis das imagens de referência.");
+  }
+  if (mode === "composite") {
+    const topOwned = [analysis.decote, analysis.possuiManga, analysis.manga, analysis.detalhesTecnicos.corpete, analysis.detalhesTecnicos.cintura];
+    const bottomOwned = [analysis.comprimento, analysis.saia, analysis.detalhesTecnicos.caimento, analysis.detalhesTecnicos.volume, analysis.detalhesTecnicos.barra];
+    if (topOwned.some((observation) => observation.sourceRole !== null && observation.sourceRole !== "top")) {
+      throw new Error("A resposta atribuiu campo superior ao recorte inferior.");
+    }
+    if (bottomOwned.some((observation) => observation.sourceRole !== null && observation.sourceRole !== "bottom")) {
+      throw new Error("A resposta atribuiu campo inferior ao recorte superior.");
+    }
   }
   return analysis;
 }
@@ -400,6 +436,30 @@ export function referenceAnalysisToCroquiSpecs(analysis: ReferenceAnalysis, ocas
     extra.path.toLowerCase().endsWith(".elastico") && extra.value === true && (extra.confidence === null || extra.confidence >= REFERENCE_CATALOG_CONFIDENCE_THRESHOLD),
   );
   if (hasAdjustedCuff && !hasExplicitElastic) details.push("manga: punho ajustado; não adicionar elástico no punho");
+  if (analysis.mode === "composite") {
+    const formatPart = (entries: Array<{ label: string; observation: ObservedValue<unknown> }>) => entries
+      .filter(({ observation }) => observation.value !== null && observation.confidence >= REFERENCE_CATALOG_CONFIDENCE_THRESHOLD)
+      .map(({ label, observation }) => `${label}: ${observation.value}`);
+    const upper = formatPart([
+      { label: "decote", observation: analysis.decote as ObservedValue<unknown> },
+      { label: "possuiManga", observation: analysis.possuiManga as ObservedValue<unknown> },
+      { label: "manga", observation: analysis.manga as ObservedValue<unknown> },
+      { label: "corpete", observation: analysis.detalhesTecnicos.corpete },
+      { label: "cintura", observation: analysis.detalhesTecnicos.cintura },
+    ]);
+    const lower = formatPart([
+      { label: "comprimento", observation: analysis.comprimento as ObservedValue<unknown> },
+      { label: "saia", observation: analysis.saia as ObservedValue<unknown> },
+      { label: "caimento", observation: analysis.detalhesTecnicos.caimento },
+      { label: "volume", observation: analysis.detalhesTecnicos.volume },
+      { label: "barra", observation: analysis.detalhesTecnicos.barra },
+    ]);
+    details.unshift(
+      `PARTE SUPERIOR — fonte top e autoridade para decote, mangas, corpete e cintura: ${upper.join(", ") || "nenhuma característica confirmada"}`,
+      `PARTE INFERIOR — fonte bottom e autoridade para saia, comprimento, caimento, volume e barra: ${lower.join(", ") || "nenhuma característica confirmada"}`,
+      "Não substituir características da parte superior pelas da parte inferior, nem características da parte inferior pelas da parte superior. Não inventar campos sem evidência.",
+    );
+  }
   const specs: CroquiGenerationSpecs = {
     peca: analysis.peca.value || "",
     comprimento: optionalObservationForGeneration(analysis.comprimento),
@@ -414,6 +474,85 @@ export function referenceAnalysisToCroquiSpecs(analysis: ReferenceAnalysis, ocas
   };
   if (analysis.rendaDecisao.value !== null && analysis.rendaDecisao.confidence >= REFERENCE_CATALOG_CONFIDENCE_THRESHOLD) specs.rendaDecisao = analysis.rendaDecisao.value;
   return specs;
+}
+
+type CompositeAnalysisParts = {
+  top: ReferenceAnalysis;
+  bottom: ReferenceAnalysis;
+  targetPiece?: ReferencePiece | null;
+};
+
+const COMPOSITE_TOP_OWNED_DETAILS = ["corpete", "cintura"] as const;
+const COMPOSITE_BOTTOM_OWNED_DETAILS = ["caimento", "volume", "barra"] as const;
+
+function observationWithRole<T>(observation: ObservedValue<T>, sourceRole: ReferenceSourceRole): ObservedValue<T> {
+  return { ...observation, sourceRole };
+}
+
+function chooseSharedObservation<T>(top: ObservedValue<T>, bottom: ObservedValue<T>): ObservedValue<T> {
+  if (top.value === null && bottom.value !== null) return observationWithRole(bottom, "bottom");
+  if (bottom.value === null && top.value !== null) return observationWithRole(top, "top");
+  if (bottom.confidence > top.confidence) return observationWithRole(bottom, "bottom");
+  return observationWithRole(top, "top");
+}
+
+function chooseRendaDecision(top: ObservedValue<boolean>, bottom: ObservedValue<boolean>): ObservedValue<boolean> {
+  if (top.value === true && top.evidence && top.confidence >= REFERENCE_CATALOG_CONFIDENCE_THRESHOLD) return observationWithRole(top, "top");
+  if (bottom.value === true && bottom.evidence && bottom.confidence >= REFERENCE_CATALOG_CONFIDENCE_THRESHOLD) return observationWithRole(bottom, "bottom");
+  return chooseSharedObservation(top, bottom);
+}
+
+function prefixedProviderExtras(analysis: ReferenceAnalysis, role: "top" | "bottom"): ReferenceProviderExtra[] {
+  return (analysis.providerExtras || []).map((extra) => ({
+    ...extra,
+    path: `${role}.${extra.path}`,
+    sourceRole: role,
+  }));
+}
+
+export function mergeCompositeReferenceAnalyses({ top, bottom, targetPiece }: CompositeAnalysisParts): ReferenceAnalysis {
+  const topField = <K extends "decote" | "possuiManga" | "manga">(field: K): ReferenceAnalysis[K] => observationWithRole(top[field] as ObservedValue<unknown>, "top") as ReferenceAnalysis[K];
+  const bottomField = <K extends "comprimento" | "saia">(field: K): ReferenceAnalysis[K] => observationWithRole(bottom[field] as ObservedValue<unknown>, "bottom") as ReferenceAnalysis[K];
+  const sharedField = <K extends "peca" | "renda">(field: K): ReferenceAnalysis[K] => chooseSharedObservation(top[field] as ObservedValue<unknown>, bottom[field] as ObservedValue<unknown>) as ReferenceAnalysis[K];
+  const topDetails = top.detalhesTecnicos;
+  const bottomDetails = bottom.detalhesTecnicos;
+  const detail = <K extends keyof ReferenceAnalysis["detalhesTecnicos"]>(key: K): ReferenceAnalysis["detalhesTecnicos"][K] => {
+    if (COMPOSITE_TOP_OWNED_DETAILS.includes(key as (typeof COMPOSITE_TOP_OWNED_DETAILS)[number])) return observationWithRole(topDetails[key], "top") as ReferenceAnalysis["detalhesTecnicos"][K];
+    if (COMPOSITE_BOTTOM_OWNED_DETAILS.includes(key as (typeof COMPOSITE_BOTTOM_OWNED_DETAILS)[number])) return observationWithRole(bottomDetails[key], "bottom") as ReferenceAnalysis["detalhesTecnicos"][K];
+    return chooseSharedObservation(topDetails[key], bottomDetails[key]) as ReferenceAnalysis["detalhesTecnicos"][K];
+  };
+  const peca = targetPiece
+    ? { value: targetPiece, confidence: Math.max(top.peca.confidence, bottom.peca.confidence), evidence: top.peca.evidence || bottom.peca.evidence, sourceRole: "top" as const }
+    : sharedField("peca");
+
+  return {
+    schemaVersion: REFERENCE_ANALYSIS_VERSION,
+    mode: "composite",
+    focus: [
+      { ...top.focus[0], role: "top" },
+      { ...bottom.focus[0], role: "bottom" },
+    ],
+    peca,
+    comprimento: bottomField("comprimento"),
+    decote: topField("decote"),
+    possuiManga: topField("possuiManga"),
+    manga: topField("manga"),
+    saia: bottomField("saia"),
+    rendaDecisao: chooseRendaDecision(top.rendaDecisao, bottom.rendaDecisao),
+    renda: sharedField("renda"),
+    detalhesTecnicos: {
+      corpete: detail("corpete"),
+      cintura: detail("cintura"),
+      caimento: detail("caimento"),
+      volume: detail("volume"),
+      barra: detail("barra"),
+      transparencia: detail("transparencia"),
+      tecido: detail("tecido"),
+      costas: detail("costas"),
+      fechamento: detail("fechamento"),
+    },
+    providerExtras: [...prefixedProviderExtras(top, "top"), ...prefixedProviderExtras(bottom, "bottom")],
+  };
 }
 
 function parseJsonResponse(rawResponse: string): unknown {
