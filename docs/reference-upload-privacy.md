@@ -6,6 +6,8 @@ Somente o recorte confirmado é enviado ao Gemini Vision pela Fal AI, no endpoin
 
 A sessão persiste a ocasião, o tipo de peça selecionado (`reference_piece`), o estado, a análise estruturada, códigos de erro, provedor/modelo Vision, versão do prompt e timestamps. O tipo escolhido no totem é enviado como contexto do Gemini; a decisão final compara esse alvo com a peça observada.
 
+No fluxo separado de foto realista com tecido do catálogo, a imagem pública do tecido selecionado pode ser baixada temporariamente pelo servidor, normalizada para JPEG e enviada ao Fal para gerar a referência da peça. A imagem normalizada e a referência intermediária não são persistidas no banco ou no estado do look; somente a imagem final segue o fluxo existente.
+
 O aplicativo não envia `store:false` ao endpoint Fal porque essa opção pertence à Responses API direta da OpenAI. A chamada Fal/OpenRouter deve ser tratada como processamento externo: confirme a política de retenção aplicável à conta antes da publicação e mantenha somente o recorte temporário necessário para a análise.
 
 As chaves privadas devem ser configuradas somente como variáveis de runtime do servidor (`FAL_KEY`, `OPENAI_API_KEY` e `SUPABASE_SERVICE_KEY`), nunca com prefixo `VITE_` e nunca como argumentos de build. A leitura legada de `VITE_SUPABASE_SERVICE_KEY` permanece apenas para compatibilidade durante a migração.

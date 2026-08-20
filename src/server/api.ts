@@ -19,6 +19,7 @@ import { decideReferenceAnalysis } from '../lib/referenceDecision';
 import { createReferenceVisionAnalyzer, ReferenceVisionError, resolveVisionModel, type ReferenceVisionResult, type VisionProvider } from './referenceVision';
 import { validateReferenceImages, ReferenceInputError } from './referenceInput';
 import { assertReferenceGenerationTextOnly, buildReferenceSeedreamInput } from './referenceGeneration';
+import { evaluateFabricCandidates, runFabricPipeline, scoreFabricCandidate } from './fabricPipeline';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -402,42 +403,82 @@ No illustrations, no sketches, no cartoons.`;
       }
 
       const lengthPrefix = comprimentoEn ? `${comprimentoEn} ` : '';
+      const bgInstruction = getBackgroundInstruction(ocasiao);
+      const mannequinSurfaceInstruction = mannequinUrl ? buildMannequinSurfaceInstruction() : '';
+      const fabricVisionModel = process.env.FAL_VISION_MODEL || 'google/gemini-2.5-flash';
 
-      // Monta array de imagens: [manequim?, croqui, tecido?]
-      const imageUrls: string[] = [];
-      if (mannequinUrl) imageUrls.push(mannequinUrl);
-      imageUrls.push(croquiUrl);
+      if (process.env.REALISTA_FABRIC_PIPELINE_V1 === 'true' && tecidoImageUrl) {
+        try {
+          const pipeline = await runFabricPipeline({
+            client: fal,
+            croquiUrl,
+            tecidoImageUrl,
+            tecidoSku,
+            tecidoNome,
+            pecaEn,
+            mannequinUrl,
+            background: bgInstruction,
+            elementFragment,
+            garmentTypeInstruction,
+            sleevelessInstruction,
+            mannequinSurfaceInstruction,
+            comentario,
+            evaluate: (candidates, context) => evaluateFabricCandidates({
+              client: fal,
+              normalizedFabricUrl: context.normalizedFabricUrl,
+              intermediateUrl: context.intermediateUrl,
+              candidates,
+              model: fabricVisionModel,
+            }),
+          });
 
-      let fabricInstruction = "";
-      let mannequinRef = "";
-      let croquiRef = "";
-
-      if (mannequinUrl) {
-        mannequinRef = `IMAGE 1 is a photorealistic dressmaking mannequin — it defines the exact body shape, silhouette and proportions to preserve.\nIMAGE 2 is a hand-drawn fashion croqui sketch of a ${lengthPrefix}${pecaEn}.`;
-        if (tecidoImageUrl) {
-          imageUrls.push(tecidoImageUrl);
-          croquiRef = `IMAGE 3 is a real fabric swatch (${tecidoNome || tecidoSku || 'fabric'}).`;
-          fabricInstruction = `\nCRITICAL FABRIC: Use the EXACT color, texture, pattern and material finish from IMAGE 3 to dress the garment.`;
-        } else {
-          fabricInstruction = `\nDress the garment in ${corEn} color.`;
-        }
-      } else {
-        // fallback sem manequim de referência
-        mannequinRef = `IMAGE 1 is a hand-drawn fashion croqui sketch of a ${lengthPrefix}${pecaEn}.`;
-        if (tecidoImageUrl) {
-          imageUrls.push(tecidoImageUrl);
-          croquiRef = `IMAGE 2 is a real fabric swatch (${tecidoNome || tecidoSku || 'fabric'}).`;
-          fabricInstruction = `\nCRITICAL FABRIC: Use the EXACT color, texture, pattern and material finish from IMAGE 2.`;
-        } else {
-          fabricInstruction = `\nConvert this flat sketch into a photorealistic, ready-to-wear finished garment in ${corEn} color, worn on a headless featureless dress mannequin.`;
+          result = { images: [{ url: pipeline.url }] };
+          console.info('[REALISTA TECIDO V1] Seleção concluída:', {
+            tecidoSku: tecidoSku || null,
+            generationModel: 'fal-ai/bytedance/seedream/v4/edit',
+            visionModel: fabricVisionModel,
+            seeds: pipeline.seeds,
+            selectedVariant: pipeline.selected.index,
+            scores: pipeline.candidates.map((candidate) => ({ index: candidate.index, score: scoreFabricCandidate(candidate.scores) })),
+          });
+        } catch (error) {
+          console.warn('[REALISTA TECIDO V1] Falhou; usando geração legada:', error);
         }
       }
 
-      const bgInstruction = getBackgroundInstruction(ocasiao);
-      const mannequinSurfaceInstruction = mannequinUrl ? buildMannequinSurfaceInstruction() : '';
+      if (!result) {
+        // Monta array de imagens: [manequim?, croqui, tecido?]
+        const imageUrls: string[] = [];
+        if (mannequinUrl) imageUrls.push(mannequinUrl);
+        imageUrls.push(croquiUrl);
 
-      const prompt = mannequinUrl
-        ? `CRITICAL: ${mannequinUrl ? String(imageUrls.length) : '1'} reference images are provided.
+        let fabricInstruction = "";
+        let mannequinRef = "";
+        let croquiRef = "";
+
+        if (mannequinUrl) {
+          mannequinRef = `IMAGE 1 is a photorealistic dressmaking mannequin — it defines the exact body shape, silhouette and proportions to preserve.\nIMAGE 2 is a hand-drawn fashion croqui sketch of a ${lengthPrefix}${pecaEn}.`;
+          if (tecidoImageUrl) {
+            imageUrls.push(tecidoImageUrl);
+            croquiRef = `IMAGE 3 is a real fabric swatch (${tecidoNome || tecidoSku || 'fabric'}).`;
+            fabricInstruction = `\nCRITICAL FABRIC: Use the EXACT color, texture, pattern and material finish from IMAGE 3 to dress the garment.`;
+          } else {
+            fabricInstruction = `\nDress the garment in ${corEn} color.`;
+          }
+        } else {
+          // fallback sem manequim de referência
+          mannequinRef = `IMAGE 1 is a hand-drawn fashion croqui sketch of a ${lengthPrefix}${pecaEn}.`;
+          if (tecidoImageUrl) {
+            imageUrls.push(tecidoImageUrl);
+            croquiRef = `IMAGE 2 is a real fabric swatch (${tecidoNome || tecidoSku || 'fabric'}).`;
+            fabricInstruction = `\nCRITICAL FABRIC: Use the EXACT color, texture, pattern and material finish from IMAGE 2.`;
+          } else {
+            fabricInstruction = `\nConvert this flat sketch into a photorealistic, ready-to-wear finished garment in ${corEn} color, worn on a headless featureless dress mannequin.`;
+          }
+        }
+
+        const prompt = mannequinUrl
+          ? `CRITICAL: ${mannequinUrl ? String(imageUrls.length) : '1'} reference images are provided.
 ${mannequinRef}${croquiRef ? '\n' + croquiRef : ''}
 TASK: Dress the mannequin from IMAGE 1 with the exact garment shown in IMAGE 2.${fabricInstruction}
 ${sleevelessInstruction}${garmentTypeInstruction}
@@ -448,26 +489,27 @@ Maintain high fidelity to the cut, shape, style and construction of the garment 
 The final result must look like a professional editorial fashion photograph with soft natural studio lighting and ${bgInstruction}, showing the real fabric texture.
 ${comentario ? `Extra design details: ${comentario}\n` : ''}
 No face, no person, just the mannequin with the garment. No text, no watermark, no illustration, no sketch, no cartoon, no flat drawing.`
-        : `${sleevelessInstruction}${garmentTypeInstruction}
+          : `${sleevelessInstruction}${garmentTypeInstruction}
 CRITICAL: The first reference image is a hand-drawn fashion design croqui sketch of a ${lengthPrefix}${pecaEn}.${elementFragment}${fabricInstruction}
 Maintain high fidelity to the cut, shape, style and construction shown in the reference sketch.
 The final result must look like a professional editorial fashion photograph with soft natural studio lighting and ${bgInstruction}, showing the real fabric texture.
 ${comentario ? `Extra design details: ${comentario}\n` : ''}
 No face, no person, just the mannequin with the garment. No text, no watermark, no illustration, no sketch, no cartoon, no flat drawing.`;
 
-      try {
-        result = await fal.subscribe("fal-ai/bytedance/seedream/v4/edit", {
-          input: {
-            prompt,
-            image_urls: imageUrls,
-            image_size: "square_hd",
-            num_images: 1,
-            enable_safety_checker: false,
-          }
-        });
-      } catch (error) {
-        console.error("[REALISTA MANEQUIM] Error generating:", error);
-        throw error;
+        try {
+          result = await fal.subscribe("fal-ai/bytedance/seedream/v4/edit", {
+            input: {
+              prompt,
+              image_urls: imageUrls,
+              image_size: "square_hd",
+              num_images: 1,
+              enable_safety_checker: false,
+            }
+          });
+        } catch (error) {
+          console.error("[REALISTA MANEQUIM] Error generating:", error);
+          throw error;
+        }
       }
     }
 
