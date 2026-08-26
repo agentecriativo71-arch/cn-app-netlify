@@ -272,11 +272,18 @@ async function generateCroquiCandidates(request: TypedCroquiGenerationRequest): 
 type GenerateCroquiClientOptions = { data: TypedCroquiGenerationRequest };
 type GenerateCroquiClientResult = { url: string; metadata: CroquiGenerationMetadata };
 
-export const generateCroquiFn = createServerFn({ method: 'POST' })
-  .handler(async ({ data }: { data: unknown }) => {
+const generateCroquiServerFn = createServerFn({ method: 'POST' })
+  .handler<Promise<GenerateCroquiClientResult>>(async ({ data }: { data: unknown }) => {
     const result = await generateCroquiCandidates(parseCroquiGenerationRequest(data));
     return result;
-  }) as unknown as (options: GenerateCroquiClientOptions) => Promise<GenerateCroquiClientResult>;
+  });
+
+// O compilador do TanStack precisa enxergar a chamada direta de createServerFn
+// no inicializador. A asserção fica somente no alias tipado consumido pela UI;
+// assim o build ainda extrai o handler para RPC e mantém o payload conhecido.
+export const generateCroquiFn = generateCroquiServerFn as unknown as (
+  options: GenerateCroquiClientOptions,
+) => Promise<GenerateCroquiClientResult>;
 
 function hexToColorDescription(hex: string): string {
   const cleanHex = hex.replace("#", "");
