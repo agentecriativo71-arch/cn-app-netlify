@@ -10,6 +10,7 @@ import { generateRealistaFn, updateLookDbFn } from "@/server/api";
 
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorModal } from "@/components/ErrorModal";
+import { RatingStars } from "@/components/RatingStars";
 
 export const Route = createFileRoute("/resultado")({
   component: Resultado,
@@ -49,6 +50,7 @@ function Resultado() {
             userImageUrl: s.fotoUrl,
             croquiUrl: s.croquiUrl,
             modo: s.modo,
+            executionId: s.executionId || undefined,
             biotipo: s.biotipo,
             comprimento: s.comprimento,
             decote: s.decote,
@@ -66,7 +68,7 @@ function Resultado() {
         });
         
         if (!active) return;
-        s.set({ realistaUrl: res.url });
+        s.set({ realistaUrl: res.url, executionId: res.executionId, realistaArtifactId: res.artifactId, trackingStatus: res.trackingStatus });
         
         if (s.dbId) {
           try {
@@ -74,7 +76,8 @@ function Resultado() {
               data: {
                 id: s.dbId,
                 update: {
-                  realista_url: res.url
+                  realista_url: res.url,
+                  execution_id: res.executionId,
                 }
               }
             });
@@ -121,6 +124,7 @@ function Resultado() {
             <div className="image-frame">
               <img src={s.realistaUrl!} alt="Look final" />
             </div>
+            <RatingStars artifactId={s.realistaArtifactId} executionId={s.executionId} label="Esta foto realista ficou satisfatória?" />
           </div>
 
           {/* Right — Info + Actions */}

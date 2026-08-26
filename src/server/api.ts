@@ -1,7 +1,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import * as fal from '@fal-ai/serverless-client';
 import { createClient } from '@supabase/supabase-js';
-import { saveLook, updateLook, searchProducts, createUploadSession, getUploadSession, confirmUploadSession, updateUploadSession, updateUploadSessionStatus, claimUploadSessionForGeneration } from './db';
+import { saveLook, updateLook, searchProducts, createUploadSession, getUploadSession, confirmUploadSession, updateUploadSession, updateUploadSessionStatus, claimUploadSessionForGeneration, type UploadSession } from './db';
 import type { JsonObject } from './db';
 import { getBackgroundInstruction, getMannequinUrl, buildSleevelessInstruction, buildMannequinSurfaceInstruction, SLEEVELESS_DECOTES } from '../lib/noivaUtils';
 import { buildCatalogElementPromptFragment } from '../lib/garmentPrompt';
@@ -24,6 +24,10 @@ import { validateReferenceDataUrl, validateReferenceImages, ReferenceInputError 
 import { assertReferenceGenerationTextOnly, buildReferenceSeedreamInput } from './referenceGeneration';
 import { evaluateFabricCandidates, runFabricPipeline, scoreFabricCandidate } from './fabricPipeline';
 import { buildCandidateGatePrompt, buildCroquiEvaluationPrompt, buildCroquiReferenceImageUrls, buildCroquiReferenceRoleInstruction, chooseCroquiCandidate, CROQUI_CANDIDATE_COUNT, CROQUI_GENERATOR, CROQUI_PROMPT_VERSION, FEMALE_CROQUI_INVARIANT, MANNEQUIN_TEMPLATE_INSTRUCTION, occasionInstruction, parseCroquiGenerationRequest, scoreCroquiCandidate, type CroquiGenerationRequest, type CroquiGenerationMetadata, type CroquiVisualAssessment } from '../lib/croquiGeneration';
+import { failOpenOperationalAnalytics, operationalAnalytics } from './analyticsRuntime';
+import type { FailOpenTrackedExecution, FailOpenTrackedStep } from './operationalAnalytics';
+import { deriveGarmentDetailDataUrls } from './executionAssets';
+import { getExecutionAssetStore } from './executionAssetsRuntime';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -232,34 +236,77 @@ No text, no labels, no annotations, no watermarks, no faces, no facial features.
   }
 }
 
-async function generateCroquiCandidates(request: TypedCroquiGenerationRequest): Promise<{ url: string; metadata: CroquiGenerationMetadata }> {
+async function generateCroquiCandidates(request: TypedCroquiGenerationRequest, execution: FailOpenTrackedExecution | null = null): Promise<{ url: string; metadata: CroquiGenerationMetadata; artifactId: string | null }> {
   const candidates: CroquiGenerationMetadata["candidates"] = [];
+  const candidateStepIds = new Map<number, string>();
+  const overallStep = await execution?.startStep({ stage: 'croqui_generation', promptVersion: CROQUI_PROMPT_VERSION });
   for (let batch = 0; batch < 2; batch += 1) {
     for (let index = 0; index < CROQUI_CANDIDATE_COUNT; index += 1) {
       const seed = 260826 + batch * CROQUI_CANDIDATE_COUNT + index;
+      const attempt = batch * CROQUI_CANDIDATE_COUNT + index + 1;
+      const generationStep = await execution?.startStep({ stage: 'croqui_candidate_generation', parentStepId: overallStep?.stepId, attempt, seed, promptVersion: CROQUI_PROMPT_VERSION });
       try {
         const url = await internalGenerateCroqui({ ...request, seed });
+        if (generationStep) candidateStepIds.set(seed, generationStep.stepId);
+        await generationStep?.succeed({ provider: 'fal', model: CROQUI_GENERATOR, metadata: { batch: batch + 1 } });
         let visual: CroquiVisualAssessment | undefined;
         if (process.env.NODE_ENV !== 'test' && process.env.CROQUI_VISUAL_GATE !== 'false') {
+          const evaluationStep = await execution?.startStep({ stage: 'croqui_candidate_evaluation', parentStepId: generationStep?.stepId || overallStep?.stepId, attempt, seed, promptVersion: CROQUI_PROMPT_VERSION });
           try {
             const evaluator = createReferenceVisionAnalyzer();
             const evaluated = await evaluator.analyze({ mode: 'single', occasion: request.ocasiao || undefined, targetPiece: request.peca as ReferencePiece, imageDataUrls: [url], prompt: buildCroquiEvaluationPrompt(request) });
             visual = { peca: evaluated.analysis.peca, decote: evaluated.analysis.decote, possuiManga: evaluated.analysis.possuiManga, manga: evaluated.analysis.manga, saia: evaluated.analysis.saia };
+            await evaluationStep?.succeed({ provider: evaluator.providerName, model: evaluator.modelName });
           } catch {
+            await evaluationStep?.fail('visual_gate_failed');
             candidates.push({ url, seed, score: 0, rejected: true, rejectionReasons: ['visual_gate_failed'] });
             continue;
           }
         }
         candidates.push(scoreCroquiCandidate(request, buildCandidateGatePrompt(request), url, seed, visual));
       } catch {
+        await generationStep?.fail('generation_failed');
         candidates.push({ url: "", seed, score: 0, rejected: true, rejectionReasons: ["generation_failed"] });
       }
     }
     try {
       const selected = chooseCroquiCandidate(candidates);
-      return { url: selected.url, metadata: { generator: CROQUI_GENERATOR, promptVersion: CROQUI_PROMPT_VERSION, candidates } };
+      let selectedArtifactId: string | null = null;
+      for (const candidate of candidates) {
+        if (!candidate.url) continue;
+        const isSelected = candidate.seed === selected.seed;
+        const kind = isSelected ? 'croqui' : 'croqui_candidate';
+        const storageStep = await execution?.startStep({ stage: 'generated_artifact_storage', parentStepId: candidateStepIds.get(candidate.seed) || overallStep?.stepId, seed: candidate.seed });
+        let stored: { storageBucket: string; storagePath: string; mimeType: string } | null = null;
+        try {
+          const assets = getExecutionAssetStore();
+          if (!assets) throw new Error('storage_unavailable');
+          stored = await assets.saveGeneratedImage({ executionId: execution!.executionId, kind, sourceUrl: candidate.url });
+          await storageStep?.succeed({ provider: 'supabase', model: 'storage', metadata: { kind } });
+        } catch {
+          await storageStep?.fail('generated_artifact_storage_failed');
+        }
+        const artifact = await execution?.recordArtifact({
+          kind,
+          selected: isSelected,
+          stepId: candidateStepIds.get(candidate.seed) || null,
+          // O URL temporário do provedor não é fonte analítica e pode conter
+          // tokens; o artefato oficial é o objeto privado abaixo.
+          sourceUrl: null,
+          storageBucket: stored?.storageBucket || null,
+          storagePath: stored?.storagePath || null,
+          mimeType: stored?.mimeType || null,
+          status: stored ? 'available' : 'storage_failed',
+          metadata: { seed: candidate.seed, score: candidate.score, rejected: candidate.rejected, rejectionReasons: candidate.rejectionReasons },
+          retentionDays: 90,
+        });
+        if (isSelected) selectedArtifactId = artifact?.artifactId || null;
+      }
+      await overallStep?.succeed({ provider: 'fal', model: CROQUI_GENERATOR, metadata: { candidateCount: candidates.length, selectedSeed: selected.seed, batches: batch + 1 } });
+      return { url: selected.url, metadata: { generator: CROQUI_GENERATOR, promptVersion: CROQUI_PROMPT_VERSION, candidates }, artifactId: selectedArtifactId };
     } catch {
       if (batch === 1) {
+        await overallStep?.fail('no_approved_candidate');
         const failure = new Error("Nenhum candidato de croqui atingiu a nota mínima sem falha eliminatória.") as Error & { metadata?: CroquiGenerationMetadata };
         failure.metadata = { generator: CROQUI_GENERATOR, promptVersion: CROQUI_PROMPT_VERSION, candidates };
         throw failure;
@@ -270,12 +317,26 @@ async function generateCroquiCandidates(request: TypedCroquiGenerationRequest): 
 }
 
 type GenerateCroquiClientOptions = { data: TypedCroquiGenerationRequest };
-type GenerateCroquiClientResult = { url: string; metadata: CroquiGenerationMetadata };
+type GenerateCroquiClientResult = { url: string; metadata: CroquiGenerationMetadata; executionId: string | null; artifactId: string | null; trackingStatus: 'healthy' | 'degraded' };
 
 const generateCroquiServerFn = createServerFn({ method: 'POST' })
   .handler<Promise<GenerateCroquiClientResult>>(async ({ data }: { data: unknown }) => {
-    const result = await generateCroquiCandidates(parseCroquiGenerationRequest(data));
-    return result;
+    const request = parseCroquiGenerationRequest(data);
+    const tracking = await failOpenOperationalAnalytics.startExecution({ source: 'manual', specification: request });
+    const formStep = await tracking.execution?.startStep({ stage: 'form_submission' }) || null;
+    await formStep?.succeed({ metadata: { fields: Object.keys(request).filter((field) => field !== 'referenceImageUrls' && field !== 'previousCroquiUrl') } });
+    try {
+      const result = await generateCroquiCandidates(request, tracking.execution);
+      await tracking.execution?.complete();
+      return {
+        ...result,
+        executionId: tracking.execution?.executionId || null,
+        trackingStatus: tracking.execution?.trackingStatus || tracking.trackingStatus,
+      };
+    } catch (error) {
+      await tracking.execution?.fail('croqui_generation_failed');
+      throw error;
+    }
   });
 
 // O compilador do TanStack precisa enxergar a chamada direta de createServerFn
@@ -394,6 +455,11 @@ export const searchProductsFn: any = createServerFn({ method: 'POST' })
 
 export const generateRealistaFn: any = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
+    const tracking = data.executionId
+      ? await failOpenOperationalAnalytics.resumeExecution(data.executionId)
+      : await failOpenOperationalAnalytics.startExecution({ source: 'manual', specification: data });
+    const generationStep = await tracking.execution?.startStep({ stage: 'realistic_generation' }) || null;
+    try {
     const { peca, cor, userImageUrl, croquiUrl, modo, biotipo, comprimento, decote, manga, possuiManga, saia, renda, comentario, tecidoImageUrl, tecidoPantone, tecidoSku, tecidoNome, ocasiao } = data;
 
     const pecaEn = PECA_EN[peca as keyof typeof PECA_EN] || peca || 'garment';
@@ -575,15 +641,47 @@ No face, no person, just the mannequin with the garment. No text, no watermark, 
     const imageUrl = result.images?.[0]?.url;
     if (!imageUrl) throw new Error("No image returned from Fal.ai");
 
-    return { url: imageUrl };
+    await generationStep?.succeed({ provider: 'fal', model: 'seedream-v4', metadata: { modo: modo || 'manequim', fabricPipeline: process.env.REALISTA_FABRIC_PIPELINE_V1 === 'true' && Boolean(tecidoImageUrl) } });
+    let artifactId: string | null = null;
+    if (tracking.execution) {
+      const storageStep = await tracking.execution.startStep({ stage: 'generated_artifact_storage', parentStepId: generationStep?.stepId || null });
+      let stored: { storageBucket: string; storagePath: string; mimeType: string } | null = null;
+      try {
+        const assets = getExecutionAssetStore();
+        if (!assets) throw new Error('storage_unavailable');
+        stored = await assets.saveGeneratedImage({ executionId: tracking.execution.executionId, kind: 'realistic', sourceUrl: imageUrl });
+        await storageStep?.succeed({ provider: 'supabase', model: 'storage' });
+      } catch {
+        await storageStep?.fail('generated_artifact_storage_failed');
+      }
+      const artifact = await tracking.execution.recordArtifact({
+        kind: 'realistic', selected: true, stepId: generationStep?.stepId || null, sourceUrl: null,
+        storageBucket: stored?.storageBucket || null, storagePath: stored?.storagePath || null, mimeType: stored?.mimeType || null,
+        status: stored ? 'available' : 'storage_failed', retentionDays: 90,
+      });
+      artifactId = artifact?.artifactId || null;
+      await tracking.execution.complete();
+    }
+    return { url: imageUrl, executionId: tracking.execution?.executionId || data.executionId || null, artifactId, trackingStatus: tracking.execution?.trackingStatus || tracking.trackingStatus };
+    } catch (error) {
+      await generationStep?.fail('realistic_generation_failed');
+      await tracking.execution?.fail('realistic_generation_failed');
+      throw error;
+    }
   });
 
 export const saveLookDbFn: any = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
+    const tracking = await failOpenOperationalAnalytics.resumeExecution(data.execution_id);
+    const persistenceStep = await tracking.execution?.startStep({ stage: 'persistence' }) || null;
     try {
       const id = await saveLook(data);
+      await persistenceStep?.succeed({ provider: 'postgres', model: 'looks' });
+      await tracking.execution?.complete();
       return { id };
     } catch (error) {
+      await persistenceStep?.fail('persistence_failed');
+      await tracking.execution?.fail('persistence_failed');
       console.error("[DB] Error saving look:", error);
       throw error;
     }
@@ -591,13 +689,31 @@ export const saveLookDbFn: any = createServerFn({ method: 'POST' })
 
 export const updateLookDbFn: any = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
+    const tracking = await failOpenOperationalAnalytics.resumeExecution(data.execution_id || data.update?.execution_id);
+    const persistenceStep = await tracking.execution?.startStep({ stage: 'persistence' }) || null;
     try {
       await updateLook(data.id, data.update);
+      await persistenceStep?.succeed({ provider: 'postgres', model: 'looks' });
+      await tracking.execution?.complete();
       return { success: true };
     } catch (error) {
+      await persistenceStep?.fail('persistence_failed');
+      await tracking.execution?.fail('persistence_failed');
       console.error("[DB] Error updating look:", error);
       throw error;
     }
+  });
+
+export const rateArtifactFn: any = createServerFn({ method: 'POST' })
+  .handler(async ({ data }: any) => {
+    const artifactId = typeof data?.artifactId === 'string' ? data.artifactId : '';
+    const executionId = typeof data?.executionId === 'string' ? data.executionId : undefined;
+    const score = Number(data?.score);
+    if (!artifactId || !Number.isInteger(score) || score < 1 || score > 5) {
+      throw new Error('Informe uma nota entre 1 e 5 estrelas.');
+    }
+    await operationalAnalytics.rateArtifact({ artifactId, executionId, score });
+    return { success: true, score };
   });
 
 export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
@@ -862,8 +978,14 @@ export const createUploadSessionFn: any = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
     if (!REFERENCE_PIECES.includes(data.peca as ReferencePiece)) throw new Error('Selecione o tipo de peça antes de criar a referência.');
     if (data.ocasiao === 'Noiva' && data.peca !== 'Vestido') throw new Error('Noiva aceita somente Vestido.');
-    const session = await createUploadSession(data.nomeCliente, data.ocasiao, data.peca as ReferencePiece);
-    return { session };
+    const tracking = await failOpenOperationalAnalytics.startExecution({
+      source: 'reference',
+      specification: { ocasiao: data.ocasiao, peca: data.peca },
+    });
+    const formStep = await tracking.execution?.startStep({ stage: 'form_submission' }) || null;
+    await formStep?.succeed({ metadata: { fields: ['nomeCliente', 'ocasiao', 'peca'] } });
+    const session = await createUploadSession(data.nomeCliente, data.ocasiao, data.peca as ReferencePiece, tracking.execution?.executionId || null);
+    return { session, trackingStatus: tracking.execution?.trackingStatus || tracking.trackingStatus };
   });
 
 export const pollUploadSessionFn: any = createServerFn({ method: 'POST' })
@@ -1088,6 +1210,88 @@ function configuredVisionMetadata(): { provider: VisionProvider; model: string }
   return { provider, model: resolveVisionModel(provider) };
 }
 
+async function ensureReferenceTracking(session: UploadSession): Promise<{
+  execution: FailOpenTrackedExecution | null;
+  trackingStatus: 'healthy' | 'degraded';
+}> {
+  if (session.execution_id) return failOpenOperationalAnalytics.resumeExecution(session.execution_id);
+  const tracking = await failOpenOperationalAnalytics.startExecution({
+    source: 'reference',
+    specification: { ocasiao: session.ocasiao, peca: session.reference_piece },
+  });
+  if (tracking.execution) {
+    session.execution_id = tracking.execution.executionId;
+    await updateUploadSession(session.id, { executionId: tracking.execution.executionId });
+  }
+  return tracking;
+}
+
+async function retainReferenceCrops(
+  execution: FailOpenTrackedExecution | null,
+  images: Array<{ role: 'single' | 'top' | 'bottom'; dataUrl: string }>,
+): Promise<void> {
+  if (!execution) return;
+  const assets = getExecutionAssetStore();
+  for (const image of images) {
+    const storageStep = await execution.startStep({ stage: 'reference_crop_storage' });
+    try {
+      if (!assets) throw new Error('storage_unavailable');
+      const stored = await assets.saveReferenceCrop({
+        executionId: execution.executionId,
+        role: image.role,
+        dataUrl: image.dataUrl,
+      });
+      await execution.recordArtifact({
+        kind: 'reference_crop',
+        stepId: storageStep?.stepId || null,
+        storageBucket: stored.storageBucket,
+        storagePath: stored.storagePath,
+        mimeType: stored.mimeType,
+        metadata: { role: image.role, anonymized: true },
+        retentionDays: 30,
+      });
+      await storageStep?.succeed({ provider: 'supabase', model: 'storage', metadata: { role: image.role } });
+    } catch {
+      await execution.recordArtifact({
+        kind: 'reference_crop',
+        stepId: storageStep?.stepId || null,
+        status: 'storage_failed',
+        metadata: { role: image.role, anonymized: true },
+        retentionDays: 30,
+      });
+      await storageStep?.fail('reference_storage_failed');
+    }
+  }
+}
+
+async function loadRetainedReferenceImages(session: UploadSession): Promise<string[]> {
+  if (!session.execution_id) return [];
+  const assets = getExecutionAssetStore();
+  if (!assets) return [];
+  try {
+    const detail = await operationalAnalytics.getExecutionDetail(session.execution_id);
+    if (!detail) return [];
+    const latestByRole = new Map<string, typeof detail.artifacts[number]>();
+    for (const artifact of detail.artifacts) {
+      const role = typeof artifact.metadata.role === 'string' ? artifact.metadata.role : null;
+      if (artifact.kind === 'reference_crop' && artifact.status === 'available' && artifact.storagePath && role) latestByRole.set(role, artifact);
+    }
+    const roles = session.reference_analysis?.mode === 'composite' ? ['top', 'bottom'] : ['single'];
+    const primary = (await Promise.all(roles.map(async (role) => {
+      const artifact = latestByRole.get(role);
+      return artifact?.storagePath ? assets.loadReferenceCrop(artifact.storagePath) : null;
+    }))).filter((value): value is string => Boolean(value));
+    if (session.reference_analysis?.mode !== 'single' || primary.length !== 1) return primary;
+    try {
+      return [...primary, ...await deriveGarmentDetailDataUrls(primary[0])];
+    } catch {
+      return primary;
+    }
+  } catch {
+    return [];
+  }
+}
+
 export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
     const { sessionId, ocasiao, singleFileBase64, topFileBase64, bottomFileBase64 } = data;
@@ -1100,8 +1304,12 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
     }
     const occasion = typeof ocasiao === 'string' && ocasiao.trim() ? ocasiao : currentSession.ocasiao || undefined;
     const visionMetadata = configuredVisionMetadata();
+    const tracking = await ensureReferenceTracking(currentSession);
+    let uploadStep: FailOpenTrackedStep | null = null;
+    let visionStep: FailOpenTrackedStep | null = null;
 
     try {
+      uploadStep = await tracking.execution?.startStep({ stage: 'reference_upload' }) || null;
       if (!mode) throw new ReferenceInputError('invalid_count', 'Modo de referência inválido.');
       const submittedImages: unknown[] = Array.isArray(data.images)
         ? data.images
@@ -1113,10 +1321,14 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
       const detailImageDataUrls = mode === 'single' && Array.isArray(data.detailCrops)
         ? data.detailCrops.map((value: unknown) => validateReferenceDataUrl(value).dataUrl).slice(0, 3)
         : [];
+      await retainReferenceCrops(tracking.execution, validatedImages);
+      await uploadStep?.succeed({ metadata: { mode, primaryImageCount: imageDataUrls.length, derivedDetailCount: detailImageDataUrls.length } });
       await updateUploadSessionStatus(sessionId, 'analyzing');
+      visionStep = await tracking.execution?.startStep({ stage: 'reference_vision', promptVersion: REFERENCE_PROMPT_VERSION }) || null;
       const visionResult = await analyzeReferenceImages({ mode, ocasiao: occasion, targetPiece: currentSession.reference_piece, imageDataUrls, detailImageDataUrls });
       const analysis = validateReferenceAnalysisForMode(visionResult.analysis, mode);
       const decision = decideReferenceAnalysis(analysis, currentSession.reference_piece);
+      await visionStep?.succeed({ provider: visionMetadata.provider, model: visionMetadata.model, metadata: { mode, decision: decision.status, code: decision.code, primaryImageCount: imageDataUrls.length, derivedDetailCount: detailImageDataUrls.length } });
       console.info('[REFERENCE ANALYSIS] decisão', {
         status: decision.status,
         code: decision.code,
@@ -1133,10 +1345,10 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
         visionModel: visionMetadata.model,
         promptVersion: REFERENCE_PROMPT_VERSION,
       });
-      if (decision.status !== 'analysis_ready') return { status: decision.status, code: decision.code, retryable: decision.retryable, message: decision.message };
+      if (decision.status !== 'analysis_ready') return { status: decision.status, code: decision.code, retryable: decision.retryable, message: decision.message, executionId: tracking.execution?.executionId || currentSession.execution_id || null, trackingStatus: tracking.execution?.trackingStatus || tracking.trackingStatus };
       try {
-        const generated = await generateReferenceCroqui(sessionId, [...imageDataUrls, ...detailImageDataUrls]);
-        return { status: 'uploaded', analysis: generated.analysis, croquiUrl: generated.croquiUrl, metadata: generated.metadata };
+        const generated = await generateReferenceCroqui(sessionId, [...imageDataUrls, ...detailImageDataUrls], tracking.execution);
+        return { status: 'uploaded', analysis: generated.analysis, croquiUrl: generated.croquiUrl, metadata: generated.metadata, executionId: generated.executionId, artifactId: generated.artifactId, trackingStatus: generated.trackingStatus };
       } catch {
         // A análise continua persistida; geração pode ser repetida sem chamar Vision novamente.
         console.warn('[REFERENCE ANALYSIS] geração automática falhou:', { code: 'generation_failed' });
@@ -1146,10 +1358,14 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
           code: 'generation_failed',
           retryable: true,
           message: 'A referência foi analisada, mas o croqui não pôde ser gerado. Tente novamente no totem.',
+          executionId: tracking.execution?.executionId || currentSession.execution_id || null,
+          trackingStatus: tracking.execution?.trackingStatus || tracking.trackingStatus,
         };
       }
     } catch (error) {
       const code = errorCodeForVision(error);
+      if (visionStep) await visionStep.fail(code);
+      else await uploadStep?.fail(code);
       // O erro pode conter detalhes do provedor ou ecoar parte da requisição.
       // Persistimos/logamos somente o código controlado para não expor conteúdo da imagem.
       console.error('[REFERENCE ANALYSIS] Vision falhou:', {
@@ -1168,16 +1384,21 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
         code,
         retryable: error instanceof ReferenceVisionError ? error.retryable : error instanceof ReferenceInputError,
         message: 'Não foi possível analisar os recortes. Tente selecionar e recortar novamente.',
+        executionId: tracking.execution?.executionId || currentSession.execution_id || null,
+        trackingStatus: tracking.execution?.trackingStatus || tracking.trackingStatus,
       };
     }
   });
 
-async function generateReferenceCroqui(sessionId: string, referenceImageUrls: string[] = []): Promise<{ croquiUrl: string; analysis: ReferenceAnalysis; metadata?: CroquiGenerationMetadata }> {
+async function generateReferenceCroqui(sessionId: string, referenceImageUrls: string[] = [], existingExecution: FailOpenTrackedExecution | null = null): Promise<{ croquiUrl: string; analysis: ReferenceAnalysis; metadata?: CroquiGenerationMetadata; executionId: string | null; artifactId: string | null; trackingStatus: 'healthy' | 'degraded' }> {
   const claimed = await claimUploadSessionForGeneration(sessionId);
   const session = await getUploadSession(sessionId);
   if (!session) throw new Error('Sessão de referência não encontrada.');
-  if (session.status === 'uploaded' && session.croqui_url && session.reference_analysis) return { croquiUrl: session.croqui_url, analysis: session.reference_analysis };
+  if (session.status === 'uploaded' && session.croqui_url && session.reference_analysis) return { croquiUrl: session.croqui_url, analysis: session.reference_analysis, executionId: session.execution_id || null, artifactId: session.croqui_artifact_id || null, trackingStatus: session.execution_id ? 'healthy' : 'degraded' };
   if (!claimed || !session.reference_analysis) throw new Error('A análise da referência ainda não está pronta para confirmação.');
+  const tracking = existingExecution
+    ? { execution: existingExecution, trackingStatus: existingExecution.trackingStatus }
+    : await ensureReferenceTracking(session);
 
   const generationStartedAt = Date.now();
   try {
@@ -1185,7 +1406,7 @@ async function generateReferenceCroqui(sessionId: string, referenceImageUrls: st
     const specs = referenceAnalysisToCroquiSpecs(analysis, session.ocasiao || undefined);
     const decision = decideReferenceAnalysis(analysis, session.reference_piece);
     if (decision.status !== 'analysis_ready') throw new Error(decision.message || 'A análise da referência não está pronta.');
-    const generated = await generateCroquiCandidates({ ...specs, referenceAnalysis: analysis, referenceImageUrls, ocasiao: session.ocasiao || undefined });
+    const generated = await generateCroquiCandidates({ ...specs, referenceAnalysis: analysis, referenceImageUrls, ocasiao: session.ocasiao || undefined }, tracking.execution);
     const croquiUrl = generated.url;
     console.info('[REFERENCE GENERATION] concluída', { model: CROQUI_GENERATOR, promptVersion: CROQUI_PROMPT_VERSION, durationMs: Date.now() - generationStartedAt, status: 'success', candidateCount: generated.metadata.candidates.length });
     await updateUploadSession(sessionId, {
@@ -1197,11 +1418,15 @@ async function generateReferenceCroqui(sessionId: string, referenceImageUrls: st
       generationPromptVersion: CROQUI_PROMPT_VERSION,
       generationCandidates: generated.metadata.candidates,
       specification: specs as unknown as JsonObject,
+      executionId: tracking.execution?.executionId || session.execution_id || null,
+      croquiArtifactId: generated.artifactId,
     });
-    return { croquiUrl, analysis, metadata: generated.metadata };
+    await tracking.execution?.complete();
+    return { croquiUrl, analysis, metadata: generated.metadata, executionId: tracking.execution?.executionId || session.execution_id || null, artifactId: generated.artifactId, trackingStatus: tracking.execution?.trackingStatus || tracking.trackingStatus };
   } catch (error) {
     console.warn('[REFERENCE GENERATION] falhou', { model: CROQUI_GENERATOR, promptVersion: CROQUI_PROMPT_VERSION, durationMs: Date.now() - generationStartedAt, status: 'error', code: 'generation_failed' });
     await updateUploadSession(sessionId, { status: 'generation_failed', analysisErrorCode: 'generation_failed', generationProvider: 'fal', generationModel: CROQUI_GENERATOR, generationPromptVersion: CROQUI_PROMPT_VERSION, generationCandidates: (error as Error & { metadata?: CroquiGenerationMetadata }).metadata?.candidates || null });
+    await tracking.execution?.fail('reference_croqui_generation_failed');
     throw error;
   }
 }
@@ -1209,7 +1434,7 @@ async function generateReferenceCroqui(sessionId: string, referenceImageUrls: st
 export const confirmReferenceGenerationFn: any = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
     const result = await generateReferenceCroqui(data.sessionId);
-    return { success: true, croquiUrl: result.croquiUrl, analysis: result.analysis, metadata: result.metadata };
+    return { success: true, ...result };
   });
 
 export const retryReferenceGenerationFn: any = createServerFn({ method: 'POST' })
@@ -1218,8 +1443,9 @@ export const retryReferenceGenerationFn: any = createServerFn({ method: 'POST' }
     if (!session || session.status === 'expired') throw new Error('Sessão de referência expirada ou inexistente.');
     if (session.status !== 'generation_failed') throw new Error('Somente uma geração que falhou pode ser repetida.');
     await updateUploadSession(data.sessionId, { status: 'analysis_ready', analysisErrorCode: null });
-    const result = await generateReferenceCroqui(data.sessionId);
-    return { success: true, croquiUrl: result.croquiUrl, analysis: result.analysis, metadata: result.metadata };
+    const referenceImageUrls = await loadRetainedReferenceImages(session);
+    const result = await generateReferenceCroqui(data.sessionId, referenceImageUrls);
+    return { success: true, ...result };
   });
 
 export const requestReferenceRecropFn: any = createServerFn({ method: 'POST' })

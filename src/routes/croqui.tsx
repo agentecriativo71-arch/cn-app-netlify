@@ -3,12 +3,13 @@ import { Header } from "@/components/Header";
 import { Stepper } from "@/components/Stepper";
 import { WhatsAppModal } from "@/components/WhatsAppModal";
 import { useLook } from "@/lib/store";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MessageCircle, Printer, Camera, Pencil } from "lucide-react";
 import { generateCroquiFn, saveLookDbFn } from "@/server/api";
 
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorModal } from "@/components/ErrorModal";
+import { RatingStars } from "@/components/RatingStars";
 
 export const Route = createFileRoute("/croqui")({
   component: Croqui,
@@ -63,7 +64,7 @@ function Croqui() {
         });
         
         if (!active) return;
-        s.set({ croquiUrl: res.url });
+        s.set({ croquiUrl: res.url, executionId: res.executionId, croquiArtifactId: res.artifactId, trackingStatus: res.trackingStatus });
         
         let dbId: string | null = null;
         try {
@@ -102,8 +103,8 @@ function Croqui() {
                 comentario: s.comentario,
               },
               croqui_url: res.url,
-              foto_usuario_url: s.fotoUrl,
               nome_cliente: s.nome || undefined,
+              execution_id: res.executionId,
             }
           });
           dbId = dbRes.id;
@@ -132,6 +133,33 @@ function Croqui() {
     };
   }, [loading]);
 
+  const qrPersistingRef = useRef(false);
+  useEffect(() => {
+    if (loading || !s.croquiUrl || !s.croquiUploadSessionId || s.dbId || qrPersistingRef.current) return;
+    qrPersistingRef.current = true;
+    saveLookDbFn({
+      data: {
+        ocasiao: s.ocasiao,
+        biotipo: s.biotipo,
+        peca: s.peca,
+        comprimento: s.comprimento,
+        decote: s.decote,
+        manga: s.manga,
+        possui_manga: s.possuiManga,
+        saia: s.saia,
+        renda: s.renda,
+        renda_decisao: s.rendaDecisao,
+        comentario: s.comentario,
+        croqui_url: s.croquiUrl,
+        nome_cliente: s.nome || undefined,
+        execution_id: s.executionId,
+      },
+    }).then((res: { id: string }) => s.set({ dbId: res.id })).catch((error: unknown) => {
+      qrPersistingRef.current = false;
+      console.warn("[DB] Erro ao salvar look QR:", error);
+    });
+  }, [loading, s.croquiUrl, s.croquiUploadSessionId, s.dbId, s.executionId]);
+
   const handlePrint = () => window.print();
 
   if (loading) {
@@ -157,6 +185,7 @@ function Croqui() {
             <div className="image-frame">
               <img src={s.croquiUrl!} alt="Croqui gerado" />
             </div>
+            <RatingStars artifactId={s.croquiArtifactId} executionId={s.executionId} label="Este croqui ficou satisfatório?" />
             {s.costasProposta && <p className="mt-2 text-xs text-white/60 text-center">Costas são proposta da IA</p>}
           </div>
 
@@ -218,7 +247,7 @@ function Croqui() {
                   />
                   <button 
                     onClick={() => {
-                      s.set({ croquiUrl: null, realistaUrl: null, dbId: null });
+                      s.set({ croquiUrl: null, realistaUrl: null, dbId: null, croquiArtifactId: null, realistaArtifactId: null });
                       setLoading(true);
                     }} 
                     className="btn-primary w-full flex items-center justify-center gap-2"

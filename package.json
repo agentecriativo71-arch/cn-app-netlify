@@ -19,7 +19,9 @@
     "test:vision:live": "vitest run src/__tests__/referenceVision.live.test.ts",
     "benchmark:vision": "node --experimental-strip-types scripts/benchmark_vision.ts",
     "cleanup:reference-images:dry-run": "node scripts/reference-image-cleanup.mjs --dry-run",
-    "cleanup:reference-images": "node scripts/reference-image-cleanup.mjs --execute"
+    "cleanup:reference-images": "node scripts/reference-image-cleanup.mjs --execute",
+    "cleanup:execution-assets": "tsx scripts/execution-assets-cleanup.ts",
+    "telegram:outbox": "tsx scripts/telegram-outbox.ts"
   },
   "dependencies": {
     "@fal-ai/serverless-client": "^0.15.0",
@@ -50,6 +52,7 @@
     "@radix-ui/react-toggle": "^1.1.10",
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@supabase/ssr": "0.12.5",
     "@supabase/supabase-js": "^2.105.4",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-query": "^5.83.0",
@@ -105,6 +108,7 @@
     "globals": "^15.15.0",
     "jsdom": "^29.1.1",
     "prettier": "^3.7.3",
+    "tsx": "4.20.6",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
     "vitest": "^4.1.10"

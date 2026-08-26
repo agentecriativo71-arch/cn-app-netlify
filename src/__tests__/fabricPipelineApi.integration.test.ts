@@ -70,7 +70,7 @@ describe("integração do pipeline de tecido na geração realista", () => {
       ocasiao: "Festa",
     });
 
-    expect(result).toEqual({ url: "https://fal.test/candidate-1.png" });
+    expect(result).toMatchObject({ url: "https://fal.test/candidate-1.png", trackingStatus: "healthy" });
     expect(subscribeMock).toHaveBeenCalledTimes(5);
 
     const editCalls = subscribeMock.mock.calls.filter(([endpoint]) => endpoint === "fal-ai/bytedance/seedream/v4/edit");
@@ -104,7 +104,7 @@ describe("integração do pipeline de tecido na geração realista", () => {
       tecidoNome: "Seda Floral",
     });
 
-    expect(result).toEqual({ url: "https://fal.test/person.png" });
+    expect(result).toMatchObject({ url: "https://fal.test/person.png", trackingStatus: "healthy" });
     expect(subscribeMock).toHaveBeenCalledTimes(1);
     expect((subscribeMock.mock.calls[0][1] as any).input.image_urls).toEqual([
       "https://example.com/person.jpg",
@@ -130,7 +130,7 @@ describe("integração do pipeline de tecido na geração realista", () => {
       tecidoNome: "Seda Floral",
     });
 
-    expect(result).toEqual({ url: "https://fal.test/legacy.png" });
+    expect(result).toMatchObject({ url: "https://fal.test/legacy.png", trackingStatus: "healthy" });
     expect(subscribeMock).toHaveBeenCalledTimes(2);
     expect((subscribeMock.mock.calls[1][1] as any).input.image_urls).toEqual([
       "https://szbptnoviikflyzulhhs.supabase.co/storage/v1/object/public/elementos/manequins/ampulheta.jpg",

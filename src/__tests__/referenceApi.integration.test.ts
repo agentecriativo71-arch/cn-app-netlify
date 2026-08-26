@@ -18,8 +18,22 @@ vi.mock("../server/referenceVision", () => ({
 import { pollUploadSessionFn, retryReferenceGenerationFn, uploadReferenceFilesFn } from "../server/api";
 import { createUploadSession } from "../server/db";
 import { normalizeReferenceAnalysis, REFERENCE_ANALYSIS_VERSION } from "../lib/referenceUtils";
+import { ExecutionAssetStore, type PrivateStorageBoundary } from "../server/executionAssets";
+import { setExecutionAssetStoreForTests } from "../server/executionAssetsRuntime";
 
 const jpeg = "data:image/jpeg;base64,/9j/AA==";
+
+class MemoryPrivateStorage implements PrivateStorageBoundary {
+  readonly objects = new Map<string, { data: Uint8Array; contentType: string }>();
+  async upload(path: string, data: Uint8Array, contentType: string) { this.objects.set(path, { data, contentType }); }
+  async download(path: string) {
+    const object = this.objects.get(path);
+    if (!object) throw new Error("not found");
+    return object;
+  }
+  async remove(paths: string[]) { paths.forEach((path) => this.objects.delete(path)); }
+  async createSignedUrl(path: string) { return `https://storage.test/${path}`; }
+}
 
 function validAnalysis() {
   const observed = (value: unknown) => ({ value, confidence: 0.95, evidence: "Visível no recorte.", sourceRole: "single" as const });
@@ -38,6 +52,10 @@ async function executeServerFn(fn: any, data: unknown) {
 
 describe("fluxo público de referência", () => {
   beforeEach(() => {
+    setExecutionAssetStoreForTests(new ExecutionAssetStore(
+      new MemoryPrivateStorage(),
+      async () => new Response(new Uint8Array([0xff, 0xd8, 0xff]), { status: 200, headers: { "content-type": "image/jpeg" } }),
+    ));
     analyzeMock.mockReset().mockResolvedValue({ analysis: validAnalysis(), providerExtras: [] });
     subscribeMock.mockReset().mockResolvedValue({ images: [{ url: "https://fal.test/croqui.png" }] });
   });
@@ -134,6 +152,7 @@ describe("fluxo público de referência", () => {
     await executeServerFn(retryReferenceGenerationFn, { sessionId: session.id });
 
     expect(analyzeMock).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(subscribeMock.mock.calls[6][1].input.image_urls)).toContain("data:image/jpeg");
     expect((await executeServerFn(pollUploadSessionFn, { sessionId: session.id })).session.status).toBe("uploaded");
   });
 

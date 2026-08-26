@@ -11,10 +11,14 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ResultadoRouteImport } from './routes/resultado'
 import { Route as RealistaRouteImport } from './routes/realista'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CroquiRouteImport } from './routes/croqui'
 import { Route as CriarRouteImport } from './routes/criar'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
 import { Route as UploadSessionIdRouteImport } from './routes/upload.$sessionId'
+import { Route as DashboardLoginRouteImport } from './routes/dashboard.login'
+import { Route as DashboardExecucoesExecutionIdRouteImport } from './routes/dashboard.execucoes.$executionId'
 
 const ResultadoRoute = ResultadoRouteImport.update({
   id: '/resultado',
@@ -24,6 +28,11 @@ const ResultadoRoute = ResultadoRouteImport.update({
 const RealistaRoute = RealistaRouteImport.update({
   id: '/realista',
   path: '/realista',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CroquiRoute = CroquiRouteImport.update({
@@ -41,19 +50,39 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardIndexRoute = DashboardIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const UploadSessionIdRoute = UploadSessionIdRouteImport.update({
   id: '/upload/$sessionId',
   path: '/upload/$sessionId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardLoginRoute = DashboardLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardExecucoesExecutionIdRoute =
+  DashboardExecucoesExecutionIdRouteImport.update({
+    id: '/execucoes/$executionId',
+    path: '/execucoes/$executionId',
+    getParentRoute: () => DashboardRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/criar': typeof CriarRoute
   '/croqui': typeof CroquiRoute
+  '/dashboard': typeof DashboardRouteWithChildren
   '/realista': typeof RealistaRoute
   '/resultado': typeof ResultadoRoute
+  '/dashboard/login': typeof DashboardLoginRoute
   '/upload/$sessionId': typeof UploadSessionIdRoute
+  '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/execucoes/$executionId': typeof DashboardExecucoesExecutionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -61,16 +90,23 @@ export interface FileRoutesByTo {
   '/croqui': typeof CroquiRoute
   '/realista': typeof RealistaRoute
   '/resultado': typeof ResultadoRoute
+  '/dashboard/login': typeof DashboardLoginRoute
   '/upload/$sessionId': typeof UploadSessionIdRoute
+  '/dashboard': typeof DashboardIndexRoute
+  '/dashboard/execucoes/$executionId': typeof DashboardExecucoesExecutionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/criar': typeof CriarRoute
   '/croqui': typeof CroquiRoute
+  '/dashboard': typeof DashboardRouteWithChildren
   '/realista': typeof RealistaRoute
   '/resultado': typeof ResultadoRoute
+  '/dashboard/login': typeof DashboardLoginRoute
   '/upload/$sessionId': typeof UploadSessionIdRoute
+  '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/execucoes/$executionId': typeof DashboardExecucoesExecutionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -78,9 +114,13 @@ export interface FileRouteTypes {
     | '/'
     | '/criar'
     | '/croqui'
+    | '/dashboard'
     | '/realista'
     | '/resultado'
+    | '/dashboard/login'
     | '/upload/$sessionId'
+    | '/dashboard/'
+    | '/dashboard/execucoes/$executionId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -88,21 +128,29 @@ export interface FileRouteTypes {
     | '/croqui'
     | '/realista'
     | '/resultado'
+    | '/dashboard/login'
     | '/upload/$sessionId'
+    | '/dashboard'
+    | '/dashboard/execucoes/$executionId'
   id:
     | '__root__'
     | '/'
     | '/criar'
     | '/croqui'
+    | '/dashboard'
     | '/realista'
     | '/resultado'
+    | '/dashboard/login'
     | '/upload/$sessionId'
+    | '/dashboard/'
+    | '/dashboard/execucoes/$executionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CriarRoute: typeof CriarRoute
   CroquiRoute: typeof CroquiRoute
+  DashboardRoute: typeof DashboardRouteWithChildren
   RealistaRoute: typeof RealistaRoute
   ResultadoRoute: typeof ResultadoRoute
   UploadSessionIdRoute: typeof UploadSessionIdRoute
@@ -122,6 +170,13 @@ declare module '@tanstack/react-router' {
       path: '/realista'
       fullPath: '/realista'
       preLoaderRoute: typeof RealistaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/croqui': {
@@ -145,6 +200,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/': {
+      id: '/dashboard/'
+      path: '/'
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof DashboardIndexRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/upload/$sessionId': {
       id: '/upload/$sessionId'
       path: '/upload/$sessionId'
@@ -152,13 +214,44 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UploadSessionIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/login': {
+      id: '/dashboard/login'
+      path: '/login'
+      fullPath: '/dashboard/login'
+      preLoaderRoute: typeof DashboardLoginRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/execucoes/$executionId': {
+      id: '/dashboard/execucoes/$executionId'
+      path: '/execucoes/$executionId'
+      fullPath: '/dashboard/execucoes/$executionId'
+      preLoaderRoute: typeof DashboardExecucoesExecutionIdRouteImport
+      parentRoute: typeof DashboardRoute
+    }
   }
 }
+
+interface DashboardRouteChildren {
+  DashboardLoginRoute: typeof DashboardLoginRoute
+  DashboardIndexRoute: typeof DashboardIndexRoute
+  DashboardExecucoesExecutionIdRoute: typeof DashboardExecucoesExecutionIdRoute
+}
+
+const DashboardRouteChildren: DashboardRouteChildren = {
+  DashboardLoginRoute: DashboardLoginRoute,
+  DashboardIndexRoute: DashboardIndexRoute,
+  DashboardExecucoesExecutionIdRoute: DashboardExecucoesExecutionIdRoute,
+}
+
+const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
+  DashboardRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CriarRoute: CriarRoute,
   CroquiRoute: CroquiRoute,
+  DashboardRoute: DashboardRouteWithChildren,
   RealistaRoute: RealistaRoute,
   ResultadoRoute: ResultadoRoute,
   UploadSessionIdRoute: UploadSessionIdRoute,

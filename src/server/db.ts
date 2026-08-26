@@ -12,7 +12,7 @@ const supabaseFallback = supabaseUrl && supabaseKey ? createClient(supabaseUrl, 
 
 let pool: pg.Pool | null = null;
 const dbUrl = process.env.DATABASE_URL;
-let dbReady: Promise<unknown> = Promise.resolve();
+const dbReady: Promise<unknown> = Promise.resolve();
 
 function shouldUseSsl(url: string): boolean {
   // Desabilita SSL se explicitamente indicado na URL
@@ -33,71 +33,12 @@ if (dbUrl) {
     connectionString: dbUrl,
     ssl: useSsl ? { rejectUnauthorized: false } : false
   });
-  
-  dbReady = pool.query(`
-    CREATE TABLE IF NOT EXISTS looks (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      ocasiao VARCHAR(255),
-      biotipo VARCHAR(255),
-      peca VARCHAR(255),
-      comprimento VARCHAR(255),
-      decote VARCHAR(255),
-      manga VARCHAR(255),
-      cor VARCHAR(255),
-      foto_usuario_url TEXT,
-      croqui_url TEXT,
-      realista_url TEXT,
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-    );
-    ALTER TABLE looks ADD COLUMN IF NOT EXISTS nome_cliente VARCHAR(255);
-    ALTER TABLE looks ADD COLUMN IF NOT EXISTS telefone_cliente VARCHAR(255);
-    ALTER TABLE looks ADD COLUMN IF NOT EXISTS tipo_cerimonia VARCHAR(255);
-    ALTER TABLE looks ADD COLUMN IF NOT EXISTS renda_decisao BOOLEAN;
-    ALTER TABLE looks ADD COLUMN IF NOT EXISTS tecido_sku VARCHAR(255);
-    ALTER TABLE looks ADD COLUMN IF NOT EXISTS possui_manga BOOLEAN;
-    ALTER TABLE looks ADD COLUMN IF NOT EXISTS saia VARCHAR(255);
-    ALTER TABLE looks ADD COLUMN IF NOT EXISTS renda VARCHAR(255);
-    ALTER TABLE looks ADD COLUMN IF NOT EXISTS comentario TEXT;
-    ALTER TABLE looks ADD COLUMN IF NOT EXISTS generation_provider VARCHAR(50);
-    ALTER TABLE looks ADD COLUMN IF NOT EXISTS generation_model VARCHAR(100);
-    ALTER TABLE looks ADD COLUMN IF NOT EXISTS generation_prompt_version VARCHAR(100);
-    ALTER TABLE looks ADD COLUMN IF NOT EXISTS generation_candidates JSONB;
-    ALTER TABLE looks ADD COLUMN IF NOT EXISTS specification JSONB;
-
-    CREATE TABLE IF NOT EXISTS upload_sessions (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      nome_cliente VARCHAR(255),
-      ocasiao VARCHAR(255),
-      reference_piece VARCHAR(50),
-      status VARCHAR(50) DEFAULT 'pending',
-      croqui_url TEXT,
-      reference_analysis JSONB,
-      analysis_error_code VARCHAR(100),
-      vision_provider VARCHAR(50),
-      vision_model VARCHAR(100),
-      prompt_version VARCHAR(100),
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-      expires_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP + INTERVAL '15 minutes'
-    );
-    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS ocasiao VARCHAR(255);
-    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS reference_piece VARCHAR(50);
-    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS reference_analysis JSONB;
-    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS analysis_error_code VARCHAR(100);
-    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS vision_provider VARCHAR(50);
-    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS vision_model VARCHAR(100);
-    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS prompt_version VARCHAR(100);
-    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS generation_provider VARCHAR(50);
-    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS generation_model VARCHAR(100);
-    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS generation_prompt_version VARCHAR(100);
-    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS generation_candidates JSONB;
-    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS specification JSONB;
-    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
-  `).catch(err => {
-    console.error('[DB] Error verifying/creating tables:', err);
-  });
 } else {
   console.log('[DB] DATABASE_URL not set. Falling back to Supabase for looks database...');
+}
+
+export function getDatabasePool(): pg.Pool | null {
+  return pool;
 }
 
 export type ProductSearchResult = {
@@ -142,8 +83,8 @@ export async function searchProducts(term: string): Promise<ProductSearchResult[
 export async function saveLook(data: any): Promise<string> {
   if (pool) {
     const query = `
-      INSERT INTO looks (ocasiao, tipo_cerimonia, renda_decisao, biotipo, peca, comprimento, decote, manga, possui_manga, saia, renda, comentario, cor, tecido_sku, croqui_url, foto_usuario_url, generation_provider, generation_model, generation_prompt_version, generation_candidates, specification)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+      INSERT INTO looks (ocasiao, tipo_cerimonia, renda_decisao, biotipo, peca, comprimento, decote, manga, possui_manga, saia, renda, comentario, cor, tecido_sku, croqui_url, foto_usuario_url, generation_provider, generation_model, generation_prompt_version, generation_candidates, specification, execution_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
       RETURNING id;
     `;
     const values = [
@@ -162,20 +103,24 @@ export async function saveLook(data: any): Promise<string> {
       data.cor,
       data.tecido_sku,
       data.croqui_url,
-      data.foto_usuario_url,
+      // A foto original de cliente permanece somente no aparelho; a coluna
+      // legada é mantida para compatibilidade, mas nunca recebe o arquivo.
+      null,
       data.generation_provider,
       data.generation_model,
       data.generation_prompt_version,
       data.generation_candidates ? JSON.stringify(data.generation_candidates) : null,
       data.specification ? JSON.stringify(data.specification) : null,
+      data.execution_id || null,
     ];
     const res = await pool.query(query, values);
     return res.rows[0].id;
   } else {
     if (!supabaseFallback) throw new Error('DATABASE_URL não configurado e Supabase fallback indisponível.');
+    const safeData = { ...data, foto_usuario_url: null };
     const { data: dbData, error } = await supabaseFallback
       .from('looks')
-      .insert([data])
+      .insert([{ ...safeData, foto_usuario_url: null }])
       .select('id')
       .single();
     if (error) throw error;
@@ -185,21 +130,27 @@ export async function saveLook(data: any): Promise<string> {
 
 export async function updateLook(id: string, update: any): Promise<void> {
   if (pool) {
-    const setClause = Object.keys(update)
-      .map((key, idx) => `"${key}" = $${idx + 2}`)
+    const allowedColumns = new Set(['realista_url', 'nome_cliente', 'telefone_cliente']);
+    const entries = Object.entries(update).filter(([key]) => allowedColumns.has(key));
+    if (!entries.length) throw new Error('Nenhum campo permitido para atualização do look.');
+    const setClause = entries
+      .map(([key], idx) => `"${key}" = $${idx + 2}`)
       .join(', ');
     const query = `
       UPDATE looks
       SET ${setClause}
       WHERE id = $1;
     `;
-    const values = [id, ...Object.values(update)];
+    const values = [id, ...entries.map(([, value]) => value)];
     await pool.query(query, values);
   } else {
     if (!supabaseFallback) throw new Error('DATABASE_URL não configurado e Supabase fallback indisponível.');
+    const allowedColumns = new Set(['realista_url', 'nome_cliente', 'telefone_cliente']);
+    const safeUpdate = Object.fromEntries(Object.entries(update).filter(([key]) => allowedColumns.has(key)));
+    if (!Object.keys(safeUpdate).length) throw new Error('Nenhum campo permitido para atualização do look.');
     const { error } = await supabaseFallback
       .from('looks')
-      .update(update)
+      .update(safeUpdate)
       .eq('id', id);
     if (error) throw error;
   }
@@ -223,6 +174,8 @@ export type UploadSession = {
   generation_prompt_version?: string | null;
   generation_candidates?: Array<{ url: string; seed: number; score: number; rejected: boolean; rejectionReasons: string[] }> | null;
   specification?: JsonObject | null;
+  execution_id?: string | null;
+  croqui_artifact_id?: string | null;
   updated_at?: string;
   created_at?: string;
   expires_at?: string;
@@ -230,7 +183,7 @@ export type UploadSession = {
 
 const memoryUploadSessions = new Map<string, UploadSession>();
 
-export async function createUploadSession(nomeCliente: string, ocasiao?: string, referencePiece?: ReferencePiece | null): Promise<UploadSession> {
+export async function createUploadSession(nomeCliente: string, ocasiao?: string, referencePiece?: ReferencePiece | null, executionId?: string | null): Promise<UploadSession> {
   const sessionId = randomUUID();
   const createdAt = new Date();
   const session: UploadSession = {
@@ -240,6 +193,8 @@ export async function createUploadSession(nomeCliente: string, ocasiao?: string,
     reference_piece: referencePiece || null,
     status: 'pending',
     croqui_url: null,
+    execution_id: executionId || null,
+    croqui_artifact_id: null,
     created_at: createdAt.toISOString(),
     updated_at: createdAt.toISOString(),
     expires_at: new Date(createdAt.getTime() + 15 * 60 * 1000).toISOString(),
@@ -253,11 +208,11 @@ export async function createUploadSession(nomeCliente: string, ocasiao?: string,
   if (pool) {
     await dbReady;
     const query = `
-      INSERT INTO upload_sessions (id, nome_cliente, ocasiao, reference_piece, status)
-      VALUES ($1, $2, $3, $4, 'pending')
-      RETURNING id, nome_cliente, ocasiao, reference_piece, status, croqui_url, reference_analysis, analysis_error_code, vision_provider, vision_model, prompt_version, created_at, updated_at, expires_at;
+      INSERT INTO upload_sessions (id, nome_cliente, ocasiao, reference_piece, status, execution_id)
+      VALUES ($1, $2, $3, $4, 'pending', $5)
+      RETURNING id, nome_cliente, ocasiao, reference_piece, status, croqui_url, reference_analysis, analysis_error_code, vision_provider, vision_model, prompt_version, execution_id, croqui_artifact_id, created_at, updated_at, expires_at;
     `;
-    const res = await pool.query(query, [sessionId, nomeCliente, ocasiao || null, referencePiece || null]);
+    const res = await pool.query(query, [sessionId, nomeCliente, ocasiao || null, referencePiece || null, executionId || null]);
     return res.rows[0];
   } else {
     memoryUploadSessions.set(sessionId, session);
@@ -284,7 +239,7 @@ export async function getUploadSession(id: string): Promise<UploadSession | null
   if (pool) {
     await dbReady;
     const query = `
-      SELECT id, nome_cliente, ocasiao, reference_piece, status, croqui_url, reference_analysis, analysis_error_code, vision_provider, vision_model, prompt_version, generation_provider, generation_model, generation_prompt_version, generation_candidates, specification, created_at, updated_at, expires_at
+      SELECT id, nome_cliente, ocasiao, reference_piece, status, croqui_url, reference_analysis, analysis_error_code, vision_provider, vision_model, prompt_version, generation_provider, generation_model, generation_prompt_version, generation_candidates, specification, execution_id, croqui_artifact_id, created_at, updated_at, expires_at
       FROM upload_sessions
       WHERE id = $1;
     `;
@@ -309,6 +264,8 @@ export type UploadSessionPatch = {
   generationPromptVersion?: string | null;
   generationCandidates?: Array<{ url: string; seed: number; score: number; rejected: boolean; rejectionReasons: string[] }> | null;
   specification?: JsonObject | null;
+  executionId?: string | null;
+  croquiArtifactId?: string | null;
 };
 
 export async function updateUploadSession(id: string, patch: UploadSessionPatch): Promise<void> {
@@ -329,6 +286,8 @@ export async function updateUploadSession(id: string, patch: UploadSessionPatch)
     if (patch.generationPromptVersion !== undefined) sess.generation_prompt_version = patch.generationPromptVersion;
     if (patch.generationCandidates !== undefined) sess.generation_candidates = patch.generationCandidates;
     if (patch.specification !== undefined) sess.specification = patch.specification;
+    if (patch.executionId !== undefined) sess.execution_id = patch.executionId;
+    if (patch.croquiArtifactId !== undefined) sess.croqui_artifact_id = patch.croquiArtifactId;
     sess.updated_at = new Date().toISOString();
   }
 
@@ -356,6 +315,8 @@ export async function updateUploadSession(id: string, patch: UploadSessionPatch)
     if (patch.generationPromptVersion !== undefined) add('generation_prompt_version', patch.generationPromptVersion);
     if (patch.generationCandidates !== undefined) add('generation_candidates', patch.generationCandidates ? JSON.stringify(patch.generationCandidates) : null);
     if (patch.specification !== undefined) add('specification', patch.specification ? JSON.stringify(patch.specification) : null);
+    if (patch.executionId !== undefined) add('execution_id', patch.executionId);
+    if (patch.croquiArtifactId !== undefined) add('croqui_artifact_id', patch.croquiArtifactId);
     if (assignments.length === 0) return;
     assignments.push('updated_at = CURRENT_TIMESTAMP');
     try {
