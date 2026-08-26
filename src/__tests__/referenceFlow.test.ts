@@ -134,6 +134,15 @@ describe("Contrato reference-analysis-v1", () => {
     expect(referenceAnalysisToCroquiSpecs(lowTechnical).comentario).not.toContain("tecido não confirmado");
   });
 
+  it("não aplica renda quando a decisão confirmada é não", () => {
+    const analysis = normalizeReferenceAnalysis({
+      ...analysisInput(),
+      rendaDecisao: observed(false),
+      renda: observed("Renda Inteira"),
+    }, "single", "single");
+    expect(referenceAnalysisToCroquiSpecs(analysis).renda).toBeNull();
+  });
+
   it("envia extras legados para geração sem transformar punho ajustado em elástico", () => {
     const analysis = normalizeReferenceAnalysis({
       ...analysisInput(),

@@ -7,6 +7,7 @@ import {
   MANNEQUIN_URLS,
   buildSleevelessInstruction,
   buildMannequinSurfaceInstruction,
+  clearIncompatibleLookFields,
 } from "../lib/noivaUtils";
 
 describe("Fluxo Vestido de Noiva - Ajustes Cliente", () => {
@@ -37,6 +38,11 @@ describe("Fluxo Vestido de Noiva - Ajustes Cliente", () => {
       rendaDecisao: true,
       comprimento: "Longo",
       biotipo: "Ampulheta",
+      decote: "V (V-Neck)",
+      possuiManga: false,
+      manga: null,
+      saia: "Evasê",
+      renda: "Renda Inteira",
       comentario: "",
     };
 
@@ -92,5 +98,9 @@ describe("Fluxo Vestido de Noiva - Ajustes Cliente", () => {
     expect(inst).toContain("CRITICAL MANNEQUIN SURFACE & UNDERGARMENT REMOVAL");
     expect(inst).toContain("Do NOT show, render, or bleed any grey bodysuit");
     expect(inst).toContain("MANNEQUIN ANATOMY");
+  });
+
+  it("limpa campos incompatíveis ao trocar para peça de baixo", () => {
+    expect(clearIncompatibleLookFields("Saia", "Festa")).toMatchObject({ decote: null, manga: null, possuiManga: null, rendaDecisao: null, renda: null });
   });
 });

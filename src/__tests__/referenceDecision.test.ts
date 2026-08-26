@@ -38,4 +38,14 @@ describe("decisão server-side da análise de referência", () => {
   it("libera somente uma análise pronta", () => {
     expect(decideReferenceAnalysis(analysis())).toMatchObject({ status: "analysis_ready", retryable: false });
   });
+
+  it("bloqueia elemento aplicável ausente quando a peça foi selecionada", () => {
+    const result = decideReferenceAnalysis({ ...analysis(), decote: { ...analysis().decote, value: null, confidence: 0 } }, "Vestido");
+    expect(result).toMatchObject({ status: "needs_recrop", code: "neckline_below_threshold" });
+  });
+
+  it("aceita vestido sem manga somente com presença confirmada", () => {
+    const result = decideReferenceAnalysis({ ...analysis(), decote: { ...analysis().decote, value: "V (V-Neck)" }, possuiManga: { ...analysis().possuiManga, value: false, confidence: 0.95 }, saia: { ...analysis().saia, value: "Evasê" } }, "Vestido");
+    expect(result.status).toBe("analysis_ready");
+  });
 });

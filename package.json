@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:vision:live": "vitest run src/__tests__/referenceVision.live.test.ts",
+    "benchmark:vision": "node --experimental-strip-types scripts/benchmark_vision.ts",
     "cleanup:reference-images:dry-run": "node scripts/reference-image-cleanup.mjs --dry-run",
     "cleanup:reference-images": "node scripts/reference-image-cleanup.mjs --execute"
   },

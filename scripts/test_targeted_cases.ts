@@ -1,22 +1,12 @@
 import * as fal from '@fal-ai/serverless-client';
 import * as fs from 'fs';
 import * as path from 'path';
-import elementosRaw from '../src/lib/elementos_vestuario.json';
 import { getBackgroundInstruction, getMannequinUrl, buildSleevelessInstruction, buildMannequinSurfaceInstruction } from '../src/lib/noivaUtils';
+import { buildCatalogElementPromptFragment } from '../src/lib/garmentPrompt';
 
 fal.config({
   credentials: process.env.FAL_KEY,
 });
-
-type Elemento = {
-  nome: string;
-  categoria: string;
-  prompt_fragment: string;
-};
-
-const ELEMENTOS_MAP: Map<string, Elemento> = new Map(
-  (elementosRaw as Elemento[]).map(e => [e.nome, e])
-);
 
 function buildElementPromptFragment(params: {
   decote?: string | null;
@@ -25,28 +15,7 @@ function buildElementPromptFragment(params: {
   renda?: string | null;
   peca?: string | null;
 }): string {
-  const { decote, manga, saia, renda, peca } = params;
-  const fragments: string[] = [];
-
-  if (decote) {
-    const el = ELEMENTOS_MAP.get(decote);
-    if (el?.prompt_fragment) fragments.push(el.prompt_fragment);
-  }
-  if (manga) {
-    const el = ELEMENTOS_MAP.get(manga);
-    if (el?.prompt_fragment) fragments.push(el.prompt_fragment);
-  }
-  if (saia && peca !== 'Blusa' && peca !== 'Top') {
-    const el = ELEMENTOS_MAP.get(saia);
-    if (el?.prompt_fragment) fragments.push(el.prompt_fragment);
-  }
-  if (renda) {
-    const el = ELEMENTOS_MAP.get(renda);
-    if (el?.prompt_fragment) fragments.push(el.prompt_fragment);
-  }
-
-  if (fragments.length === 0) return '';
-  return ' Incorporate the following design elements precisely:\n- ' + fragments.join('\n- ') + '\n';
+  return buildCatalogElementPromptFragment(params);
 }
 
 const PECA_EN: Record<string, string> = {
@@ -85,8 +54,8 @@ const testCases = [
     peca: "Vestido",
     comprimento: "Midi",
     decote: "Canoa",
-    manga: "Manga Curta",
-    saia: "Godê",
+    manga: "Curta (Short Sleeve)",
+    saia: "Godê Simples",
     cor: "Azul Marinho",
     croquiUrl: "https://v3b.fal.media/files/b/0aa635a1/mi1mBxVXwJwXVL4vjuDQ1_778f13c64fed44238379e673fdb8a6ec.jpg"
   },
@@ -98,8 +67,8 @@ const testCases = [
     ocasiao: "Festa",
     peca: "Vestido",
     comprimento: "Curto",
-    decote: "Decote V",
-    manga: "Sem Manga",
+    decote: "V (V-Neck)",
+    manga: null,
     saia: "Evasê",
     cor: "Vermelho Rubi",
     croquiUrl: "https://v3b.fal.media/files/b/0aa635b9/r7zaSUvejsNnTOPwbGHxz_69c4f59adc344d5da3b891a00b481371.jpg"

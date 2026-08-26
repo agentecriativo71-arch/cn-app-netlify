@@ -51,7 +51,7 @@ function validVisionJson(mode: "single" | "composite" = "single") {
 }
 
 describe("configuração compartilhada do Vision", () => {
-  it("prioriza VISION_MODEL e VISION_MAX_OUTPUT_TOKENS, mantendo fallback legado", () => {
+  it("prioriza o modelo específico do provider e mantém fallback genérico", () => {
     withEnvironment({
       VISION_MODEL: "modelo-geral",
       FAL_VISION_MODEL: "modelo-fal-legado",
@@ -60,8 +60,8 @@ describe("configuração compartilhada do Vision", () => {
       FAL_VISION_MAX_OUTPUT_TOKENS: "1900",
       OPENAI_VISION_MAX_OUTPUT_TOKENS: "2100",
     }, () => {
-      expect(resolveVisionModel("fal")).toBe("modelo-geral");
-      expect(resolveVisionModel("openai")).toBe("modelo-geral");
+      expect(resolveVisionModel("fal")).toBe("modelo-fal-legado");
+      expect(resolveVisionModel("openai")).toBe("modelo-openai-legado");
       expect(resolveVisionMaxOutputTokens("fal")).toBe(2400);
       expect(resolveVisionMaxOutputTokens("openai")).toBe(2400);
     });
@@ -82,14 +82,14 @@ describe("configuração compartilhada do Vision", () => {
   });
 });
 
-describe("OpenAI GPT-5.4 mini Vision adapter", () => {
-  it("envia imagem, configuração GPT-5.4 mini e schema estrito", async () => {
+describe("OpenAI GPT-5 Vision adapter", () => {
+  it("envia imagem, configuração GPT-5 e schema estrito", async () => {
     const create = vi.fn().mockResolvedValue({ output_text: validVisionJson() });
-    const analyzer = new OpenAIReferenceVisionAnalyzer({ client: { responses: { create } }, model: "gpt-5.4-mini", maxAttempts: 1 });
+    const analyzer = new OpenAIReferenceVisionAnalyzer({ client: { responses: { create } }, model: "gpt-5", maxAttempts: 1 });
     const result = await analyzer.analyze({ mode: "single", occasion: "Festa", targetPiece: "Vestido", imageDataUrls: ["data:image/jpeg;base64,crop"] });
     const payload = create.mock.calls[0][0] as Record<string, any>;
     const content = payload.input[0].content;
-    expect(payload.model).toBe("gpt-5.4-mini");
+    expect(payload.model).toBe("gpt-5");
     expect(payload.store).toBe(false);
     expect(payload.reasoning).toEqual({ effort: "low" });
     expect(payload.max_output_tokens).toBe(1800);

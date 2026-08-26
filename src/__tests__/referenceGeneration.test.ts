@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { assertReferenceGenerationTextOnly, buildReferenceSeedreamInput } from '../server/referenceGeneration';
 
 describe('reference generation contract', () => {
-  it('builds a text-only Seedream input', () => {
+  it('builds a Seedream input without client references by default', () => {
     const input = buildReferenceSeedreamInput('technical croqui prompt');
 
     expect(input).toEqual({
@@ -12,6 +12,12 @@ describe('reference generation contract', () => {
       enable_safety_checker: false,
     });
     expect(Object.keys(input)).not.toContain('image_urls');
+  });
+
+  it('inclui somente recortes anonimizados explicitamente fornecidos', () => {
+    const input = buildReferenceSeedreamInput('technical croqui prompt', ['data:image/jpeg;base64,anon'], 123);
+    expect(input.image_urls).toEqual(['data:image/jpeg;base64,anon']);
+    expect(input.seed).toBe(123);
   });
 
   it('rejects reference image fields when the reference flow is generating', () => {

@@ -51,6 +51,11 @@ export function isFormValidForNoiva(state: {
   ocasiao?: string | null;
   tipoCerimonia?: string | null;
   rendaDecisao?: boolean | null;
+  decote?: string | null;
+  manga?: string | null;
+  possuiManga?: boolean | null;
+  saia?: string | null;
+  renda?: string | null;
   comprimento?: string | null;
   biotipo?: string | null;
   comentario?: string | null;
@@ -65,11 +70,43 @@ export function isFormValidForNoiva(state: {
       state.rendaDecisao !== undefined &&
       state.comprimento &&
       state.biotipo &&
+      state.decote &&
+      (state.possuiManga === false || !!state.manga) &&
+      state.saia &&
+      (state.rendaDecisao === false || !!state.renda) &&
       state.comentario?.trim()
     );
   }
 
-  return !!(state.peca && state.biotipo);
+  const hasNeckline = ["Vestido", "Blusa", "Macacão", "Top", "Blazer"].includes(state.peca || "");
+  const hasSleeve = hasNeckline && !SLEEVELESS_DECOTES.includes(state.decote || "");
+  const hasSkirt = ["Vestido", "Saia", "Macacão"].includes(state.peca || "");
+  return !!(
+    state.peca && state.biotipo &&
+    (!hasNeckline || state.decote) &&
+    (!hasSleeve || state.possuiManga === false || state.manga) &&
+    (!hasSkirt || state.saia)
+  );
+}
+
+export function clearIncompatibleLookFields(peca: string | null, ocasiao?: string | null) {
+  const patch: Record<string, null | boolean | string> = {};
+  const onePiece = ocasiao === "Noiva" || peca === "Vestido" || peca === "Macacão";
+  const hasTop = ["Vestido", "Blusa", "Macacão", "Top", "Blazer"].includes(peca || "");
+  const hasBottom = ["Vestido", "Saia", "Macacão"].includes(peca || "");
+  if (!onePiece) patch.comprimento = null;
+  if (!hasTop) {
+    patch.decote = null;
+    patch.manga = null;
+    patch.possuiManga = null;
+  }
+  if (!hasBottom) patch.saia = null;
+  if (ocasiao !== "Noiva") {
+    patch.tipoCerimonia = null;
+    patch.rendaDecisao = null;
+    patch.renda = null;
+  }
+  return patch;
 }
 
 export const SLEEVELESS_DECOTES = ["Frente Única", "Coração (Sweetheart)", "Tomara que Caia"];

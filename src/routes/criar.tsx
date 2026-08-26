@@ -6,6 +6,7 @@ import { ImageOff, Check, PartyPopper, Shirt, Ruler, MessageSquare } from "lucid
 import elementosData from "@/lib/elementos_vestuario.json";
 import { useEffect, useState } from "react";
 import { useVideoStore } from "@/lib/videoStore";
+import { clearIncompatibleLookFields, isFormValidForNoiva, SLEEVELESS_DECOTES } from "@/lib/noivaUtils";
 
 import ocasiaoCasamento from "@/assets/ocasiao-casamento.png";
 import ocasiaoFesta from "@/assets/ocasiao-festa.png";
@@ -229,15 +230,15 @@ function Criar() {
   }, [s.nome, router]);
 
   const isNoiva = s.ocasiao === "Noiva";
-  const valid = s.nome && s.ocasiao && (isNoiva ? (s.tipoCerimonia && s.rendaDecisao !== null && s.comprimento && s.biotipo && !!localComentario.trim()) : (s.peca && s.biotipo));
+  const valid = isFormValidForNoiva({ ...s, comentario: localComentario });
 
   // Condicionais de exibição baseadas na peça principal selecionada
   const pecaAtual = isNoiva ? "Vestido" : s.peca;
   const showComprimento = pecaAtual === "Vestido" || pecaAtual === "Saia";
-  const showDecote = pecaAtual === "Vestido" || pecaAtual === "Blusa" || pecaAtual === "Macacão" || pecaAtual === "Top";
-  const isSleevelessDecote = s.decote === "Frente Única" || s.decote === "Coração (Sweetheart)" || s.decote === "Tomara que Caia";
-  const showManga = (pecaAtual === "Vestido" || pecaAtual === "Blusa" || pecaAtual === "Macacão" || pecaAtual === "Top") && !isSleevelessDecote;
-  const showSaia = pecaAtual === "Vestido" || pecaAtual === "Saia";
+  const showDecote = pecaAtual === "Vestido" || pecaAtual === "Blusa" || pecaAtual === "Macacão" || pecaAtual === "Top" || pecaAtual === "Blazer";
+  const isSleevelessDecote = SLEEVELESS_DECOTES.includes(s.decote || "");
+  const showManga = (pecaAtual === "Vestido" || pecaAtual === "Blusa" || pecaAtual === "Macacão" || pecaAtual === "Top" || pecaAtual === "Blazer") && !isSleevelessDecote;
+  const showSaia = pecaAtual === "Vestido" || pecaAtual === "Saia" || pecaAtual === "Macacão";
 
   // Definindo as etapas ativas dinamicamente
   const steps: any[] = [];
@@ -254,7 +255,7 @@ function Criar() {
         selected={s.ocasiao}
         onSelect={(nome) => {
           s.set({ 
-            ocasiao: nome || null, 
+            ocasiao: nome || null,
             peca: nome === "Noiva" ? "Vestido" : null,
             tipoCerimonia: null,
             rendaDecisao: null,
@@ -263,7 +264,9 @@ function Criar() {
             manga: null,
             saia: null,
             renda: null,
-            biotipo: null
+            biotipo: null,
+            possuiManga: null,
+            comentario: null,
           });
         }}
       />
@@ -304,8 +307,8 @@ function Criar() {
       steps.push({
         id: "renda",
         title: "Tipo de Renda",
-        hint: "Escolha a renda desejada",
-        valid: true,
+        hint: "Obrigatório",
+        valid: !!s.renda,
         render: () => (
           <ElementGrid
             items={RENDAS}
@@ -319,8 +322,8 @@ function Criar() {
       steps.push({
         id: "decote",
         title: "Escolha seu Decote / Gola",
-        hint: "Toque para escolher",
-        valid: true,
+        hint: "Obrigatório",
+        valid: !!s.decote,
         render: () => (
           <ElementGrid
             items={DECOTES}
@@ -329,7 +332,7 @@ function Criar() {
               const isSleeveless = nome === "Frente Única" || nome === "Coração (Sweetheart)" || nome === "Tomara que Caia";
               s.set({
                 decote: nome || null,
-                ...(isSleeveless ? { manga: null } : {})
+                ...(isSleeveless ? { manga: null, possuiManga: false } : { possuiManga: null })
               });
             }}
           />
@@ -340,13 +343,13 @@ function Criar() {
       steps.push({
         id: "manga",
         title: "Escolha a Manga",
-        hint: "Toque para escolher",
-        valid: true,
+        hint: "Obrigatório",
+        valid: s.possuiManga === false || !!s.manga,
         render: () => (
           <ElementGrid
             items={MANGAS}
             selected={s.manga}
-            onSelect={(nome) => s.set({ manga: nome || null })}
+            onSelect={(nome) => s.set({ manga: nome || null, possuiManga: nome ? true : null })}
           />
         )
       });
@@ -355,8 +358,8 @@ function Criar() {
       steps.push({
         id: "saia",
         title: "Modelo de Saia",
-        hint: "Toque para escolher",
-        valid: true,
+        hint: "Obrigatório",
+        valid: !!s.saia,
         render: () => (
           <ElementGrid
             items={SAIAS}
@@ -405,7 +408,7 @@ function Criar() {
             selected={s.peca}
             onSelect={(nome) => {
               const v = nome || null;
-              const patch: Partial<LookState> = { peca: v };
+              const patch: Partial<LookState> = { peca: v, ...clearIncompatibleLookFields(v, s.ocasiao) };
               if (v === "Saia") {
                 patch.decote = null;
                 patch.manga = null;
@@ -413,6 +416,7 @@ function Criar() {
                 patch.saia = null;
                 patch.comprimento = null;
                 patch.manga = "Longa (Long Sleeve)";
+                patch.possuiManga = true;
               } else if (v === "Blusa" || v === "Macacão" || v === "Top") {
                 patch.saia = null;
                 patch.comprimento = null;
@@ -446,8 +450,8 @@ function Criar() {
         steps.push({
           id: "decote",
           title: "Escolha seu Decote",
-          hint: "Toque para escolher",
-          valid: true,
+          hint: "Obrigatório",
+          valid: !!s.decote,
           render: () => (
             <ElementGrid
               items={DECOTES}
@@ -456,7 +460,7 @@ function Criar() {
                 const isSleeveless = nome === "Frente Única" || nome === "Coração (Sweetheart)" || nome === "Tomara que Caia";
                 s.set({
                   decote: nome || null,
-                  ...(isSleeveless ? { manga: null } : {})
+                  ...(isSleeveless ? { manga: null, possuiManga: false } : { possuiManga: null })
                 });
               }}
             />
@@ -468,13 +472,13 @@ function Criar() {
         steps.push({
           id: "manga",
           title: "Escolha a Manga",
-          hint: "Toque para escolher",
-          valid: true,
+          hint: "Obrigatório",
+          valid: s.possuiManga === false || !!s.manga,
           render: () => (
             <ElementGrid
               items={MANGAS}
               selected={s.manga}
-              onSelect={(nome) => s.set({ manga: nome || null })}
+              onSelect={(nome) => s.set({ manga: nome || null, possuiManga: nome ? true : null })}
             />
           )
         });
@@ -484,8 +488,8 @@ function Criar() {
         steps.push({
           id: "saia",
           title: "Modelo de Saia",
-          hint: "Toque para escolher",
-          valid: true,
+          hint: "Obrigatório",
+          valid: !!s.saia,
           render: () => (
             <ElementGrid
               items={SAIAS}

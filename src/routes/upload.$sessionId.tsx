@@ -2,7 +2,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pollUploadSessionFn, uploadReferenceFilesFn } from "@/server/api";
-import { cropImageToDataUrl, type CropPixels } from "@/lib/imageCrop";
+import { anonymizeCropDataUrl, cropImageToDataUrl, deriveGarmentDetailCrops, type CropPixels } from "@/lib/imageCrop";
 import { buildReferenceUploadPayload } from "@/lib/referenceUpload";
 import { REFERENCE_FILE_ACCEPT, isReferenceImageType } from "@/lib/referenceUploadUi";
 import { type ReferencePiece } from "@/lib/referenceUtils";
@@ -31,6 +31,7 @@ function UploadModeloMobile() {
 
   const [singleOriginal, setSingleOriginal] = useState<string | null>(null);
   const [singleCrop, setSingleCrop] = useState<string | null>(null);
+  const [singleDetailCrops, setSingleDetailCrops] = useState<string[]>([]);
   const [topOriginal, setTopOriginal] = useState<string | null>(null);
   const [topCrop, setTopCrop] = useState<string | null>(null);
   const [bottomOriginal, setBottomOriginal] = useState<string | null>(null);
@@ -49,7 +50,7 @@ function UploadModeloMobile() {
       if (url) URL.revokeObjectURL(url);
     }
     originalUrlsRef.current = { single: null, top: null, bottom: null };
-    setSingleOriginal(null); setSingleCrop(null); setTopOriginal(null); setTopCrop(null); setBottomOriginal(null); setBottomCrop(null); setCropTarget(null); setCropAreaPixels(null);
+    setSingleOriginal(null); setSingleCrop(null); setSingleDetailCrops([]); setTopOriginal(null); setTopCrop(null); setBottomOriginal(null); setBottomCrop(null); setCropTarget(null); setCropAreaPixels(null);
   }, []);
 
   const replaceOriginalUrl = useCallback((target: ImageTarget, url: string) => {
@@ -106,7 +107,7 @@ function UploadModeloMobile() {
     setErrorMsg(null);
     const objectUrl = URL.createObjectURL(file);
     replaceOriginalUrl(target, objectUrl);
-    if (target === "single") setSingleCrop(null);
+    if (target === "single") { setSingleCrop(null); setSingleDetailCrops([]); }
     if (target === "top") setTopCrop(null);
     if (target === "bottom") setBottomCrop(null);
     setCropAreaPixels(null);
@@ -118,9 +119,13 @@ function UploadModeloMobile() {
     setCropping(true);
     try {
       const cropped = await cropImageToDataUrl(originalForTarget[cropTarget], cropAreaPixels);
-      if (cropTarget === "single") setSingleCrop(cropped);
-      if (cropTarget === "top") setTopCrop(cropped);
-      if (cropTarget === "bottom") setBottomCrop(cropped);
+      const anonymized = await anonymizeCropDataUrl(cropped);
+      if (cropTarget === "single") {
+        setSingleCrop(anonymized);
+        setSingleDetailCrops(await deriveGarmentDetailCrops(anonymized));
+      }
+      if (cropTarget === "top") setTopCrop(anonymized);
+      if (cropTarget === "bottom") setBottomCrop(anonymized);
       setCropTarget(null);
     } catch (error) {
       console.error("[CROP] Error:", error);
@@ -139,7 +144,7 @@ function UploadModeloMobile() {
     setUploading(true);
     setErrorMsg(null);
     try {
-      const result = await uploadReferenceFilesFn({ data: buildReferenceUploadPayload(sessionId, mode, { single: singleCrop, top: topCrop, bottom: bottomCrop }) });
+      const result = await uploadReferenceFilesFn({ data: buildReferenceUploadPayload(sessionId, mode, { single: singleCrop, detailCrops: singleDetailCrops, top: topCrop, bottom: bottomCrop }) });
       if (result.status === "needs_recrop") {
         setErrorMsg(`A ${CRISPIM_AI_LABEL} não conseguiu confirmar o foco com segurança. Ajuste o recorte para deixar apenas a roupa ou pessoa principal e envie novamente.`);
         return;
@@ -190,7 +195,7 @@ function UploadModeloMobile() {
       <main className="flex-1 flex flex-col items-center justify-center py-4 space-y-4">
         <p className="text-xs text-center text-white/70">A {CRISPIM_AI_LABEL} procura o tipo <span className="text-[#E5D3A2] font-bold">{referencePiece || "selecionado no totem"}</span>. Recorte a pessoa ou roupa principal para deixar esse foco claro, mesmo que haja outras pessoas ou objetos na foto.</p>
         {!compositeAllowed && <p className="text-[10px] text-center text-white/45">O modo “cima + baixo” é reservado para Vestido. Para este tipo de peça, envie uma foto geral.</p>}
-        <p className="text-[10px] leading-relaxed text-center text-white/45 max-w-sm">Privacidade: a foto original permanece neste aparelho. Somente o recorte confirmado será analisado pela {CRISPIM_AI_LABEL} e não será armazenado pelo aplicativo.</p>
+        <p className="text-[10px] leading-relaxed text-center text-white/45 max-w-sm">Privacidade: a foto original permanece neste aparelho. O recorte enviado é anonimizado (rosto ocultado e fundo neutralizado), usado apenas para análise e desenho e não armazenado pelo aplicativo.</p>
         {mode === "single" ? <SingleSlot preview={singleCrop} onChange={(event) => handleFileChange(event, "single")} onRecrop={() => setCropTarget("single")} /> : <div className="grid grid-cols-2 gap-3 w-full"><CompositeSlot label="1. Busto / cima" preview={topCrop} onChange={(event) => handleFileChange(event, "top")} onRecrop={() => setCropTarget("top")} /><CompositeSlot label="2. Saia / baixo" preview={bottomCrop} onChange={(event) => handleFileChange(event, "bottom")} onRecrop={() => setCropTarget("bottom")} /></div>}
         {errorMsg && <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs text-center w-full">{errorMsg}</div>}
       </main>
@@ -206,7 +211,7 @@ function CenteredMessage({ children }: { children: React.ReactNode }) { return <
 
 function SingleSlot({ preview, onChange, onRecrop }: { preview: string | null; onChange: (event: React.ChangeEvent<HTMLInputElement>) => void; onRecrop: () => void }) {
   if (!preview) return <label className="w-full h-64 rounded-3xl border-2 border-dashed border-[#E5D3A2]/50 bg-white/5 flex flex-col items-center justify-center p-6 text-center cursor-pointer"><input type="file" accept={REFERENCE_FILE_ACCEPT} onChange={onChange} className="hidden" /><ImagePlus size={32} className="text-[#E5D3A2] mb-3" /><span className="text-sm font-bold uppercase">Tirar foto ou escolher da galeria</span><span className="text-[11px] text-white/50">O recorte será enviado, não a foto original</span></label>;
-  return <div className="w-full space-y-3"><PreviewImage src={preview} alt="Recorte do modelo" onRecrop={onRecrop} onChange={onChange} /><p className="text-[11px] text-center text-white/60">Apenas este recorte será enviado à {CRISPIM_AI_LABEL}.</p></div>;
+  return <div className="w-full space-y-3"><PreviewImage src={preview} alt="Recorte anonimizado do modelo" onRecrop={onRecrop} onChange={onChange} /><p className="text-[11px] text-center text-white/60">Este recorte anonimizado e três detalhes derivados serão enviados à {CRISPIM_AI_LABEL}.</p></div>;
 }
 
 function CompositeSlot({ label, preview, onChange, onRecrop }: { label: string; preview: string | null; onChange: (event: React.ChangeEvent<HTMLInputElement>) => void; onRecrop: () => void }) {

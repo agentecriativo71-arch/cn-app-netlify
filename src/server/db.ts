@@ -3,6 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import type { ReferenceAnalysis, ReferencePiece } from '../lib/referenceUtils';
 
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type JsonObject = { [key: string]: JsonValue };
+
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
 const supabaseFallback = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
@@ -51,6 +54,15 @@ if (dbUrl) {
     ALTER TABLE looks ADD COLUMN IF NOT EXISTS tipo_cerimonia VARCHAR(255);
     ALTER TABLE looks ADD COLUMN IF NOT EXISTS renda_decisao BOOLEAN;
     ALTER TABLE looks ADD COLUMN IF NOT EXISTS tecido_sku VARCHAR(255);
+    ALTER TABLE looks ADD COLUMN IF NOT EXISTS possui_manga BOOLEAN;
+    ALTER TABLE looks ADD COLUMN IF NOT EXISTS saia VARCHAR(255);
+    ALTER TABLE looks ADD COLUMN IF NOT EXISTS renda VARCHAR(255);
+    ALTER TABLE looks ADD COLUMN IF NOT EXISTS comentario TEXT;
+    ALTER TABLE looks ADD COLUMN IF NOT EXISTS generation_provider VARCHAR(50);
+    ALTER TABLE looks ADD COLUMN IF NOT EXISTS generation_model VARCHAR(100);
+    ALTER TABLE looks ADD COLUMN IF NOT EXISTS generation_prompt_version VARCHAR(100);
+    ALTER TABLE looks ADD COLUMN IF NOT EXISTS generation_candidates JSONB;
+    ALTER TABLE looks ADD COLUMN IF NOT EXISTS specification JSONB;
 
     CREATE TABLE IF NOT EXISTS upload_sessions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -75,6 +87,11 @@ if (dbUrl) {
     ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS vision_provider VARCHAR(50);
     ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS vision_model VARCHAR(100);
     ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS prompt_version VARCHAR(100);
+    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS generation_provider VARCHAR(50);
+    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS generation_model VARCHAR(100);
+    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS generation_prompt_version VARCHAR(100);
+    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS generation_candidates JSONB;
+    ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS specification JSONB;
     ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
   `).catch(err => {
     console.error('[DB] Error verifying/creating tables:', err);
@@ -125,8 +142,8 @@ export async function searchProducts(term: string): Promise<ProductSearchResult[
 export async function saveLook(data: any): Promise<string> {
   if (pool) {
     const query = `
-      INSERT INTO looks (ocasiao, tipo_cerimonia, renda_decisao, biotipo, peca, comprimento, decote, manga, cor, tecido_sku, croqui_url, foto_usuario_url)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      INSERT INTO looks (ocasiao, tipo_cerimonia, renda_decisao, biotipo, peca, comprimento, decote, manga, possui_manga, saia, renda, comentario, cor, tecido_sku, croqui_url, foto_usuario_url, generation_provider, generation_model, generation_prompt_version, generation_candidates, specification)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       RETURNING id;
     `;
     const values = [
@@ -138,10 +155,19 @@ export async function saveLook(data: any): Promise<string> {
       data.comprimento,
       data.decote,
       data.manga,
+      data.possui_manga,
+      data.saia,
+      data.renda,
+      data.comentario,
       data.cor,
       data.tecido_sku,
       data.croqui_url,
-      data.foto_usuario_url
+      data.foto_usuario_url,
+      data.generation_provider,
+      data.generation_model,
+      data.generation_prompt_version,
+      data.generation_candidates ? JSON.stringify(data.generation_candidates) : null,
+      data.specification ? JSON.stringify(data.specification) : null,
     ];
     const res = await pool.query(query, values);
     return res.rows[0].id;
@@ -192,6 +218,11 @@ export type UploadSession = {
   vision_provider?: string | null;
   vision_model?: string | null;
   prompt_version?: string | null;
+  generation_provider?: string | null;
+  generation_model?: string | null;
+  generation_prompt_version?: string | null;
+  generation_candidates?: Array<{ url: string; seed: number; score: number; rejected: boolean; rejectionReasons: string[] }> | null;
+  specification?: JsonObject | null;
   updated_at?: string;
   created_at?: string;
   expires_at?: string;
@@ -253,7 +284,7 @@ export async function getUploadSession(id: string): Promise<UploadSession | null
   if (pool) {
     await dbReady;
     const query = `
-      SELECT id, nome_cliente, ocasiao, reference_piece, status, croqui_url, reference_analysis, analysis_error_code, vision_provider, vision_model, prompt_version, created_at, updated_at, expires_at
+      SELECT id, nome_cliente, ocasiao, reference_piece, status, croqui_url, reference_analysis, analysis_error_code, vision_provider, vision_model, prompt_version, generation_provider, generation_model, generation_prompt_version, generation_candidates, specification, created_at, updated_at, expires_at
       FROM upload_sessions
       WHERE id = $1;
     `;
@@ -273,6 +304,11 @@ export type UploadSessionPatch = {
   visionProvider?: string | null;
   visionModel?: string | null;
   promptVersion?: string | null;
+  generationProvider?: string | null;
+  generationModel?: string | null;
+  generationPromptVersion?: string | null;
+  generationCandidates?: Array<{ url: string; seed: number; score: number; rejected: boolean; rejectionReasons: string[] }> | null;
+  specification?: JsonObject | null;
 };
 
 export async function updateUploadSession(id: string, patch: UploadSessionPatch): Promise<void> {
@@ -288,6 +324,11 @@ export async function updateUploadSession(id: string, patch: UploadSessionPatch)
     if (patch.visionProvider !== undefined) sess.vision_provider = patch.visionProvider;
     if (patch.visionModel !== undefined) sess.vision_model = patch.visionModel;
     if (patch.promptVersion !== undefined) sess.prompt_version = patch.promptVersion;
+    if (patch.generationProvider !== undefined) sess.generation_provider = patch.generationProvider;
+    if (patch.generationModel !== undefined) sess.generation_model = patch.generationModel;
+    if (patch.generationPromptVersion !== undefined) sess.generation_prompt_version = patch.generationPromptVersion;
+    if (patch.generationCandidates !== undefined) sess.generation_candidates = patch.generationCandidates;
+    if (patch.specification !== undefined) sess.specification = patch.specification;
     sess.updated_at = new Date().toISOString();
   }
 
@@ -310,6 +351,11 @@ export async function updateUploadSession(id: string, patch: UploadSessionPatch)
     if (patch.visionProvider !== undefined) add('vision_provider', patch.visionProvider);
     if (patch.visionModel !== undefined) add('vision_model', patch.visionModel);
     if (patch.promptVersion !== undefined) add('prompt_version', patch.promptVersion);
+    if (patch.generationProvider !== undefined) add('generation_provider', patch.generationProvider);
+    if (patch.generationModel !== undefined) add('generation_model', patch.generationModel);
+    if (patch.generationPromptVersion !== undefined) add('generation_prompt_version', patch.generationPromptVersion);
+    if (patch.generationCandidates !== undefined) add('generation_candidates', patch.generationCandidates ? JSON.stringify(patch.generationCandidates) : null);
+    if (patch.specification !== undefined) add('specification', patch.specification ? JSON.stringify(patch.specification) : null);
     if (assignments.length === 0) return;
     assignments.push('updated_at = CURRENT_TIMESTAMP');
     try {

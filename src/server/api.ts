@@ -2,12 +2,15 @@ import { createServerFn } from '@tanstack/react-start';
 import * as fal from '@fal-ai/serverless-client';
 import { createClient } from '@supabase/supabase-js';
 import { saveLook, updateLook, searchProducts, createUploadSession, getUploadSession, confirmUploadSession, updateUploadSession, updateUploadSessionStatus, claimUploadSessionForGeneration } from './db';
+import type { JsonObject } from './db';
 import { getBackgroundInstruction, getMannequinUrl, buildSleevelessInstruction, buildMannequinSurfaceInstruction, SLEEVELESS_DECOTES } from '../lib/noivaUtils';
 import { buildCatalogElementPromptFragment } from '../lib/garmentPrompt';
 import {
   REFERENCE_PROMPT_VERSION,
   REFERENCE_PIECES,
   buildVisionPromptForReferencePart,
+  buildVisionPromptForCompositeReference,
+  buildVisionPromptForSingleReference,
   mergeCompositeReferenceAnalyses,
   relabelReferenceAnalysisPart,
   referenceAnalysisToCroquiSpecs,
@@ -17,21 +20,15 @@ import {
 } from '../lib/referenceUtils';
 import { decideReferenceAnalysis } from '../lib/referenceDecision';
 import { createReferenceVisionAnalyzer, ReferenceVisionError, resolveVisionModel, type ReferenceVisionResult, type VisionProvider } from './referenceVision';
-import { validateReferenceImages, ReferenceInputError } from './referenceInput';
+import { validateReferenceDataUrl, validateReferenceImages, ReferenceInputError } from './referenceInput';
 import { assertReferenceGenerationTextOnly, buildReferenceSeedreamInput } from './referenceGeneration';
 import { evaluateFabricCandidates, runFabricPipeline, scoreFabricCandidate } from './fabricPipeline';
+import { buildCandidateGatePrompt, buildCroquiEvaluationPrompt, buildCroquiReferenceImageUrls, buildCroquiReferenceRoleInstruction, chooseCroquiCandidate, CROQUI_CANDIDATE_COUNT, CROQUI_GENERATOR, CROQUI_PROMPT_VERSION, FEMALE_CROQUI_INVARIANT, MANNEQUIN_TEMPLATE_INSTRUCTION, occasionInstruction, parseCroquiGenerationRequest, scoreCroquiCandidate, type CroquiGenerationRequest, type CroquiGenerationMetadata, type CroquiVisualAssessment } from '../lib/croquiGeneration';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
-
-const _BODY_CHARS = {
-  "Ampulheta": "shoulders and hips equally wide, waist dramatically narrower — clear X-shaped silhouette with balanced curves",
-  "Triângulo": "hips visibly wider than shoulders, narrower upper body — triangular silhouette wider at the hips",
-  "Triângulo Invertido": "shoulders broader than hips, V-shaped athletic upper body, narrower lower body",
-  "Retângulo": "shoulders, waist and hips all nearly equal width with minimal waist curve — straight athletic silhouette",
-};
 
 const PECA_EN: Record<string, string> = {
   "Vestido": "dress",
@@ -88,8 +85,21 @@ function isTopGarment(pecaEn: string, pecaPt: string): boolean {
   return _TOP_KEYWORDS.some(kw => combined.includes(kw));
 }
 
-async function internalGenerateCroqui(data: any): Promise<string> {
+export type TypedCroquiGenerationRequest = CroquiGenerationRequest;
+
+async function internalGenerateCroqui(data: TypedCroquiGenerationRequest): Promise<string> {
   const { peca, biotipo, comprimento, decote, manga, possuiManga, saia, renda, comentario, tipoCerimonia, rendaDecisao, ocasiao, previousCroquiUrl, referenceAnalysis } = data;
+
+  if (ocasiao === "Noiva" && peca !== "Vestido") throw new Error("Noiva aceita somente Vestido.");
+  if (ocasiao === "Noiva" && !referenceAnalysis && (!tipoCerimonia || rendaDecisao === null || rendaDecisao === undefined || !comprimento || !biotipo || !comentario?.trim())) {
+    throw new Error("O fluxo de Noiva exige cerimônia, renda, comprimento, biotipo e comentário.");
+  }
+  const topPiece = ["Vestido", "Blusa", "Macacão", "Top", "Blazer"].includes(peca);
+  const bottomPiece = ["Vestido", "Saia", "Macacão"].includes(peca);
+  if (topPiece && !decote) throw new Error("Decote ou gola é obrigatório para esta peça.");
+  if (topPiece && possuiManga !== false && !manga) throw new Error("Manga é obrigatória para esta peça, exceto quando sem manga for confirmado.");
+  if (bottomPiece && !saia) throw new Error("Modelagem de saia é obrigatória para esta peça.");
+  if (rendaDecisao === true && !renda) throw new Error("O tipo de renda é obrigatório quando a decisão é sim.");
 
   if (referenceAnalysis && !peca) {
     throw new Error("A análise da referência não identificou a peça com confiança suficiente.");
@@ -97,6 +107,11 @@ async function internalGenerateCroqui(data: any): Promise<string> {
 
   if (referenceAnalysis) {
     assertReferenceGenerationTextOnly(data);
+    for (const referenceImageUrl of data.referenceImageUrls || []) {
+      // O fluxo de referência só aceita Data URLs validadas do recorte
+      // anonimizado. URLs remotas poderiam reintroduzir a foto original.
+      validateReferenceDataUrl(referenceImageUrl);
+    }
   }
 
   // Se houver um croqui anterior (ajuste/edição), usamos o endpoint de EDIT do Seedream para alterar a imagem existente
@@ -128,14 +143,12 @@ Style: hand-drawn black pencil on white paper. No color, no photo, no background
   }
 
   let bodyContext = "";
-  if (biotipo && _BODY_CHARS[biotipo as keyof typeof _BODY_CHARS]) {
-    bodyContext = ` CRITICAL — the figure MUST have body type: ${_BODY_CHARS[biotipo as keyof typeof _BODY_CHARS]}. This is NOT a standard thin fashion illustration — the body shape described must be clearly visible with realistic proportions. Do NOT draw a slender model.`;
-  }
+  if (biotipo) bodyContext = ` CRITICAL — IMAGE 1 is the sole authority for the selected female biotype ${biotipo}. Preserve its proportions exactly; do not infer or redraw this body from a textual description.`;
 
   const pecaEn = PECA_EN[peca as keyof typeof PECA_EN] || peca || 'garment';
   const comprimentoEn = comprimento ? (COMPRIMENTO_EN[comprimento as keyof typeof COMPRIMENTO_EN] || comprimento) : '';
 
-  const elementFragment = buildCatalogElementPromptFragment({ decote, manga, possuiManga, saia, renda, peca });
+  const elementFragment = buildCatalogElementPromptFragment({ decote, manga, possuiManga, saia, renda: rendaDecisao === false ? null : renda, peca });
   const isBottom = isBottomGarment(pecaEn, peca || '');
   const isTop = isTopGarment(pecaEn, peca || '');
   const hemInstruction = comprimento ? (COMPRIMENTO_HEM[comprimento as keyof typeof COMPRIMENTO_HEM] || '') : '';
@@ -186,27 +199,26 @@ Style: hand-drawn black pencil on white paper. No color, no photo, no background
       ? `The back view must show closure details and seam lines ONLY on the garment itself (above the waist/hips). The mannequin lower body below the hem of the ${pecaEn} must remain completely bare.`
       : `CRITICAL FRONT/BACK CONSISTENCY: The back view must be structurally consistent with the front view — same neckline type, same sleeve type (or lack thereof), same overall silhouette and construction. Do NOT add structural elements to the back (straps, sleeves, coverage) that do not exist on the front. The back view should show: the reverse of the same garment construction, any back closure details (invisible zipper, buttons), back seam lines, and darts — but the overall structure must match the front exactly.${sleevelessBackRule}`;
 
-  const prompt = `${sleevelessInstruction}${leadingInstructions}
+  const prompt = `${FEMALE_CROQUI_INVARIANT}
+${MANNEQUIN_TEMPLATE_INSTRUCTION}
+${buildCroquiReferenceRoleInstruction(data)}
+${occasionInstruction(ocasiao)}
+${sleevelessInstruction}${leadingInstructions}
 Professional fashion design croqui of a ${comprimentoEn} ${pecaEn}.${elementFragment}${bodyContext}
 ${isOnePiece ? `REMINDER: This is ONE single piece of clothing — bodice and skirt/lower portion are NOT separate items. Draw it as one unified garment with continuous fabric flow from top to bottom.\n` : ''}${comentario ? `Extra design instructions: ${comentario}\n` : ''}
 CRITICAL: Show BOTH front view AND back view of the garment side by side in a single composition — front view on the left, back view on the right, as in professional fashion croquis.
 The figure is a faceless fashion mannequin form — no facial features, no face detail, just a smooth featureless head or implied head shape. The focus is entirely on the garment.
 Style: hand-drawn black pencil on white paper. Use hatching and cross-hatching for volume and shadow, directional strokes following the fabric grain to convey drape and texture, fine contour lines for garment structure, and stippling for any textured surfaces.
 Clearly render garment construction details: seam lines, darts, stitch lines, closures, hemlines, and any decorative elements.
+CAIMENTO AND MOVEMENT: show directional fabric grain, gravity-aware folds, realistic volume, hem movement and fluid drape. Preserve every visible construction detail from the selected catalog/reference; do not simplify the garment into a blank basic shape.
 ${backViewInstruction}
 No color, no photographs, no realistic rendering, no 3D, no shading gradients, no painted or digital look.
 No text, no labels, no annotations, no watermarks, no faces, no facial features.`;
 
   try {
-    const input = referenceAnalysis
-      ? buildReferenceSeedreamInput(prompt)
-      : {
-          prompt,
-          image_size: "portrait_4_3",
-          num_images: 1,
-          enable_safety_checker: false,
-        };
-    const result: any = await fal.subscribe("fal-ai/bytedance/seedream/v4/text-to-image", {
+    const referenceImageUrls = buildCroquiReferenceImageUrls(data, data.referenceImageUrls || []);
+    const input = buildReferenceSeedreamInput(prompt, referenceImageUrls, data.seed);
+    const result: any = await fal.subscribe("fal-ai/bytedance/seedream/v4/edit", {
       input,
     });
 
@@ -220,11 +232,51 @@ No text, no labels, no annotations, no watermarks, no faces, no facial features.
   }
 }
 
-export const generateCroquiFn: any = createServerFn({ method: 'POST' })
-  .handler(async ({ data }: { data: any }) => {
-    const url = await internalGenerateCroqui(data);
-    return { url };
-  });
+async function generateCroquiCandidates(request: TypedCroquiGenerationRequest): Promise<{ url: string; metadata: CroquiGenerationMetadata }> {
+  const candidates: CroquiGenerationMetadata["candidates"] = [];
+  for (let batch = 0; batch < 2; batch += 1) {
+    for (let index = 0; index < CROQUI_CANDIDATE_COUNT; index += 1) {
+      const seed = 260826 + batch * CROQUI_CANDIDATE_COUNT + index;
+      try {
+        const url = await internalGenerateCroqui({ ...request, seed });
+        let visual: CroquiVisualAssessment | undefined;
+        if (process.env.NODE_ENV !== 'test' && process.env.CROQUI_VISUAL_GATE !== 'false') {
+          try {
+            const evaluator = createReferenceVisionAnalyzer();
+            const evaluated = await evaluator.analyze({ mode: 'single', occasion: request.ocasiao || undefined, targetPiece: request.peca as ReferencePiece, imageDataUrls: [url], prompt: buildCroquiEvaluationPrompt(request) });
+            visual = { peca: evaluated.analysis.peca, decote: evaluated.analysis.decote, possuiManga: evaluated.analysis.possuiManga, manga: evaluated.analysis.manga, saia: evaluated.analysis.saia };
+          } catch {
+            candidates.push({ url, seed, score: 0, rejected: true, rejectionReasons: ['visual_gate_failed'] });
+            continue;
+          }
+        }
+        candidates.push(scoreCroquiCandidate(request, buildCandidateGatePrompt(request), url, seed, visual));
+      } catch {
+        candidates.push({ url: "", seed, score: 0, rejected: true, rejectionReasons: ["generation_failed"] });
+      }
+    }
+    try {
+      const selected = chooseCroquiCandidate(candidates);
+      return { url: selected.url, metadata: { generator: CROQUI_GENERATOR, promptVersion: CROQUI_PROMPT_VERSION, candidates } };
+    } catch {
+      if (batch === 1) {
+        const failure = new Error("Nenhum candidato de croqui atingiu a nota mínima sem falha eliminatória.") as Error & { metadata?: CroquiGenerationMetadata };
+        failure.metadata = { generator: CROQUI_GENERATOR, promptVersion: CROQUI_PROMPT_VERSION, candidates };
+        throw failure;
+      }
+    }
+  }
+  throw new Error("Nenhum candidato de croqui atingiu a nota mínima sem falha eliminatória.");
+}
+
+type GenerateCroquiClientOptions = { data: TypedCroquiGenerationRequest };
+type GenerateCroquiClientResult = { url: string; metadata: CroquiGenerationMetadata };
+
+export const generateCroquiFn = createServerFn({ method: 'POST' })
+  .handler(async ({ data }: { data: unknown }) => {
+    const result = await generateCroquiCandidates(parseCroquiGenerationRequest(data));
+    return result;
+  }) as unknown as (options: GenerateCroquiClientOptions) => Promise<GenerateCroquiClientResult>;
 
 function hexToColorDescription(hex: string): string {
   const cleanHex = hex.replace("#", "");
@@ -335,7 +387,7 @@ export const searchProductsFn: any = createServerFn({ method: 'POST' })
 
 export const generateRealistaFn: any = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
-    const { peca, cor, userImageUrl, croquiUrl, modo, biotipo, comprimento, decote, manga, saia, renda, comentario, tecidoImageUrl, tecidoPantone, tecidoSku, tecidoNome, ocasiao } = data;
+    const { peca, cor, userImageUrl, croquiUrl, modo, biotipo, comprimento, decote, manga, possuiManga, saia, renda, comentario, tecidoImageUrl, tecidoPantone, tecidoSku, tecidoNome, ocasiao } = data;
 
     const pecaEn = PECA_EN[peca as keyof typeof PECA_EN] || peca || 'garment';
     const corEn = cor ? (cor.startsWith('#') ? `${hexToColorDescription(cor)} color (hex: ${cor})` : (CORES_EN[cor as keyof typeof CORES_EN] || cor)) : 'a beautiful';
@@ -387,11 +439,11 @@ No illustrations, no sketches, no cartoons.`;
       const mannequinUrl = getMannequinUrl(biotipo);
 
       const comprimentoEn = comprimento ? (COMPRIMENTO_EN[comprimento as keyof typeof COMPRIMENTO_EN] || comprimento) : '';
-      const elementFragment = buildCatalogElementPromptFragment({ decote, manga, saia, renda, peca });
+      const elementFragment = buildCatalogElementPromptFragment({ decote, manga, possuiManga, saia, renda: data.rendaDecisao === false ? null : renda, peca });
       const isBottom = isBottomGarment(pecaEn, peca || '');
       const isTop = isTopGarment(pecaEn, peca || '');
       const hemInstruction = comprimento ? (COMPRIMENTO_HEM[comprimento as keyof typeof COMPRIMENTO_HEM] || '') : '';
-      const sleevelessInstruction = buildSleevelessInstruction(decote, manga);
+      const sleevelessInstruction = buildSleevelessInstruction(decote, possuiManga === false ? "Sem Manga" : manga);
 
       let garmentTypeInstruction = '';
       if (isBottom) {
@@ -543,7 +595,7 @@ export const updateLookDbFn: any = createServerFn({ method: 'POST' })
 
 export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
-    const { nome, telefone, croquiUrl, realistaUrl, peca, ocasiao, tipoCerimonia, rendaDecisao, biotipo, comprimento, decote, manga, cor, comentario } = data;
+    const { nome, telefone, croquiUrl, realistaUrl, peca, ocasiao, tipoCerimonia, rendaDecisao, biotipo, comprimento, decote, manga, possuiManga, saia, renda, cor, comentario } = data;
 
     const evolutionUrl = process.env.EVOLUTION_API_URL || import.meta.env.EVOLUTION_API_URL || "";
     const evolutionInstance = process.env.EVOLUTION_INSTANCE || import.meta.env.EVOLUTION_INSTANCE || "";
@@ -764,6 +816,9 @@ export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
                 comprimento ? `Comprimento: ${comprimento}` : "",
                 decote ? `Decote: ${decote}` : "",
                 manga ? `Manga: ${manga}` : "",
+                possuiManga === false ? "Sem manga" : "",
+                saia ? `Saia: ${saia}` : "",
+                renda ? `Renda: ${renda}` : "",
                 cor ? `Cor: ${cor}` : "",
                 comentario ? `Comentários: ${comentario}` : ""
               ].filter(Boolean).join("\n");
@@ -799,6 +854,7 @@ export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
 export const createUploadSessionFn: any = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
     if (!REFERENCE_PIECES.includes(data.peca as ReferencePiece)) throw new Error('Selecione o tipo de peça antes de criar a referência.');
+    if (data.ocasiao === 'Noiva' && data.peca !== 'Vestido') throw new Error('Noiva aceita somente Vestido.');
     const session = await createUploadSession(data.nomeCliente, data.ocasiao, data.peca as ReferencePiece);
     return { session };
   });
@@ -849,6 +905,7 @@ async function analyzeReferenceImages(params: {
   ocasiao?: string;
   targetPiece?: ReferencePiece | null;
   imageDataUrls: string[];
+  detailImageDataUrls?: string[];
 }): Promise<ReferenceVisionResult> {
   if (params.mode === 'composite') {
     const roles = ['top', 'bottom'] as const;
@@ -896,7 +953,44 @@ async function analyzeReferenceImages(params: {
         throw error;
       }
     }));
-    const analysis = mergeCompositeReferenceAnalyses({ top: parts[0].analysis, bottom: parts[1].analysis, targetPiece: params.targetPiece });
+    // Segunda leitura conjunta evita costuras incompatíveis entre top e bottom.
+    const reconciliationAnalyzer = createReferenceVisionAnalyzer();
+    const reconciliation = await reconciliationAnalyzer.analyze({
+      mode: 'composite',
+      occasion: params.ocasiao,
+      targetPiece: params.targetPiece,
+      imageDataUrls: params.imageDataUrls,
+      prompt: buildVisionPromptForCompositeReference(params.ocasiao, params.targetPiece),
+    });
+    const independent = mergeCompositeReferenceAnalyses({ top: parts[0].analysis, bottom: parts[1].analysis, targetPiece: params.targetPiece });
+    let joint = independent;
+    if (reconciliation.analysis.mode === 'composite') {
+      try {
+        joint = validateReferenceAnalysisForMode(reconciliation.analysis, 'composite');
+      } catch {
+        // Reconciliação é melhoria, nunca pode invalidar duas leituras parciais válidas.
+        joint = independent;
+      }
+    }
+    const chooseObserved = <T extends { confidence: number }>(value: T, fallback: T): T => value.confidence >= fallback.confidence ? value : fallback;
+    const chooseJoint = <T extends keyof ReferenceAnalysis>(field: T): ReferenceAnalysis[T] => chooseObserved(joint[field] as { confidence: number }, independent[field] as { confidence: number }) as ReferenceAnalysis[T];
+    const jointDetails = joint.detalhesTecnicos;
+    const independentDetails = independent.detalhesTecnicos;
+    const analysis: ReferenceAnalysis = {
+      ...independent,
+      peca: chooseJoint('peca'), comprimento: chooseJoint('comprimento'), decote: chooseJoint('decote'), possuiManga: chooseJoint('possuiManga'), manga: chooseJoint('manga'), saia: chooseJoint('saia'), rendaDecisao: chooseJoint('rendaDecisao'), renda: chooseJoint('renda'), detalhesTecnicos: {
+        corpete: chooseObserved(jointDetails.corpete, independentDetails.corpete),
+        cintura: chooseObserved(jointDetails.cintura, independentDetails.cintura),
+        caimento: chooseObserved(jointDetails.caimento, independentDetails.caimento),
+        volume: chooseObserved(jointDetails.volume, independentDetails.volume),
+        barra: chooseObserved(jointDetails.barra, independentDetails.barra),
+        transparencia: chooseObserved(jointDetails.transparencia, independentDetails.transparencia),
+        tecido: chooseObserved(jointDetails.tecido, independentDetails.tecido),
+        costas: chooseObserved(jointDetails.costas, independentDetails.costas),
+        fechamento: chooseObserved(jointDetails.fechamento, independentDetails.fechamento),
+      },
+      providerExtras: [...(independent.providerExtras || []), ...(joint.providerExtras || [])],
+    };
     console.info('[REFERENCE VISION] composta concluída', {
       mode: 'composite',
       imageCount: 2,
@@ -912,7 +1006,26 @@ async function analyzeReferenceImages(params: {
   const startedAt = Date.now();
   try {
     const result = await analyzer.analyze({ mode: params.mode, occasion: params.ocasiao, targetPiece: params.targetPiece, imageDataUrls: params.imageDataUrls });
-    const focusConfidence = result.analysis.focus.reduce((sum, focus) => sum + focus.confidence, 0) / result.analysis.focus.length;
+    let enrichedAnalysis = result.analysis;
+    if (params.mode === 'single' && params.detailImageDataUrls?.length) {
+      const details = await Promise.all(params.detailImageDataUrls.map((detailImageDataUrl) => analyzer.analyze({
+        mode: 'single', occasion: params.ocasiao, targetPiece: params.targetPiece, imageDataUrls: [detailImageDataUrl],
+        prompt: `${buildVisionPromptForSingleReference(params.ocasiao, params.targetPiece)}\nThis is a detail crop from the confirmed garment crop. Resolve small neckline, waist, skirt and hem details only.`,
+      })));
+      for (const detailResult of details) {
+        const detail = detailResult.analysis;
+        const fields = ['decote', 'possuiManga', 'manga', 'saia', 'rendaDecisao', 'renda', 'comprimento'] as const;
+        for (const field of fields) {
+          if (detail[field].value !== null && detail[field].confidence > enrichedAnalysis[field].confidence) enrichedAnalysis = { ...enrichedAnalysis, [field]: detail[field] };
+        }
+        enrichedAnalysis = { ...enrichedAnalysis, detalhesTecnicos: Object.fromEntries(Object.entries(enrichedAnalysis.detalhesTecnicos).map(([key, current]) => {
+          const candidate = detail.detalhesTecnicos[key as keyof typeof detail.detalhesTecnicos];
+          return [key, candidate.value !== null && candidate.confidence > current.confidence ? candidate : current];
+        })) as ReferenceAnalysis['detalhesTecnicos'] };
+      }
+    }
+    const enrichedResult = { ...result, analysis: enrichedAnalysis };
+    const focusConfidence = enrichedResult.analysis.focus.reduce((sum, focus) => sum + focus.confidence, 0) / enrichedResult.analysis.focus.length;
     console.info('[REFERENCE VISION] concluída', {
       model: analyzer.modelName,
       provider: analyzer.providerName,
@@ -922,11 +1035,11 @@ async function analyzeReferenceImages(params: {
       durationMs: Date.now() - startedAt,
       retries: Math.max(0, analyzer.lastAttempts - 1),
       status: 'success',
-      responseContract: result.providerExtras.length > 0 ? 'legacy-adapted' : 'canonical',
-      providerExtrasCount: result.providerExtras.length,
+      responseContract: enrichedResult.providerExtras.length > 0 ? 'legacy-adapted' : 'canonical',
+      providerExtrasCount: enrichedResult.providerExtras.length,
       focusConfidence,
     });
-    return result;
+    return enrichedResult;
   } catch (error) {
     console.warn('[REFERENCE VISION] falhou', {
       model: analyzer.modelName,
@@ -949,10 +1062,11 @@ export type AnalyzeReferenceRequest = {
   mode: 'single' | 'composite';
   targetPiece: ReferencePiece;
   images: Array<{ role: 'single' | 'top' | 'bottom'; dataUrl: string }>;
+  detailCrops?: string[];
 };
 
 export type AnalyzeReferenceResponse =
-  | { status: 'uploaded' | 'generation_failed'; analysis: ReferenceAnalysis; croquiUrl?: string; code?: string; retryable?: boolean; message?: string }
+  | { status: 'uploaded' | 'generation_failed'; analysis: ReferenceAnalysis; croquiUrl?: string; metadata?: CroquiGenerationMetadata; code?: string; retryable?: boolean; message?: string }
   | { status: 'analysis_ready'; analysis: ReferenceAnalysis }
   | { status: 'needs_recrop' | 'unsupported_garment' | 'analysis_failed'; code: string; retryable: boolean; message: string };
 
@@ -989,8 +1103,11 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
           : [{ role: 'single', dataUrl: singleFileBase64 }];
       const validatedImages = validateReferenceImages(mode, submittedImages);
       const imageDataUrls = validatedImages.map((image) => image.dataUrl);
+      const detailImageDataUrls = mode === 'single' && Array.isArray(data.detailCrops)
+        ? data.detailCrops.map((value: unknown) => validateReferenceDataUrl(value).dataUrl).slice(0, 3)
+        : [];
       await updateUploadSessionStatus(sessionId, 'analyzing');
-      const visionResult = await analyzeReferenceImages({ mode, ocasiao: occasion, targetPiece: currentSession.reference_piece, imageDataUrls });
+      const visionResult = await analyzeReferenceImages({ mode, ocasiao: occasion, targetPiece: currentSession.reference_piece, imageDataUrls, detailImageDataUrls });
       const analysis = validateReferenceAnalysisForMode(visionResult.analysis, mode);
       const decision = decideReferenceAnalysis(analysis, currentSession.reference_piece);
       console.info('[REFERENCE ANALYSIS] decisão', {
@@ -1011,8 +1128,8 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
       });
       if (decision.status !== 'analysis_ready') return { status: decision.status, code: decision.code, retryable: decision.retryable, message: decision.message };
       try {
-        const generated = await generateReferenceCroqui(sessionId);
-        return { status: 'uploaded', analysis: generated.analysis, croquiUrl: generated.croquiUrl };
+        const generated = await generateReferenceCroqui(sessionId, [...imageDataUrls, ...detailImageDataUrls]);
+        return { status: 'uploaded', analysis: generated.analysis, croquiUrl: generated.croquiUrl, metadata: generated.metadata };
       } catch {
         // A análise continua persistida; geração pode ser repetida sem chamar Vision novamente.
         console.warn('[REFERENCE ANALYSIS] geração automática falhou:', { code: 'generation_failed' });
@@ -1048,7 +1165,7 @@ export const uploadReferenceFilesFn: any = createServerFn({ method: 'POST' })
     }
   });
 
-async function generateReferenceCroqui(sessionId: string): Promise<{ croquiUrl: string; analysis: ReferenceAnalysis }> {
+async function generateReferenceCroqui(sessionId: string, referenceImageUrls: string[] = []): Promise<{ croquiUrl: string; analysis: ReferenceAnalysis; metadata?: CroquiGenerationMetadata }> {
   const claimed = await claimUploadSessionForGeneration(sessionId);
   const session = await getUploadSession(sessionId);
   if (!session) throw new Error('Sessão de referência não encontrada.');
@@ -1061,13 +1178,23 @@ async function generateReferenceCroqui(sessionId: string): Promise<{ croquiUrl: 
     const specs = referenceAnalysisToCroquiSpecs(analysis, session.ocasiao || undefined);
     const decision = decideReferenceAnalysis(analysis, session.reference_piece);
     if (decision.status !== 'analysis_ready') throw new Error(decision.message || 'A análise da referência não está pronta.');
-    const croquiUrl = await internalGenerateCroqui({ ...specs, referenceAnalysis: analysis, ocasiao: session.ocasiao || undefined });
-    console.info('[REFERENCE GENERATION] concluída', { model: 'seedream-v4', durationMs: Date.now() - generationStartedAt, status: 'success' });
-    await confirmUploadSession(sessionId, croquiUrl, analysis);
-    return { croquiUrl, analysis };
+    const generated = await generateCroquiCandidates({ ...specs, referenceAnalysis: analysis, referenceImageUrls, ocasiao: session.ocasiao || undefined });
+    const croquiUrl = generated.url;
+    console.info('[REFERENCE GENERATION] concluída', { model: CROQUI_GENERATOR, promptVersion: CROQUI_PROMPT_VERSION, durationMs: Date.now() - generationStartedAt, status: 'success', candidateCount: generated.metadata.candidates.length });
+    await updateUploadSession(sessionId, {
+      status: 'uploaded',
+      croquiUrl,
+      referenceAnalysis: analysis,
+      generationProvider: 'fal',
+      generationModel: CROQUI_GENERATOR,
+      generationPromptVersion: CROQUI_PROMPT_VERSION,
+      generationCandidates: generated.metadata.candidates,
+      specification: specs as unknown as JsonObject,
+    });
+    return { croquiUrl, analysis, metadata: generated.metadata };
   } catch (error) {
-    console.warn('[REFERENCE GENERATION] falhou', { model: 'seedream-v4', durationMs: Date.now() - generationStartedAt, status: 'error', code: 'generation_failed' });
-    await updateUploadSession(sessionId, { status: 'generation_failed', analysisErrorCode: 'generation_failed' });
+    console.warn('[REFERENCE GENERATION] falhou', { model: CROQUI_GENERATOR, promptVersion: CROQUI_PROMPT_VERSION, durationMs: Date.now() - generationStartedAt, status: 'error', code: 'generation_failed' });
+    await updateUploadSession(sessionId, { status: 'generation_failed', analysisErrorCode: 'generation_failed', generationProvider: 'fal', generationModel: CROQUI_GENERATOR, generationPromptVersion: CROQUI_PROMPT_VERSION, generationCandidates: (error as Error & { metadata?: CroquiGenerationMetadata }).metadata?.candidates || null });
     throw error;
   }
 }
@@ -1075,7 +1202,7 @@ async function generateReferenceCroqui(sessionId: string): Promise<{ croquiUrl: 
 export const confirmReferenceGenerationFn: any = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: any }) => {
     const result = await generateReferenceCroqui(data.sessionId);
-    return { success: true, croquiUrl: result.croquiUrl, analysis: result.analysis };
+    return { success: true, croquiUrl: result.croquiUrl, analysis: result.analysis, metadata: result.metadata };
   });
 
 export const retryReferenceGenerationFn: any = createServerFn({ method: 'POST' })
@@ -1085,7 +1212,7 @@ export const retryReferenceGenerationFn: any = createServerFn({ method: 'POST' }
     if (session.status !== 'generation_failed') throw new Error('Somente uma geração que falhou pode ser repetida.');
     await updateUploadSession(data.sessionId, { status: 'analysis_ready', analysisErrorCode: null });
     const result = await generateReferenceCroqui(data.sessionId);
-    return { success: true, croquiUrl: result.croquiUrl, analysis: result.analysis };
+    return { success: true, croquiUrl: result.croquiUrl, analysis: result.analysis, metadata: result.metadata };
   });
 
 export const requestReferenceRecropFn: any = createServerFn({ method: 'POST' })

@@ -9,7 +9,7 @@ vi.mock("@tanstack/react-start", () => ({
 }));
 vi.mock("../server/referenceVision", () => ({
   DEFAULT_FAL_VISION_MODEL: "google/gemini-2.5-flash",
-  DEFAULT_OPENAI_VISION_MODEL: "gpt-5.4-mini",
+  DEFAULT_OPENAI_VISION_MODEL: "gpt-5",
   ReferenceVisionError: class ReferenceVisionError extends Error {},
   resolveVisionModel: () => "google/gemini-2.5-flash",
   createReferenceVisionAnalyzer: () => ({ analyze: analyzeMock, providerName: "fal", modelName: "google/gemini-2.5-flash", lastAttempts: 1 }),
@@ -42,7 +42,7 @@ describe("fluxo público de referência", () => {
     subscribeMock.mockReset().mockResolvedValue({ images: [{ url: "https://fal.test/croqui.png" }] });
   });
 
-  it("persiste a análise, recupera a ocasião e envia somente texto ao Seedream", async () => {
+  it("persiste a análise, recupera a ocasião e envia recorte anonimizado ao Seedream edit", async () => {
     const analysis = validAnalysis();
     analysis.providerExtras = [{ path: "detalhesTecnicos.manga.punho", value: "Ajustado", confidence: 0.9, evidence: "Punho visível.", sourceRole: "single" }];
     analyzeMock.mockResolvedValueOnce({ analysis, providerExtras: analysis.providerExtras });
@@ -58,13 +58,14 @@ describe("fluxo público de referência", () => {
     expect(polled.session.ocasiao).toBe("Festa");
     expect(polled.session.vision_provider).toBe("fal");
     expect(polled.session.vision_model).toBe("google/gemini-2.5-flash");
+    expect(polled.session.specification).toMatchObject({ peca: "Vestido", decote: "V (V-Neck)", saia: "Evasê" });
     expect(polled.session.reference_analysis.providerExtras).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: "detalhesTecnicos.manga.punho", value: "Ajustado" }),
     ]));
     expect(JSON.stringify(polled.session)).not.toContain("data:image");
 
-    expect(subscribeMock).toHaveBeenCalledWith("fal-ai/bytedance/seedream/v4/text-to-image", expect.objectContaining({ input: expect.not.objectContaining({ image_urls: expect.anything() }) }));
-    expect(JSON.stringify(subscribeMock.mock.calls[0][1].input)).not.toContain("data:image");
+    expect(subscribeMock).toHaveBeenCalledWith("fal-ai/bytedance/seedream/v4/edit", expect.objectContaining({ input: expect.objectContaining({ image_urls: expect.any(Array), seed: expect.any(Number) }) }));
+    expect(JSON.stringify(subscribeMock.mock.calls[0][1].input)).toContain("data:image");
     expect(JSON.stringify(subscribeMock.mock.calls[0][1].input)).toContain("não adicionar elástico no punho");
     expect((await executeServerFn(pollUploadSessionFn, { sessionId: session.id })).session.status).toBe("uploaded");
   });
@@ -80,7 +81,7 @@ describe("fluxo público de referência", () => {
       analysis.manga = { ...analysis.manga, value: isTop ? "Longa (Long Sleeve)" : null };
       analysis.saia = { ...analysis.saia, value: isTop ? null : "Evasê" };
       analysis.comprimento = { ...analysis.comprimento, value: isTop ? null : "Midi" };
-      expect(prompt).toContain(isTop ? "upper garment crop" : "lower garment crop");
+      if (imageDataUrls.length === 1) expect(prompt).toContain(isTop ? "upper garment crop" : "lower garment crop");
       return { analysis, providerExtras: [] };
     });
 
@@ -92,7 +93,7 @@ describe("fluxo público de referência", () => {
     });
 
     expect(result.status).toBe("uploaded");
-    expect(analyzeMock).toHaveBeenCalledTimes(2);
+    expect(analyzeMock).toHaveBeenCalledTimes(3);
     expect(result.analysis).toMatchObject({
       mode: "composite",
       decote: { value: "Quadrado (Square)", sourceRole: "top" },
@@ -107,7 +108,7 @@ describe("fluxo público de referência", () => {
     expect(generationInput.prompt).toContain("PARTE INFERIOR");
     expect(generationInput.prompt).toContain("Quadrado (Square)");
     expect(generationInput.prompt).toContain("Evasê");
-    expect(generationInput).not.toHaveProperty("image_urls");
+    expect(generationInput.image_urls).toEqual(expect.arrayContaining([topImage, bottomImage]));
   });
 
   it("não gera croqui quando o foco é ambíguo", async () => {
@@ -120,7 +121,12 @@ describe("fluxo público de referência", () => {
   });
 
   it("permite retry da geração sem chamar Vision novamente", async () => {
-    subscribeMock.mockRejectedValueOnce(new Error("falha Seedream")).mockResolvedValueOnce({ images: [{ url: "https://fal.test/retry.png" }] });
+    let attempts = 0;
+    subscribeMock.mockImplementation(async () => {
+      attempts += 1;
+      if (attempts <= 6) throw new Error("falha Seedream");
+      return { images: [{ url: "https://fal.test/retry.png" }] };
+    });
     const session = await createUploadSession("Cliente retry", "Festa");
     const analyzed = await executeServerFn(uploadReferenceFilesFn, { sessionId: session.id, mode: "single", images: [{ role: "single", dataUrl: jpeg }] });
     expect(analyzed.status).toBe("generation_failed");

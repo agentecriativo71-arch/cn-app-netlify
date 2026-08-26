@@ -16,7 +16,7 @@ import {
   type ReferenceSourceRole,
 } from "../lib/referenceUtils";
 
-export const DEFAULT_OPENAI_VISION_MODEL = "gpt-5.4-mini";
+export const DEFAULT_OPENAI_VISION_MODEL = "gpt-5";
 export const FAL_VISION_ENDPOINT = "openrouter/router/vision";
 export const DEFAULT_FAL_VISION_MODEL = "google/gemini-2.5-flash";
 export const DEFAULT_VISION_MAX_OUTPUT_TOKENS = 1800;
@@ -49,7 +49,11 @@ export type ReferenceVisionDiagnostic =
 
 export function resolveVisionModel(provider: VisionProvider, explicitModel?: string): string {
   if (explicitModel) return explicitModel;
-  return process.env.VISION_MODEL || (provider === "fal" ? process.env.FAL_VISION_MODEL : process.env.OPENAI_VISION_MODEL) || (provider === "fal" ? DEFAULT_FAL_VISION_MODEL : DEFAULT_OPENAI_VISION_MODEL);
+  // O modelo específico do provider vence o fallback genérico. Assim, manter
+  // VISION_MODEL=Gemini no baseline Fal não impede a comparação com
+  // OPENAI_VISION_MODEL=gpt-5 quando o provider OpenAI for habilitado.
+  const providerModel = provider === "fal" ? process.env.FAL_VISION_MODEL : process.env.OPENAI_VISION_MODEL;
+  return providerModel || process.env.VISION_MODEL || (provider === "fal" ? DEFAULT_FAL_VISION_MODEL : DEFAULT_OPENAI_VISION_MODEL);
 }
 
 export function resolveVisionMaxOutputTokens(provider: VisionProvider, explicitValue?: number): number {
@@ -137,10 +141,10 @@ function outputText(response: { output_text?: string; output?: unknown }): strin
     const value = item as { type?: string; content?: unknown[]; refusal?: unknown };
     return value.type === "refusal" || typeof value.refusal === "string" || (Array.isArray(value.content) && value.content.some((content) => content && typeof content === "object" && (content as { type?: string }).type === "refusal"));
   })) {
-    throw new ReferenceVisionError("refusal", "O GPT-5.4 mini recusou a análise da referência.");
+    throw new ReferenceVisionError("refusal", "O GPT-5 recusou a análise da referência.");
   }
   if (typeof response.output_text === "string" && response.output_text.trim()) return response.output_text;
-  throw new ReferenceVisionError("invalid_response", "A resposta do GPT-5.4 mini Vision não continha JSON estruturado.", undefined, true);
+  throw new ReferenceVisionError("invalid_response", "A resposta do GPT-5 Vision não continha JSON estruturado.", undefined, true);
 }
 
 function textFromFalValue(value: unknown, depth = 0): string | null {
@@ -449,7 +453,7 @@ export class OpenAIReferenceVisionAnalyzer {
     this.model = resolveVisionModel("openai", options.model);
     this.maxAttempts = Math.max(1, Math.min(options.maxAttempts || 2, 2));
     this.retryDelayMs = Math.max(0, options.retryDelayMs || 0);
-    // GPT-5.4 mini continua usando contrato estruturado; low/medium reduz latência.
+    // GPT-5 continua usando contrato estruturado; low/medium reduz latência.
     this.reasoningEffort = options.reasoningEffort || process.env.OPENAI_VISION_REASONING_EFFORT || "low";
     this.detail = options.detail || (process.env.OPENAI_VISION_DETAIL as VisionAnalyzerOptions["detail"] || "medium");
     this.maxOutputTokens = resolveVisionMaxOutputTokens("openai", options.maxOutputTokens);
@@ -492,7 +496,7 @@ export class OpenAIReferenceVisionAnalyzer {
       } catch (error) {
         const normalizedError = error instanceof ReferenceVisionError
           ? error
-          : new ReferenceVisionError("provider_error", "Falha transitória ao chamar o GPT-5.4 mini Vision.", { cause: error }, isRetryableProviderError(error));
+          : new ReferenceVisionError("provider_error", "Falha transitória ao chamar o GPT-5 Vision.", { cause: error }, isRetryableProviderError(error));
         lastError = normalizedError;
         if (attempt < this.maxAttempts && normalizedError.retryable && this.retryDelayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, this.retryDelayMs));
@@ -502,7 +506,7 @@ export class OpenAIReferenceVisionAnalyzer {
     }
 
     if (lastError instanceof ReferenceVisionError) throw lastError;
-    throw new ReferenceVisionError("provider_error", "O GPT-5.4 mini Vision falhou após duas tentativas.", { cause: lastError });
+    throw new ReferenceVisionError("provider_error", "O GPT-5 Vision falhou após duas tentativas.", { cause: lastError });
   }
 }
 

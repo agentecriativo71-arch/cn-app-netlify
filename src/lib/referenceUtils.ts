@@ -2,7 +2,7 @@ import { z } from "zod";
 import elementosRaw from "./elementos_vestuario.json";
 
 export const REFERENCE_ANALYSIS_VERSION = "reference-analysis-v1" as const;
-export const REFERENCE_PROMPT_VERSION = "reference-analysis-v3-parts" as const;
+export const REFERENCE_PROMPT_VERSION = "reference-analysis-v4-anon-reconcile" as const;
 export const REFERENCE_PIECES = ["Vestido", "Macacão", "Saia", "Blusa", "Calça", "Top", "Short/Bermuda", "Blazer"] as const;
 export const REFERENCE_LENGTHS = ["Curto", "Médio", "Midi", "Longo"] as const;
 export const REFERENCE_SOURCE_ROLES = ["single", "top", "bottom"] as const;
@@ -145,6 +145,7 @@ This is ${REFERENCE_PROMPT_VERSION}, using canonical contract ${REFERENCE_ANALYS
 The analysis mode is "${mode}". ${targetPiece ? `The user selected this garment type at the totem: "${targetPiece}". Treat it as the expected garment scope.` : "No garment type was selected in the session; do not invent one."} ${ocasiao ? `The intended occasion persisted in the session is: ${ocasiao}.` : "The occasion must not be invented."}
 
 FOCUS, PRIVACY AND IMAGE INSTRUCTIONS:
+- Images are anonymized garment crops: face may be masked and background neutralized. Clothing pixels remain authoritative; never infer identity from them.
 - The user-selected crop is an explicit indication of the target. Analyze only the person or garment inside that crop.
 - Confirm whether one person or garment is predominant. In the focus array, record candidateCount, status, confidence and only visible evidence.
 - Never identify a person. Never infer identity, age, ethnicity, health, body attractiveness or other personal attributes.
@@ -460,6 +461,9 @@ export function referenceAnalysisToCroquiSpecs(analysis: ReferenceAnalysis, ocas
       "Não substituir características da parte superior pelas da parte inferior, nem características da parte inferior pelas da parte superior. Não inventar campos sem evidência.",
     );
   }
+  const confirmedRendaDecision = analysis.rendaDecisao.value !== null && analysis.rendaDecisao.confidence >= REFERENCE_CATALOG_CONFIDENCE_THRESHOLD
+    ? analysis.rendaDecisao.value
+    : null;
   const specs: CroquiGenerationSpecs = {
     peca: analysis.peca.value || "",
     comprimento: optionalObservationForGeneration(analysis.comprimento),
@@ -467,12 +471,14 @@ export function referenceAnalysisToCroquiSpecs(analysis: ReferenceAnalysis, ocas
     manga: analysis.possuiManga.value === false ? null : catalogValueForGeneration(analysis.manga),
     possuiManga: optionalObservationForGeneration(analysis.possuiManga),
     saia: catalogValueForGeneration(analysis.saia),
-    renda: catalogValueForGeneration(analysis.renda),
+    // Uma decisão explícita de "não" sempre vence qualquer ruído residual
+    // que o Vision possa ter deixado no campo do tipo de renda.
+    renda: confirmedRendaDecision === false ? null : catalogValueForGeneration(analysis.renda),
     ocasiao,
     comentario: details.join(". "),
     referenceAnalysis: analysis,
   };
-  if (analysis.rendaDecisao.value !== null && analysis.rendaDecisao.confidence >= REFERENCE_CATALOG_CONFIDENCE_THRESHOLD) specs.rendaDecisao = analysis.rendaDecisao.value;
+  if (confirmedRendaDecision !== null) specs.rendaDecisao = confirmedRendaDecision;
   return specs;
 }
 

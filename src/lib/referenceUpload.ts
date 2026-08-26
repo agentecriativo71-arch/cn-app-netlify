@@ -3,6 +3,7 @@ export type ReferenceCropSelection = {
   single?: string | null;
   top?: string | null;
   bottom?: string | null;
+  detailCrops?: string[];
 };
 
 export function buildReferenceUploadPayload(sessionId: string, mode: ReferenceUploadMode, crops: ReferenceCropSelection) {
@@ -14,5 +15,5 @@ export function buildReferenceUploadPayload(sessionId: string, mode: ReferenceUp
     throw new Error("Cada imagem de referência precisa ter um recorte confirmado.");
   }
 
-  return { sessionId, mode, images };
+  return { sessionId, mode, images, ...(mode === "single" && crops.detailCrops?.length ? { detailCrops: crops.detailCrops } : {}) };
 }

@@ -53,6 +53,7 @@ function Resultado() {
             comprimento: s.comprimento,
             decote: s.decote,
             manga: s.manga,
+            possuiManga: s.possuiManga,
             saia: s.saia,
             renda: s.renda,
             comentario: s.comentario,

@@ -2,7 +2,7 @@
 
 O fluxo de referência exige que o cliente recorte a pessoa ou a peça desejada no navegador. A imagem original permanece no aparelho e não é enviada pelo aplicativo.
 
-Somente o recorte confirmado é enviado ao Gemini Vision pela Fal AI, no endpoint OpenRouter Vision, para análise. O recorte não é gravado no Supabase Storage, em disco, no PostgreSQL ou nos logs da aplicação. A geração recebe apenas as especificações textuais validadas pelo catálogo. A edição posterior pode receber somente o croqui já gerado.
+Antes do envio, o recorte confirmado é anonimizado no aparelho: rosto ocultado e margens/fundo neutralizados. Somente esse recorte anonimizado é enviado ao Gemini Vision pela Fal AI, no endpoint OpenRouter Vision, e ao Seedream v4 Edit junto do template do manequim e das referências de catálogo. Nenhum recorte é gravado no Supabase Storage, em disco, no PostgreSQL ou nos logs da aplicação; a geração nunca recebe a foto original.
 
 A sessão persiste a ocasião, o tipo de peça selecionado (`reference_piece`), o estado, a análise estruturada, códigos de erro, provedor/modelo Vision, versão do prompt e timestamps. O tipo escolhido no totem é enviado como contexto do Gemini; a decisão final compara esse alvo com a peça observada.
 

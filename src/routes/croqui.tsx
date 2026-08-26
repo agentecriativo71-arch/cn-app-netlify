@@ -46,11 +46,12 @@ function Croqui() {
       try {
         const res = await generateCroquiFn({
           data: {
-            peca: s.peca,
+            peca: s.peca || "",
             biotipo: s.biotipo,
             comprimento: s.comprimento,
             decote: s.decote,
             manga: s.manga,
+            possuiManga: s.possuiManga,
             saia: s.saia,
             renda: s.renda,
             comentario: s.comentario,
@@ -76,7 +77,30 @@ function Croqui() {
               comprimento: s.comprimento,
               decote: s.decote,
               manga: s.manga,
+              possui_manga: s.possuiManga,
               cor: s.cor,
+              saia: s.saia,
+              renda: s.renda,
+              comentario: s.comentario,
+              generation_provider: "fal",
+              generation_model: "seedream-v4",
+              generation_prompt_version: res.metadata?.promptVersion,
+              generation_candidates: res.metadata?.candidates,
+              specification: {
+                ocasiao: s.ocasiao,
+                tipoCerimonia: s.tipoCerimonia,
+                rendaDecisao: s.rendaDecisao,
+                biotipo: s.biotipo,
+                peca: s.peca,
+                comprimento: s.comprimento,
+                decote: s.decote,
+                possuiManga: s.possuiManga,
+                manga: s.manga,
+                saia: s.saia,
+                renda: s.renda,
+                cor: s.cor,
+                comentario: s.comentario,
+              },
               croqui_url: res.url,
               foto_usuario_url: s.fotoUrl,
               nome_cliente: s.nome || undefined,
@@ -133,6 +157,7 @@ function Croqui() {
             <div className="image-frame">
               <img src={s.croquiUrl!} alt="Croqui gerado" />
             </div>
+            {s.costasProposta && <p className="mt-2 text-xs text-white/60 text-center">Costas são proposta da IA</p>}
           </div>
 
           {/* Right — Summary + Actions */}

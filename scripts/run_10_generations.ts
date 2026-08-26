@@ -1,23 +1,13 @@
 import * as fal from '@fal-ai/serverless-client';
 import * as fs from 'fs';
 import * as path from 'path';
-import elementosRaw from '../src/lib/elementos_vestuario.json';
 import { getBackgroundInstruction, getMannequinUrl } from '../src/lib/noivaUtils';
+import { buildCatalogElementPromptFragment } from '../src/lib/garmentPrompt';
+import { buildCroquiReferenceImageUrls, buildCroquiReferenceRoleInstruction, FEMALE_CROQUI_INVARIANT, MANNEQUIN_TEMPLATE_INSTRUCTION, occasionInstruction } from '../src/lib/croquiGeneration';
 
 fal.config({
   credentials: process.env.FAL_KEY,
 });
-
-type Elemento = {
-  nome: string;
-  categoria: string;
-  subcategoria?: string;
-  prompt_fragment: string;
-};
-
-const ELEMENTOS_MAP: Map<string, Elemento> = new Map(
-  (elementosRaw as Elemento[]).map(e => [e.nome, e])
-);
 
 function buildElementPromptFragment(params: {
   decote?: string | null;
@@ -25,37 +15,10 @@ function buildElementPromptFragment(params: {
   saia?: string | null;
   renda?: string | null;
   peca?: string | null;
+  possuiManga?: boolean | null;
 }): string {
-  const { decote, manga, saia, renda, peca } = params;
-  const fragments: string[] = [];
-
-  if (decote) {
-    const el = ELEMENTOS_MAP.get(decote);
-    if (el?.prompt_fragment) fragments.push(el.prompt_fragment);
-  }
-  if (manga) {
-    const el = ELEMENTOS_MAP.get(manga);
-    if (el?.prompt_fragment) fragments.push(el.prompt_fragment);
-  }
-  if (saia && peca !== 'Blusa' && peca !== 'Top') {
-    const el = ELEMENTOS_MAP.get(saia);
-    if (el?.prompt_fragment) fragments.push(el.prompt_fragment);
-  }
-  if (renda) {
-    const el = ELEMENTOS_MAP.get(renda);
-    if (el?.prompt_fragment) fragments.push(el.prompt_fragment);
-  }
-
-  if (fragments.length === 0) return '';
-  return ' Incorporate the following design elements precisely:\n- ' + fragments.join('\n- ') + '\n';
+  return buildCatalogElementPromptFragment(params);
 }
-
-const _BODY_CHARS: Record<string, string> = {
-  "Ampulheta": "shoulders and hips equally wide, waist dramatically narrower — clear X-shaped silhouette with balanced curves",
-  "Triângulo": "hips visibly wider than shoulders, narrower upper body — triangular silhouette wider at the hips",
-  "Triângulo Invertido": "shoulders broader than hips, V-shaped athletic upper body, narrower lower body",
-  "Retângulo": "shoulders, waist and hips all nearly equal width with minimal waist curve — straight athletic silhouette",
-};
 
 const PECA_EN: Record<string, string> = {
   "Vestido": "dress",
@@ -141,8 +104,9 @@ const testCases = [
     ocasiao: "Noiva",
     peca: "Vestido",
     comprimento: "Longo",
-    decote: "Decote V",
-    manga: "Manga Longa",
+    decote: "V (V-Neck)",
+    manga: "Longa (Long Sleeve)",
+    possuiManga: true,
     saia: "Evasê",
     renda: "Inteira",
     rendaDecisao: true,
@@ -159,8 +123,9 @@ const testCases = [
     peca: "Vestido",
     comprimento: "Midi",
     decote: "Canoa",
-    manga: "Manga Curta",
-    saia: "Godê",
+    manga: "Curta (Short Sleeve)",
+    possuiManga: true,
+    saia: "Godê Simples",
     cor: "Azul Marinho",
     comentario: "Cinto fino marcando a cintura",
   },
@@ -172,22 +137,24 @@ const testCases = [
     ocasiao: "Festa",
     peca: "Vestido",
     comprimento: "Curto",
-    decote: "Decote V",
-    manga: "Sem Manga",
+    decote: "V (V-Neck)",
+    manga: null,
+    possuiManga: false,
     saia: "Evasê",
     cor: "Vermelho Rubi",
   },
-  // 5. Gala Retângulo
+  // 5. Festa Retângulo
   {
     id: 5,
-    name: "Caso 5: Gala - Vestido Longo Reto Gola Alta (Retângulo)",
+    name: "Caso 5: Festa - Vestido Longo Reto Gola Alta (Retângulo)",
     biotipo: "Retângulo",
-    ocasiao: "Gala",
+    ocasiao: "Festa",
     peca: "Vestido",
     comprimento: "Longo",
     decote: "Gola Alta",
-    manga: "Manga 3/4",
-    saia: "Reta",
+    manga: "3/4 (Three-Quarter)",
+    possuiManga: true,
+    saia: "Reta (Straight)",
     cor: "Preto",
     comentario: "Linhas limpas e fenda lateral sutil",
   },
@@ -199,8 +166,9 @@ const testCases = [
     ocasiao: "Noiva",
     peca: "Vestido",
     comprimento: "Midi",
-    decote: "Quadrado",
-    manga: "Manga Bufante",
+    decote: "Quadrado (Square)",
+    manga: "Bufante / Puff",
+    possuiManga: true,
     saia: "Plissada",
     rendaDecisao: false,
     tipoCerimonia: "Civil",
@@ -216,6 +184,7 @@ const testCases = [
     peca: "Macacão",
     comprimento: "Longo",
     decote: "Frente Única",
+    possuiManga: false,
     cor: "Terracota",
   },
   // 8. Saia Midi Retângulo
@@ -226,7 +195,7 @@ const testCases = [
     ocasiao: "Casual",
     peca: "Saia",
     comprimento: "Midi",
-    saia: "Lápis",
+    saia: "Lápis (Pencil)",
     cor: "Amarelo Mostarda",
   },
   // 9. Noiva Tomara que Caia Triângulo Invertido
@@ -238,6 +207,7 @@ const testCases = [
     peca: "Vestido",
     comprimento: "Longo",
     decote: "Tomara que Caia",
+    possuiManga: false,
     saia: "Evasê",
     renda: "Barrados",
     rendaDecisao: true,
@@ -253,27 +223,25 @@ const testCases = [
     peca: "Vestido",
     comprimento: "Longo",
     decote: "Ombro a Ombro",
-    manga: "Manga Flutuante",
-    saia: "Godê",
+    manga: "Flutuante (Flutter)",
+    possuiManga: true,
+    saia: "Godê Simples",
     cor: "Roxo Imperial",
   }
 ];
 
 async function generateCroqui(data: any) {
-  const { peca, biotipo, comprimento, decote, manga, saia, renda, comentario, tipoCerimonia, rendaDecisao, ocasiao } = data;
+  const { peca, biotipo, comprimento, decote, manga, possuiManga, saia, renda, comentario, tipoCerimonia, rendaDecisao, ocasiao } = data;
 
-  let bodyContext = "";
-  if (biotipo && _BODY_CHARS[biotipo]) {
-    bodyContext = ` CRITICAL — the figure MUST have body type: ${_BODY_CHARS[biotipo]}. This is NOT a standard thin fashion illustration — the body shape described must be clearly visible with realistic proportions. Do NOT draw a slender model.`;
-  }
+  const bodyContext = biotipo ? ` CRITICAL — IMAGE 1 is the sole authority for the selected female biotype ${biotipo}. Preserve its proportions exactly; do not infer or redraw this body from a textual description.` : "";
 
   const pecaEn = PECA_EN[peca] || peca || 'garment';
   const comprimentoEn = comprimento ? (COMPRIMENTO_EN[comprimento] || comprimento) : '';
-  const elementFragment = buildElementPromptFragment({ decote, manga, saia, renda, peca });
+  const elementFragment = buildElementPromptFragment({ decote, manga, possuiManga, saia, renda, peca });
   const isBottom = isBottomGarment(pecaEn, peca || '');
   const isTop = isTopGarment(pecaEn, peca || '');
   const hemInstruction = comprimento ? (COMPRIMENTO_HEM[comprimento] || '') : '';
-  const sleevelessInstruction = buildSleevelessInstruction(decote, manga);
+  const sleevelessInstruction = buildSleevelessInstruction(decote, possuiManga === false ? "Sem Manga" : manga);
 
   let leadingInstructions = '';
   const isOnePiece = pecaEn === 'dress' || pecaEn === 'jumpsuit' || ocasiao === 'Noiva';
@@ -315,20 +283,26 @@ async function generateCroqui(data: any) {
       ? `The back view must show closure details and seam lines ONLY on the garment itself (above the waist/hips). The mannequin lower body below the hem of the ${pecaEn} must remain completely bare.`
       : `CRITICAL FRONT/BACK CONSISTENCY: The back view must be structurally consistent with the front view — same neckline type, same sleeve type (or lack thereof), same overall silhouette and construction. Do NOT add structural elements to the back (straps, sleeves, coverage) that do not exist on the front. The back view should show: the reverse of the same garment construction, any back closure details (invisible zipper, buttons), back seam lines, and darts — but the overall structure must match the front exactly.${sleevelessBackRule}`;
 
-  const prompt = `${sleevelessInstruction}${leadingInstructions}
+  const prompt = `${FEMALE_CROQUI_INVARIANT}
+${MANNEQUIN_TEMPLATE_INSTRUCTION}
+${buildCroquiReferenceRoleInstruction(data)}
+${occasionInstruction(ocasiao)}
+${sleevelessInstruction}${leadingInstructions}
 Professional fashion design croqui of a ${comprimentoEn} ${pecaEn}.${elementFragment}${bodyContext}
 ${isOnePiece ? `REMINDER: This is ONE single piece of clothing — bodice and skirt/lower portion are NOT separate items. Draw it as one unified garment with continuous fabric flow from top to bottom.\n` : ''}${comentario ? `Extra design instructions: ${comentario}\n` : ''}
 CRITICAL: Show BOTH front view AND back view of the garment side by side in a single composition — front view on the left, back view on the right, as in professional fashion croquis.
 The figure is a faceless fashion mannequin form — no facial features, no face detail, just a smooth featureless head or implied head shape. The focus is entirely on the garment.
 Style: hand-drawn black pencil on white paper. Use hatching and cross-hatching for volume and shadow, directional strokes following the fabric grain to convey drape and texture, fine contour lines for garment structure, and stippling for any textured surfaces.
 Clearly render garment construction details: seam lines, darts, stitch lines, closures, hemlines, and any decorative elements.
+CAIMENTO AND MOVEMENT: show directional fabric grain, gravity-aware folds, realistic volume and hem movement.
 ${backViewInstruction}
 No color, no photographs, no realistic rendering, no 3D, no shading gradients, no painted or digital look.
 No text, no labels, no annotations, no watermarks, no faces, no facial features.`;
 
-  const result: any = await fal.subscribe("fal-ai/bytedance/seedream/v4/text-to-image", {
+  const result: any = await fal.subscribe("fal-ai/bytedance/seedream/v4/edit", {
     input: {
       prompt,
+      image_urls: buildCroquiReferenceImageUrls({ biotipo, decote, manga, saia, renda }),
       image_size: "portrait_4_3",
       num_images: 1,
       enable_safety_checker: false,

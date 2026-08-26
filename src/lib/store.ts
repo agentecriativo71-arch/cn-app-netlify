@@ -10,6 +10,7 @@ export type LookState = {
   comprimento: string | null;
   decote: string | null;
   manga: string | null;
+  possuiManga: boolean | null;
   saia: string | null;
   renda: string | null;
   cor: string | null;
@@ -23,6 +24,7 @@ export type LookState = {
   croquiUrl: string | null;
   realistaUrl: string | null;
   croquiUploadSessionId: string | null;
+  costasProposta: boolean;
   dbId: string | null;
   set: (patch: Partial<Omit<LookState, "set" | "reset">>) => void;
   reset: () => void;
@@ -31,10 +33,10 @@ export type LookState = {
 const initial = {
   nome: null,
   ocasiao: null, tipoCerimonia: null, rendaDecisao: null, biotipo: null, peca: null, comprimento: null,
-  decote: null, manga: null, saia: null, renda: null, cor: null,
+  decote: null, manga: null, possuiManga: null, saia: null, renda: null, cor: null,
   tecidoSku: null, tecidoNome: null, tecidoImageUrl: null, tecidoPantone: null,
   comentario: null, modo: null, fotoUrl: null, croquiUrl: null,
-  realistaUrl: null, croquiUploadSessionId: null, dbId: null,
+  realistaUrl: null, croquiUploadSessionId: null, costasProposta: false, dbId: null,
 };
 
 export const useLook = create<LookState>((set) => ({
