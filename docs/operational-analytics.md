@@ -3,9 +3,23 @@
 ## Pré-requisitos
 
 1. Aplicar a migration `supabase/migrations/20260826171046_app_analytics_operational.sql` no projeto Supabase alvo.
-2. Configurar `DATABASE_URL` para o pool PostgreSQL do servidor e `SUPABASE_SERVICE_KEY` para o bucket privado.
-3. Configurar `VITE_SUPABASE_ANON_KEY` para login SSR do dashboard, e definir `app_metadata.role=admin` nos usuários autorizados.
-4. Configurar `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` e `APP_BASE_URL`.
+2. Configurar `ANALYTICS_DATABASE_URL` com a conexão PostgreSQL do mesmo projeto Supabase. O runtime de rastreio nunca reutiliza `DATABASE_URL`.
+3. Manter `DATABASE_URL` apontando para o PostgreSQL interno do EasyPanel, usado por produtos, `looks` e `upload_sessions`.
+4. Configurar `VITE_SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` e `SUPABASE_SERVICE_KEY` com credenciais do projeto operacional.
+5. Configurar `CRM_SUPABASE_URL`, `CRM_SUPABASE_SERVICE_KEY` e `CN_ORGANIZATION_ID` com dados do projeto CRM.
+6. Definir `app_metadata.role=admin` nos usuários autorizados e configurar `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` e `APP_BASE_URL`.
+
+Em um container persistente do EasyPanel com saída IPv4, prefira a URL do Supavisor em session mode, porta 5432, para `ANALYTICS_DATABASE_URL`.
+
+## Migration do PostgreSQL interno
+
+Antes do primeiro deploy desta versão, execute uma única vez:
+
+```bash
+npm run migrate:app-db
+```
+
+O comando usa somente `DATABASE_URL`, aplica migrations versionadas e registra cada versão em `app_schema_migrations`. As colunas `execution_id` e `croqui_artifact_id` são referências lógicas; não recebem foreign keys porque o analytics está em outro banco.
 
 ## Rotinas diárias
 
@@ -21,6 +35,7 @@ A limpeza remove pela Storage API apenas objetos expirados (recortes após 30 di
 ## Segurança
 
 - `app_analytics` e `execution-assets` são privados; somente o servidor com `service_role` acessa esses recursos.
+- `SUPABASE_SERVICE_KEY` e `CRM_SUPABASE_SERVICE_KEY` são exclusivas do servidor e nunca usam prefixo `VITE_`.
 - O dashboard exige Supabase Auth e `app_metadata.role=admin` em cada função protegida.
 - Imagens no detalhe são URLs assinadas com validade de cinco minutos.
 - A aplicação não persiste a foto original, base64, payload bruto, prompt integral ou segredos.

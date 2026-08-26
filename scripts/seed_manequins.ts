@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const supabaseUrl = 'https://szbptnoviikflyzulhhs.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || '';
 
 if (!supabaseKey) {
   console.error('SUPABASE_SERVICE_KEY não definida. Rode: SUPABASE_SERVICE_KEY=<key> npx tsx scripts/seed_manequins.ts');

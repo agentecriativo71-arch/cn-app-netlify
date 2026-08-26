@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAdministrativeUser } from "../server/dashboardAuth";
+import { isAdministrativeUser, resolveDashboardAuthConfiguration } from "../server/dashboardAuth";
 
 describe("autorização do dashboard", () => {
   it("aceita somente role admin em app_metadata", () => {
@@ -7,5 +7,16 @@ describe("autorização do dashboard", () => {
     expect(isAdministrativeUser({ app_metadata: { role: "user" } })).toBe(false);
     expect(isAdministrativeUser({ app_metadata: {}, })).toBe(false);
     expect(isAdministrativeUser({ app_metadata: undefined })).toBe(false);
+  });
+
+  it("usa URL operacional e chave publicável sem aceitar service key", () => {
+    expect(resolveDashboardAuthConfiguration({
+      VITE_SUPABASE_URL: "https://operational.supabase.co",
+      SUPABASE_PUBLISHABLE_KEY: "publishable-key",
+      SUPABASE_SERVICE_KEY: "server-secret",
+    })).toEqual({
+      url: "https://operational.supabase.co",
+      publishableKey: "publishable-key",
+    });
   });
 });

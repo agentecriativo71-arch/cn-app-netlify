@@ -26,7 +26,7 @@ function DashboardLogin() {
   };
 
   return (
-    <section className="max-w-md mx-auto card-soft p-6">
+    <section className="w-full max-w-md mx-auto card-soft p-6">
       <h2 className="text-xl font-semibold text-white mb-1">Acesso restrito</h2>
       <p className="text-sm text-white/65 mb-6">Entre com uma conta administrativa.</p>
       <form className="space-y-4" onSubmit={submit}>

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getOperationalSupabaseAdminClient } from "./supabaseClients";
 
 export const EXECUTION_ASSETS_BUCKET = "execution-assets";
 const MAX_ASSET_BYTES = 10 * 1024 * 1024;
@@ -116,12 +117,8 @@ export class SupabasePrivateStorageBoundary implements PrivateStorageBoundary {
 }
 
 export function createExecutionAssetStoreFromEnvironment(): ExecutionAssetStore | null {
-  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
-  const serviceKey = process.env.SUPABASE_SERVICE_KEY || "";
-  if (!url || !serviceKey) return null;
-  const client = createClient(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const client = getOperationalSupabaseAdminClient();
+  if (!client) return null;
   return new ExecutionAssetStore(new SupabasePrivateStorageBoundary(client));
 }
 

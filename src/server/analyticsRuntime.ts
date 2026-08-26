@@ -1,4 +1,4 @@
-import { getDatabasePool } from "./db";
+import { getAnalyticsDatabasePool } from "./analyticsDatabase";
 import {
   FailOpenOperationalAnalytics,
   InMemoryAnalyticsRepository,
@@ -31,7 +31,7 @@ class UnavailableAnalyticsRepository implements AnalyticsRepository {
 }
 
 const testRepository = new InMemoryAnalyticsRepository();
-const databasePool = getDatabasePool();
+const databasePool = getAnalyticsDatabasePool();
 const repository: AnalyticsRepository = process.env.NODE_ENV === "test"
   ? testRepository
   : databasePool

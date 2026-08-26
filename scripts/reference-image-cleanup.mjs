@@ -12,7 +12,7 @@ function getStorageApi(client) {
 
 function getStorageClient() {
   const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY;
+  const key = process.env.SUPABASE_SERVICE_KEY;
   if (!url || !key) throw new Error("VITE_SUPABASE_URL e SUPABASE_SERVICE_KEY são obrigatórios para limpar referências.");
   return createClient(url, key);
 }

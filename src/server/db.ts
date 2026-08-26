@@ -1,14 +1,9 @@
 import pg from 'pg';
-import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import type { ReferenceAnalysis, ReferencePiece } from '../lib/referenceUtils';
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
-
-const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
-const supabaseFallback = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 let pool: pg.Pool | null = null;
 const dbUrl = process.env.DATABASE_URL;
@@ -34,7 +29,7 @@ if (dbUrl) {
     ssl: useSsl ? { rejectUnauthorized: false } : false
   });
 } else {
-  console.log('[DB] DATABASE_URL not set. Falling back to Supabase for looks database...');
+  console.warn('[DB] DATABASE_URL não configurada; produtos, looks e sessões permanecerão indisponíveis fora do modo de teste.');
 }
 
 export function getDatabasePool(): pg.Pool | null {
@@ -64,20 +59,8 @@ export async function searchProducts(term: string): Promise<ProductSearchResult[
     `;
     const res = await pool.query(query, [`%${cleanTerm}%`]);
     return res.rows;
-  } else {
-    if (!supabaseFallback) return [];
-    const { data, error } = await supabaseFallback
-      .from('products')
-      .select('id, name, sku, image_url, pantone, tag')
-      .or(`sku.ilike.%${cleanTerm}%,name.ilike.%${cleanTerm}%`)
-      .limit(10);
-
-    if (error) {
-      console.warn('[DB] Error searching products on Supabase:', error);
-      return [];
-    }
-    return data || [];
   }
+  return [];
 }
 
 export async function saveLook(data: any): Promise<string> {
@@ -115,17 +98,8 @@ export async function saveLook(data: any): Promise<string> {
     ];
     const res = await pool.query(query, values);
     return res.rows[0].id;
-  } else {
-    if (!supabaseFallback) throw new Error('DATABASE_URL não configurado e Supabase fallback indisponível.');
-    const safeData = { ...data, foto_usuario_url: null };
-    const { data: dbData, error } = await supabaseFallback
-      .from('looks')
-      .insert([{ ...safeData, foto_usuario_url: null }])
-      .select('id')
-      .single();
-    if (error) throw error;
-    return dbData.id;
   }
+  throw new Error('DATABASE_URL não configurada para persistir looks.');
 }
 
 export async function updateLook(id: string, update: any): Promise<void> {
@@ -143,17 +117,9 @@ export async function updateLook(id: string, update: any): Promise<void> {
     `;
     const values = [id, ...entries.map(([, value]) => value)];
     await pool.query(query, values);
-  } else {
-    if (!supabaseFallback) throw new Error('DATABASE_URL não configurado e Supabase fallback indisponível.');
-    const allowedColumns = new Set(['realista_url', 'nome_cliente', 'telefone_cliente']);
-    const safeUpdate = Object.fromEntries(Object.entries(update).filter(([key]) => allowedColumns.has(key)));
-    if (!Object.keys(safeUpdate).length) throw new Error('Nenhum campo permitido para atualização do look.');
-    const { error } = await supabaseFallback
-      .from('looks')
-      .update(safeUpdate)
-      .eq('id', id);
-    if (error) throw error;
+    return;
   }
+  throw new Error('DATABASE_URL não configurada para atualizar looks.');
 }
 
 export type UploadSession = {

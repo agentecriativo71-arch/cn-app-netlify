@@ -1,20 +1,31 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { getExecutionDetailFn } from "@/server/dashboardApi";
-import type { ExecutionArtifactRecord, ExecutionDetail } from "@/server/operationalAnalytics";
+import type { ExecutionDetailLoadResult } from "@/server/dashboardApi";
 
 export const Route = createFileRoute("/dashboard/execucoes/$executionId")({
   loader: async ({ params }) => {
-    try {
-      return await getExecutionDetailFn({ data: { executionId: params.executionId } });
-    } catch {
+    const result = await getExecutionDetailFn({ data: { executionId: params.executionId } }) as ExecutionDetailLoadResult;
+    if (result.status === "unauthorized") {
       throw redirect({ to: "/dashboard/login" });
     }
+    return result;
   },
   component: ExecutionDetailPage,
 });
 
 function ExecutionDetailPage() {
-  const detail = Route.useLoaderData() as Omit<ExecutionDetail, "artifacts"> & { artifacts: Array<ExecutionArtifactRecord & { signedUrl?: string | null }> };
+  const result = Route.useLoaderData() as Exclude<ExecutionDetailLoadResult, { status: "unauthorized" }>;
+  if (result.status !== "ready") {
+    return (
+      <section className="card-soft p-6" role="alert">
+        <h2 className="text-lg font-semibold text-white">{result.status === "not_found" ? "Execução não encontrada" : "Rastreabilidade indisponível"}</h2>
+        <p className="text-sm text-white/65 mt-2">{result.status === "not_found" ? "O identificador informado não possui execução registrada." : "Não foi possível consultar o banco operacional. Tente novamente."}</p>
+        <Link to="/dashboard" className="inline-block text-sm text-[#E5D3A2] underline mt-4">← Voltar</Link>
+      </section>
+    );
+  }
+
+  const detail = result.data;
   return (
     <section>
       <Link to="/dashboard" className="text-sm text-[#E5D3A2] underline">← Voltar</Link>

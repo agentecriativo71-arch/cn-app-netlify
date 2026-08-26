@@ -1,14 +1,11 @@
 import { getRequestHeader, getResponseHeaders, setResponseHeader } from "@tanstack/react-start/server";
 import { createServerClient, parseCookieHeader, serializeCookieHeader } from "@supabase/ssr";
-import { isAdministrativeUser } from "./dashboardAuth";
-
-type AuthUser = { id: string; email?: string; app_metadata?: Record<string, unknown> };
+import { isAdministrativeUser, resolveDashboardAuthConfiguration, type DashboardAuthUser } from "./dashboardAuthPolicy";
 
 function createRequestSupabaseClient() {
-  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
-  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || "";
-  if (!url || !key) throw new Error("Autenticação administrativa não configurada.");
-  return createServerClient(url, key, {
+  const configuration = resolveDashboardAuthConfiguration(process.env);
+  if (!configuration.url || !configuration.publishableKey) throw new Error("Autenticação administrativa não configurada.");
+  return createServerClient(configuration.url, configuration.publishableKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     cookies: {
       getAll: () => parseCookieHeader(getRequestHeader("cookie") || ""),
@@ -21,11 +18,11 @@ function createRequestSupabaseClient() {
   });
 }
 
-export async function requireAdministrativeUser(): Promise<AuthUser> {
+export async function requireAdministrativeUser(): Promise<DashboardAuthUser> {
   const supabase = createRequestSupabaseClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user || !isAdministrativeUser(data.user)) throw new Error("Acesso administrativo negado.");
-  return data.user as AuthUser;
+  return data.user as DashboardAuthUser;
 }
 
 export async function signInAdmin(data: { email?: unknown; password?: unknown }) {

@@ -161,6 +161,7 @@
 
   /* ── Containers ────────────────────────────────── */
   .container-app {
+    box-sizing: border-box;
     width: 100%;
     max-width: 672px;
     margin-left: auto;
@@ -175,6 +176,7 @@
   }
 
   .container-wide {
+    box-sizing: border-box;
     width: 100%;
     max-width: 960px;
     margin-left: auto;
@@ -318,6 +320,7 @@
 
   /* ── Cards ─────────────────────────────────────── */
   .card-soft {
+    box-sizing: border-box;
     background: rgba(255, 255, 255, 0.07) !important;
     backdrop-filter: blur(16px) !important;
     -webkit-backdrop-filter: blur(16px) !important;

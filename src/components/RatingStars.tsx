@@ -5,16 +5,28 @@ import { rateArtifactFn } from "@/server/api";
 type RatingStarsProps = {
   artifactId: string | null;
   executionId: string | null;
+  trackingStatus?: "healthy" | "degraded" | null;
   label?: string;
 };
 
-export function RatingStars({ artifactId, executionId, label = "Avalie este resultado" }: RatingStarsProps) {
+export function RatingStars({ artifactId, executionId, trackingStatus, label = "Avalie este resultado" }: RatingStarsProps) {
   const [rating, setRating] = useState<number | null>(null);
   const [hovered, setHovered] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  if (!artifactId) return null;
+  if (!artifactId) {
+    return (
+      <div className="card-soft mt-4 p-4" aria-label={label}>
+        <p className="text-xs font-semibold mb-1" style={{ color: "var(--color-muted-foreground)" }}>{label}</p>
+        <p className="text-xs text-amber-100/80" role="status">
+          {trackingStatus === "degraded"
+            ? "Avaliação indisponível porque este resultado não foi rastreado."
+            : "Avaliação indisponível para este resultado antigo. Gere novamente para avaliar."}
+        </p>
+      </div>
+    );
+  }
 
   const submit = async (score: number) => {
     if (saving) return;
@@ -33,7 +45,7 @@ export function RatingStars({ artifactId, executionId, label = "Avalie este resu
 
   const visibleRating = hovered || rating || 0;
   return (
-    <div className="card-soft" aria-label={label}>
+    <div className="card-soft mt-4 p-4" aria-label={label}>
       <p className="text-xs font-semibold mb-2" style={{ color: "var(--color-muted-foreground)" }}>{label}</p>
       <div className="flex items-center gap-1" onMouseLeave={() => setHovered(null)}>
         {[1, 2, 3, 4, 5].map((score) => (

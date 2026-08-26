@@ -4,11 +4,12 @@ import { readFile } from "node:fs/promises";
 import { PostgresAnalyticsRepository } from "../server/postgresAnalyticsRepository";
 import { OperationalAnalytics } from "../server/operationalAnalytics";
 
-const enabled = Boolean(process.env.TEST_DATABASE_URL);
+const analyticsTestDatabaseUrl = process.env.TEST_ANALYTICS_DATABASE_URL || process.env.TEST_DATABASE_URL;
+const enabled = Boolean(analyticsTestDatabaseUrl);
 
 describe.skipIf(!enabled)("rastreabilidade PostgreSQL (opt-in)", () => {
   it("aplica a migration e persiste execução, etapa e artefato", async () => {
-    const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
+    const pool = new pg.Pool({ connectionString: analyticsTestDatabaseUrl });
     try {
       const migration = await readFile(new URL("../../supabase/migrations/20260826171046_app_analytics_operational.sql", import.meta.url), "utf8");
       await pool.query(migration);

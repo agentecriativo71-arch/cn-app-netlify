@@ -1,6 +1,5 @@
 import { createServerFn } from '@tanstack/react-start';
 import * as fal from '@fal-ai/serverless-client';
-import { createClient } from '@supabase/supabase-js';
 import { saveLook, updateLook, searchProducts, createUploadSession, getUploadSession, confirmUploadSession, updateUploadSession, updateUploadSessionStatus, claimUploadSessionForGeneration, type UploadSession } from './db';
 import type { JsonObject } from './db';
 import { getBackgroundInstruction, getMannequinUrl, buildSleevelessInstruction, buildMannequinSurfaceInstruction, SLEEVELESS_DECOTES } from '../lib/noivaUtils';
@@ -28,11 +27,10 @@ import { failOpenOperationalAnalytics, operationalAnalytics } from './analyticsR
 import type { FailOpenTrackedExecution, FailOpenTrackedStep } from './operationalAnalytics';
 import { deriveGarmentDetailDataUrls } from './executionAssets';
 import { getExecutionAssetStore } from './executionAssetsRuntime';
+import { getCrmSupabaseAdminClient, getOperationalSupabaseAdminClient } from './supabaseClients';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+const crmSupabase = getCrmSupabaseAdminClient();
+const operationalSupabase = getOperationalSupabaseAdminClient();
 
 const PECA_EN: Record<string, string> = {
   "Vestido": "dress",
@@ -788,14 +786,14 @@ export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
         if (!orgId) {
           throw new Error("CN_ORGANIZATION_ID não configurado no ambiente.");
         }
-        if (!supabase) {
+        if (!crmSupabase) {
           throw new Error("Supabase do CRM não configurado no ambiente.");
         }
         const phone = targetNumber;
 
         // 1. Garantir contato na tabela crm_contacts
         let contactId: string | null = null;
-        const resCont = await supabase
+        const resCont = await crmSupabase
           .from("crm_contacts")
           .select("id, name")
           .eq("organization_id", orgId)
@@ -808,7 +806,7 @@ export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
         if (resCont.data && resCont.data.length > 0) {
           contactId = resCont.data[0].id;
           if (resCont.data[0].name.startsWith("Paciente") || !resCont.data[0].name) {
-            const upRes = await supabase
+            const upRes = await crmSupabase
               .from("crm_contacts")
               .update({ name: nome })
               .eq("id", contactId);
@@ -817,7 +815,7 @@ export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
             }
           }
         } else {
-          const insCont = await supabase
+          const insCont = await crmSupabase
             .from("crm_contacts")
             .insert({
               organization_id: orgId,
@@ -840,7 +838,7 @@ export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
           const stageName = "Criador de Looks";
           let stageId: string | null = null;
           
-          const resStages = await supabase
+          const resStages = await crmSupabase
             .from("crm_stages")
             .select("id, name, position")
             .eq("organization_id", orgId);
@@ -856,7 +854,7 @@ export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
             stageId = targetStage.id;
           } else {
             const maxPos = Math.max(...stages.map(s => s.position || 0), 0);
-            const insStage = await supabase
+            const insStage = await crmSupabase
               .from("crm_stages")
               .insert({
                 organization_id: orgId,
@@ -877,7 +875,7 @@ export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
 
           if (stageId) {
             // 3. Verificar duplicidade de Deal no mesmo estágio
-            const resDupDeals = await supabase
+            const resDupDeals = await crmSupabase
               .from("crm_deals")
               .select("id")
               .eq("contact_id", contactId)
@@ -893,7 +891,7 @@ export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
 
             if (!dealExists) {
               const dealTitle = `Look Criativo - ${peca || "Personalizado"}`;
-              const insDeal = await supabase
+              const insDeal = await crmSupabase
                 .from("crm_deals")
                 .insert({
                   organization_id: orgId,
@@ -913,7 +911,7 @@ export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
               if (insDeal.data) {
                 dealId = insDeal.data.id;
                 
-                const insAct = await supabase
+                const insAct = await crmSupabase
                   .from("crm_activity")
                   .insert({
                     deal_id: dealId,
@@ -948,7 +946,7 @@ export const sendWhatsAppLookFn: any = createServerFn({ method: 'POST' })
 
               const noteContent = `Look gerado pela IA:\n${detailsList}\n\nCroqui: ${croquiUrl}${realistaUrl ? `\nFoto Realista: ${realistaUrl}` : ""}`;
 
-              const insNote = await supabase
+              const insNote = await crmSupabase
                 .from("crm_notes")
                 .insert({
                   organization_id: orgId,
@@ -1002,11 +1000,11 @@ export const confirmUploadFn: any = createServerFn({ method: 'POST' })
 
 async function uploadBase64ToStorage(fileBase64: string, path: string): Promise<string> {
   try {
-    if (!supabase) {
+    if (!operationalSupabase) {
       return fileBase64.startsWith('data:') ? fileBase64 : `data:image/jpeg;base64,${fileBase64}`;
     }
     const buffer = Buffer.from(fileBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
-    const { error } = await supabase.storage
+    const { error } = await operationalSupabase.storage
       .from('croqui-uploads')
       .upload(path, buffer, {
         contentType: 'image/jpeg',
@@ -1018,7 +1016,7 @@ async function uploadBase64ToStorage(fileBase64: string, path: string): Promise<
       return fileBase64.startsWith('data:') ? fileBase64 : `data:image/jpeg;base64,${fileBase64}`;
     }
 
-    const { data: publicUrlData } = supabase.storage
+    const { data: publicUrlData } = operationalSupabase.storage
       .from('croqui-uploads')
       .getPublicUrl(path);
 

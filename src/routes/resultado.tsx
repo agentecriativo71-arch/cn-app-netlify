@@ -124,7 +124,7 @@ function Resultado() {
             <div className="image-frame">
               <img src={s.realistaUrl!} alt="Look final" />
             </div>
-            <RatingStars artifactId={s.realistaArtifactId} executionId={s.executionId} label="Esta foto realista ficou satisfatória?" />
+            <RatingStars artifactId={s.realistaArtifactId} executionId={s.executionId} trackingStatus={s.trackingStatus} label="Esta foto realista ficou satisfatória?" />
           </div>
 
           {/* Right — Info + Actions */}

@@ -185,7 +185,7 @@ function Croqui() {
             <div className="image-frame">
               <img src={s.croquiUrl!} alt="Croqui gerado" />
             </div>
-            <RatingStars artifactId={s.croquiArtifactId} executionId={s.executionId} label="Este croqui ficou satisfatório?" />
+            <RatingStars artifactId={s.croquiArtifactId} executionId={s.executionId} trackingStatus={s.trackingStatus} label="Este croqui ficou satisfatório?" />
             {s.costasProposta && <p className="mt-2 text-xs text-white/60 text-center">Costas são proposta da IA</p>}
           </div>
 

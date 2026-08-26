@@ -70,7 +70,12 @@ describe("integração do pipeline de tecido na geração realista", () => {
       ocasiao: "Festa",
     });
 
-    expect(result).toMatchObject({ url: "https://fal.test/candidate-1.png", trackingStatus: "healthy" });
+    expect(result).toMatchObject({
+      url: "https://fal.test/candidate-1.png",
+      trackingStatus: "healthy",
+      executionId: expect.any(String),
+      artifactId: expect.any(String),
+    });
     expect(subscribeMock).toHaveBeenCalledTimes(5);
 
     const editCalls = subscribeMock.mock.calls.filter(([endpoint]) => endpoint === "fal-ai/bytedance/seedream/v4/edit");
@@ -104,7 +109,12 @@ describe("integração do pipeline de tecido na geração realista", () => {
       tecidoNome: "Seda Floral",
     });
 
-    expect(result).toMatchObject({ url: "https://fal.test/person.png", trackingStatus: "healthy" });
+    expect(result).toMatchObject({
+      url: "https://fal.test/person.png",
+      trackingStatus: "healthy",
+      executionId: expect.any(String),
+      artifactId: expect.any(String),
+    });
     expect(subscribeMock).toHaveBeenCalledTimes(1);
     expect((subscribeMock.mock.calls[0][1] as any).input.image_urls).toEqual([
       "https://example.com/person.jpg",
@@ -130,7 +140,12 @@ describe("integração do pipeline de tecido na geração realista", () => {
       tecidoNome: "Seda Floral",
     });
 
-    expect(result).toMatchObject({ url: "https://fal.test/legacy.png", trackingStatus: "healthy" });
+    expect(result).toMatchObject({
+      url: "https://fal.test/legacy.png",
+      trackingStatus: "healthy",
+      executionId: expect.any(String),
+      artifactId: expect.any(String),
+    });
     expect(subscribeMock).toHaveBeenCalledTimes(2);
     expect((subscribeMock.mock.calls[1][1] as any).input.image_urls).toEqual([
       "https://szbptnoviikflyzulhhs.supabase.co/storage/v1/object/public/elementos/manequins/ampulheta.jpg",
