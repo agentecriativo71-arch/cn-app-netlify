@@ -5,9 +5,9 @@ import { InMemoryAnalyticsRepository, OperationalAnalytics } from "../server/ope
 describe("limpeza dos artefatos de execução", () => {
   it("remove artefato expirado pela Storage API e mantém o registro analítico", async () => {
     const repository = new InMemoryAnalyticsRepository();
-    const analytics = new OperationalAnalytics(repository);
     const now = new Date("2026-08-26T12:00:00Z");
-    const execution = await analytics.startExecution({ source: "reference" });
+    const analyticsAtFixedTime = new OperationalAnalytics(repository, () => now);
+    const execution = await analyticsAtFixedTime.startExecution({ source: "reference" });
     const artifact = await execution.recordArtifact({ kind: "reference_crop", storageBucket: "execution-assets", storagePath: "reference/x.jpg", retentionDays: -1 });
     const remove = vi.fn(async () => undefined);
 
@@ -15,7 +15,7 @@ describe("limpeza dos artefatos de execução", () => {
 
     expect(result).toMatchObject({ scanned: 1, deleted: 1, failed: 0 });
     expect(remove).toHaveBeenCalledWith(["reference/x.jpg"]);
-    expect((await analytics.getExecutionDetail(execution.executionId))?.artifacts[0]).toMatchObject({ id: artifact.artifactId, status: "deleted" });
+    expect((await analyticsAtFixedTime.getExecutionDetail(execution.executionId))?.artifacts[0]).toMatchObject({ id: artifact.artifactId, status: "deleted" });
   });
 
   it("registra a falha e incrementa tentativa quando Storage falha", async () => {
