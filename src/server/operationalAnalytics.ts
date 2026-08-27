@@ -500,6 +500,15 @@ export class FailOpenTrackedExecution {
     }
   }
 
+  async updateArtifact(id: string, patch: Parameters<TrackedExecution["updateArtifact"]>[1]): Promise<void> {
+    try {
+      await this.execution.updateArtifact(id, patch);
+    } catch {
+      this.degrade();
+      this.logger.warn("[TRACKING] atualização do artefato falhou", { code: "tracking_artifact_write_failed" });
+    }
+  }
+
   async complete(): Promise<void> {
     try {
       await this.execution.complete();
@@ -625,6 +634,10 @@ export class TrackedExecution {
       rating: null,
     });
     return { artifactId: id };
+  }
+
+  async updateArtifact(id: string, patch: Partial<ExecutionArtifactRecord>): Promise<void> {
+    await this.repository.updateArtifact(id, patch);
   }
 
   async complete(): Promise<void> {

@@ -146,6 +146,7 @@ export class PostgresAnalyticsRepository implements AnalyticsRepository {
 
   async updateArtifact(id: string, patch: Partial<ExecutionArtifactRecord>): Promise<void> {
     const columns: Record<string, string> = {
+      kind: "kind",
       selected: "selected",
       status: "status",
       storageBucket: "storage_bucket",

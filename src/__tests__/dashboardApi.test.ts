@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadDashboardOverview, loadExecutionDetail } from "../server/dashboardApi";
+import { getDashboardSpecificationEntries, loadDashboardOverview, loadExecutionDetail } from "../server/dashboardApi";
 
 describe("carregamento do dashboard", () => {
   it("distingue usuário não autorizado de falha do analytics", async () => {
@@ -55,5 +55,17 @@ describe("carregamento do dashboard", () => {
     });
 
     expect(result).toEqual({ status: "unavailable" });
+  });
+
+  it("formata no detalhe todos os campos selecionados pelo usuário", () => {
+    expect(getDashboardSpecificationEntries({
+      peca: "Calça",
+      biotipo: "Ampulheta",
+      possuiManga: false,
+    })).toEqual([
+      { key: "peca", label: "Peça", value: "Calça" },
+      { key: "biotipo", label: "Biotipo", value: "Ampulheta" },
+      { key: "possuiManga", label: "Possui manga", value: "Não" },
+    ]);
   });
 });

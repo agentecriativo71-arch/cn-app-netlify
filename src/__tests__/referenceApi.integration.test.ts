@@ -20,6 +20,7 @@ import { createUploadSession } from "../server/db";
 import { normalizeReferenceAnalysis, REFERENCE_ANALYSIS_VERSION } from "../lib/referenceUtils";
 import { ExecutionAssetStore, type PrivateStorageBoundary } from "../server/executionAssets";
 import { setExecutionAssetStoreForTests } from "../server/executionAssetsRuntime";
+import { operationalAnalytics } from "../server/analyticsRuntime";
 
 const jpeg = "data:image/jpeg;base64,/9j/AA==";
 
@@ -168,6 +169,39 @@ describe("fluxo público de referência", () => {
       expect(JSON.stringify(errorLog.mock.calls)).toContain("vision_failed");
     } finally {
       errorLog.mockRestore();
+    }
+  });
+
+  it("persiste os seis candidatos rejeitados com a seleção do usuário", async () => {
+    const previousGate = process.env.CROQUI_VISUAL_GATE;
+    process.env.CROQUI_VISUAL_GATE = "true";
+    analyzeMock.mockImplementation(async ({ prompt }: { prompt?: string }) => {
+      if (prompt?.startsWith("Evaluate this generated fashion croqui")) {
+        const analysis = validAnalysis();
+        analysis.peca = { ...analysis.peca, value: "Calça" };
+        return { analysis, providerExtras: [] };
+      }
+      return { analysis: validAnalysis(), providerExtras: [] };
+    });
+
+    try {
+      const session = await createUploadSession("Cliente auditoria", "Festa", "Vestido");
+      const result = await executeServerFn(uploadReferenceFilesFn, {
+        sessionId: session.id,
+        mode: "single",
+        images: [{ role: "single", dataUrl: jpeg }],
+      });
+
+      expect(result).toMatchObject({ status: "generation_failed", executionId: expect.any(String) });
+      const detail = await operationalAnalytics.getExecutionDetail(result.executionId);
+      expect(detail?.specification).toMatchObject({ ocasiao: "Festa", peca: "Vestido" });
+      expect(detail?.status).toBe("failed");
+      const generatedArtifacts = detail?.artifacts.filter((artifact) => artifact.kind === "croqui_candidate") || [];
+      expect(generatedArtifacts).toHaveLength(6);
+      expect(generatedArtifacts.every((artifact) => artifact.storagePath?.startsWith("generated/") && artifact.metadata.seed)).toBe(true);
+    } finally {
+      if (previousGate === undefined) delete process.env.CROQUI_VISUAL_GATE;
+      else process.env.CROQUI_VISUAL_GATE = previousGate;
     }
   });
 });

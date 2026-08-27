@@ -237,7 +237,45 @@ No text, no labels, no annotations, no watermarks, no faces, no facial features.
 async function generateCroquiCandidates(request: TypedCroquiGenerationRequest, execution: FailOpenTrackedExecution | null = null): Promise<{ url: string; metadata: CroquiGenerationMetadata; artifactId: string | null }> {
   const candidates: CroquiGenerationMetadata["candidates"] = [];
   const candidateStepIds = new Map<number, string>();
+  const candidateArtifactIds = new Map<number, string>();
   const overallStep = await execution?.startStep({ stage: 'croqui_generation', promptVersion: CROQUI_PROMPT_VERSION });
+
+  // Cada imagem gerada é copiada para o bucket privado e registrada antes da
+  // seleção. Assim, uma execução que termina sem candidato aprovado continua
+  // auditável, sem persistir a URL temporária do provedor.
+  const persistCandidateArtifact = async (candidate: CroquiGenerationMetadata["candidates"][number]): Promise<void> => {
+    if (!execution || !candidate.url) return;
+    const storageStep = await execution.startStep({
+      stage: 'generated_artifact_storage',
+      parentStepId: candidateStepIds.get(candidate.seed) || overallStep?.stepId,
+      seed: candidate.seed,
+    });
+    let stored: { storageBucket: string; storagePath: string; mimeType: string } | null = null;
+    try {
+      const assets = getExecutionAssetStore();
+      if (!assets) throw new Error('storage_unavailable');
+      stored = await assets.saveGeneratedImage({ executionId: execution.executionId, kind: 'croqui_candidate', sourceUrl: candidate.url });
+      await storageStep?.succeed({ provider: 'supabase', model: 'storage', metadata: { kind: 'croqui_candidate' } });
+    } catch {
+      await storageStep?.fail('generated_artifact_storage_failed');
+    }
+    const artifact = await execution.recordArtifact({
+      kind: 'croqui_candidate',
+      selected: false,
+      stepId: candidateStepIds.get(candidate.seed) || null,
+      // O URL temporário do provedor pode conter tokens; a URL oficial será
+      // criada sob demanda pelo dashboard a partir do objeto privado.
+      sourceUrl: null,
+      storageBucket: stored?.storageBucket || null,
+      storagePath: stored?.storagePath || null,
+      mimeType: stored?.mimeType || null,
+      status: stored ? 'available' : 'storage_failed',
+      metadata: { seed: candidate.seed, score: candidate.score, rejected: candidate.rejected, rejectionReasons: candidate.rejectionReasons },
+      retentionDays: 90,
+    });
+    if (artifact) candidateArtifactIds.set(candidate.seed, artifact.artifactId);
+  };
+
   for (let batch = 0; batch < 2; batch += 1) {
     for (let index = 0; index < CROQUI_CANDIDATE_COUNT; index += 1) {
       const seed = 260826 + batch * CROQUI_CANDIDATE_COUNT + index;
@@ -248,7 +286,9 @@ async function generateCroquiCandidates(request: TypedCroquiGenerationRequest, e
         if (generationStep) candidateStepIds.set(seed, generationStep.stepId);
         await generationStep?.succeed({ provider: 'fal', model: CROQUI_GENERATOR, metadata: { batch: batch + 1 } });
         let visual: CroquiVisualAssessment | undefined;
-        if (process.env.NODE_ENV !== 'test' && process.env.CROQUI_VISUAL_GATE !== 'false') {
+        const visualGateEnabled = process.env.CROQUI_VISUAL_GATE === 'true'
+          || (process.env.NODE_ENV !== 'test' && process.env.CROQUI_VISUAL_GATE !== 'false');
+        if (visualGateEnabled) {
           const evaluationStep = await execution?.startStep({ stage: 'croqui_candidate_evaluation', parentStepId: generationStep?.stepId || overallStep?.stepId, attempt, seed, promptVersion: CROQUI_PROMPT_VERSION });
           try {
             const evaluator = createReferenceVisionAnalyzer();
@@ -257,11 +297,15 @@ async function generateCroquiCandidates(request: TypedCroquiGenerationRequest, e
             await evaluationStep?.succeed({ provider: evaluator.providerName, model: evaluator.modelName });
           } catch {
             await evaluationStep?.fail('visual_gate_failed');
-            candidates.push({ url, seed, score: 0, rejected: true, rejectionReasons: ['visual_gate_failed'] });
+            const candidate = { url, seed, score: 0, rejected: true, rejectionReasons: ['visual_gate_failed'] };
+            candidates.push(candidate);
+            await persistCandidateArtifact(candidate);
             continue;
           }
         }
-        candidates.push(scoreCroquiCandidate(request, buildCandidateGatePrompt(request), url, seed, visual));
+        const candidate = scoreCroquiCandidate(request, buildCandidateGatePrompt(request), url, seed, visual);
+        candidates.push(candidate);
+        await persistCandidateArtifact(candidate);
       } catch {
         await generationStep?.fail('generation_failed');
         candidates.push({ url: "", seed, score: 0, rejected: true, rejectionReasons: ["generation_failed"] });
@@ -269,37 +313,8 @@ async function generateCroquiCandidates(request: TypedCroquiGenerationRequest, e
     }
     try {
       const selected = chooseCroquiCandidate(candidates);
-      let selectedArtifactId: string | null = null;
-      for (const candidate of candidates) {
-        if (!candidate.url) continue;
-        const isSelected = candidate.seed === selected.seed;
-        const kind = isSelected ? 'croqui' : 'croqui_candidate';
-        const storageStep = await execution?.startStep({ stage: 'generated_artifact_storage', parentStepId: candidateStepIds.get(candidate.seed) || overallStep?.stepId, seed: candidate.seed });
-        let stored: { storageBucket: string; storagePath: string; mimeType: string } | null = null;
-        try {
-          const assets = getExecutionAssetStore();
-          if (!assets) throw new Error('storage_unavailable');
-          stored = await assets.saveGeneratedImage({ executionId: execution!.executionId, kind, sourceUrl: candidate.url });
-          await storageStep?.succeed({ provider: 'supabase', model: 'storage', metadata: { kind } });
-        } catch {
-          await storageStep?.fail('generated_artifact_storage_failed');
-        }
-        const artifact = await execution?.recordArtifact({
-          kind,
-          selected: isSelected,
-          stepId: candidateStepIds.get(candidate.seed) || null,
-          // O URL temporário do provedor não é fonte analítica e pode conter
-          // tokens; o artefato oficial é o objeto privado abaixo.
-          sourceUrl: null,
-          storageBucket: stored?.storageBucket || null,
-          storagePath: stored?.storagePath || null,
-          mimeType: stored?.mimeType || null,
-          status: stored ? 'available' : 'storage_failed',
-          metadata: { seed: candidate.seed, score: candidate.score, rejected: candidate.rejected, rejectionReasons: candidate.rejectionReasons },
-          retentionDays: 90,
-        });
-        if (isSelected) selectedArtifactId = artifact?.artifactId || null;
-      }
+      const selectedArtifactId = candidateArtifactIds.get(selected.seed) || null;
+      if (selectedArtifactId) await execution?.updateArtifact(selectedArtifactId, { kind: 'croqui', selected: true });
       await overallStep?.succeed({ provider: 'fal', model: CROQUI_GENERATOR, metadata: { candidateCount: candidates.length, selectedSeed: selected.seed, batches: batch + 1 } });
       return { url: selected.url, metadata: { generator: CROQUI_GENERATOR, promptVersion: CROQUI_PROMPT_VERSION, candidates }, artifactId: selectedArtifactId };
     } catch {

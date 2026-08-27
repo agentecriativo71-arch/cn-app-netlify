@@ -3,6 +3,35 @@ import { operationalAnalytics } from "./analyticsRuntime";
 import { getExecutionAssetStore } from "./executionAssetsRuntime";
 import type { ExecutionArtifactRecord, ExecutionDetail } from "./operationalAnalytics";
 
+const SPECIFICATION_LABELS: Record<string, string> = {
+  ocasiao: "Ocasião",
+  tipoCerimonia: "Tipo de cerimônia",
+  rendaDecisao: "Renda selecionada",
+  biotipo: "Biotipo",
+  peca: "Peça",
+  comprimento: "Comprimento",
+  decote: "Decote",
+  possuiManga: "Possui manga",
+  manga: "Manga",
+  saia: "Saia",
+  renda: "Renda",
+  cor: "Cor",
+  tecidoSku: "SKU do tecido",
+  modo: "Modo",
+};
+
+export type DashboardSpecificationEntry = { key: string; label: string; value: string };
+
+export function getDashboardSpecificationEntries(specification: ExecutionDetail["specification"]): DashboardSpecificationEntry[] {
+  return Object.entries(specification)
+    .filter(([, value]) => value !== null)
+    .map(([key, value]) => ({
+      key,
+      label: SPECIFICATION_LABELS[key] || key,
+      value: typeof value === "boolean" ? (value ? "Sim" : "Não") : typeof value === "string" || typeof value === "number" ? String(value) : JSON.stringify(value),
+    }));
+}
+
 export type DashboardOverviewLoadResult =
   | { status: "ready"; data: Awaited<ReturnType<typeof operationalAnalytics.getDashboardOverview>> }
   | { status: "unauthorized" }
