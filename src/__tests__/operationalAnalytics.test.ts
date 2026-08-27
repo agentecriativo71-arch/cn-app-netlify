@@ -123,4 +123,42 @@ describe("rastreabilidade operacional", () => {
 
     expect(result).toEqual({ execution: null, trackingStatus: "degraded" });
   });
+
+  it("persiste diagnóstico sanitizado de falha da etapa", async () => {
+    const analytics = new OperationalAnalytics(new InMemoryAnalyticsRepository());
+    const execution = await analytics.startExecution({ source: "manual" });
+    const step = await execution.startStep({
+      stage: "croqui_provider_request",
+      attempt: 1,
+      seed: 260826,
+    });
+
+    await step.fail("fal_reference_download_failed", {
+      provider: "fal",
+      model: "seedream-v4",
+      metadata: {
+        httpStatus: 422,
+        providerField: "image_urls",
+        assetName: "renda-inteira.png",
+        rawUrl: "https://private.test/?token=secret",
+        prompt: "conteúdo privado",
+      },
+    });
+
+    const detail = await analytics.getExecutionDetail(execution.executionId);
+    expect(detail?.steps[0]).toMatchObject({
+      status: "error",
+      errorCode: "fal_reference_download_failed",
+      provider: "fal",
+      model: "seedream-v4",
+      metadata: {
+        httpStatus: 422,
+        providerField: "image_urls",
+        assetName: "renda-inteira.png",
+      },
+    });
+    expect(JSON.stringify(detail)).not.toContain("private.test");
+    expect(JSON.stringify(detail)).not.toContain("secret");
+    expect(JSON.stringify(detail)).not.toContain("conteúdo privado");
+  });
 });

@@ -2,6 +2,7 @@ import { getCatalogGenerationSpec } from "./garmentPrompt";
 import { getMannequinUrl, MANNEQUIN_URLS } from "./noivaUtils";
 import { z } from "zod";
 import { CATALOG_VALUES, type ReferenceAnalysis } from "./referenceUtils";
+import { isCatalogPublicAssetUrl } from "./catalogAssets";
 
 export const CROQUI_GENERATOR = "seedream-v4" as const;
 export const CROQUI_PROMPT_VERSION = "croqui-fidelity-v3" as const;
@@ -167,6 +168,21 @@ export type CroquiGenerationMetadata = {
   candidates: CroquiCandidate[];
 };
 
+export type CroquiReferenceRole =
+  | "biotipo"
+  | "decote"
+  | "manga"
+  | "saia"
+  | "renda"
+  | "customer_crop";
+
+export type CroquiReferenceDescriptor = {
+  role: CroquiReferenceRole;
+  selectedValue: string | null;
+  assetName: string | null;
+  url: string;
+};
+
 export const FEMALE_CROQUI_INVARIANT =
   "CRITICAL GLOBAL INVARIANT: Every figure and mannequin is an adult female fashion figure. This is women's fashion only. Never draw a male body, masculine mannequin, menswear model, male anatomy or menswear styling.";
 export const MANNEQUIN_TEMPLATE_INSTRUCTION =
@@ -204,17 +220,85 @@ export function buildCroquiReferenceImageUrls(
   >,
   extraUrls: string[] = [],
 ): string[] {
+  return buildCroquiReferenceDescriptors(specs, extraUrls).map(
+    (reference) => reference.url,
+  );
+}
+
+function assetNameFromUrl(url: string): string | null {
+  try {
+    const pathname = new URL(url).pathname;
+    const name = pathname.split("/").at(-1);
+    return name || null;
+  } catch {
+    return null;
+  }
+}
+
+export function buildCroquiReferenceDescriptors(
+  specs: Pick<
+    CroquiGenerationRequest,
+    "biotipo" | "decote" | "manga" | "saia" | "renda"
+  >,
+  extraUrls: string[] = [],
+): CroquiReferenceDescriptor[] {
   const template =
     CROQUI_TEMPLATES.find((item) => item.biotipo === specs.biotipo) ||
     CROQUI_TEMPLATES[0];
-  const urls = [template?.imageUrl || getMannequinUrl(specs.biotipo)];
-  for (const value of [specs.decote, specs.manga, specs.saia, specs.renda]) {
+  const references: CroquiReferenceDescriptor[] = [
+    {
+      role: "biotipo",
+      selectedValue: specs.biotipo || null,
+      assetName: assetNameFromUrl(template?.imageUrl || getMannequinUrl(specs.biotipo)),
+      url: template?.imageUrl || getMannequinUrl(specs.biotipo),
+    },
+  ];
+  for (const [role, value] of [
+    ["decote", specs.decote],
+    ["manga", specs.manga],
+    ["saia", specs.saia],
+    ["renda", specs.renda],
+  ] as const) {
     const imageUrl = getCatalogGenerationSpec(value)?.imageUrl;
-    if (imageUrl) urls.push(imageUrl);
+    if (imageUrl) {
+      references.push({
+        role,
+        selectedValue: value || null,
+        assetName: assetNameFromUrl(imageUrl),
+        url: imageUrl,
+      });
+    }
   }
   for (const url of extraUrls)
-    if (typeof url === "string" && url.trim()) urls.push(url);
-  return [...new Set(urls)].slice(0, 10);
+    if (typeof url === "string" && url.trim()) {
+      references.push({
+        role: "customer_crop",
+        selectedValue: null,
+        assetName: null,
+        url,
+      });
+    }
+  return references.filter(
+    (reference, index, all) =>
+      all.findIndex((item) => item.url === reference.url) === index,
+  ).slice(0, 10);
+}
+
+export function validateCroquiReferenceDescriptors(
+  references: CroquiReferenceDescriptor[],
+): { valid: true } | { valid: false; invalid: CroquiReferenceDescriptor } {
+  for (const reference of references) {
+    if (reference.role === "customer_crop") {
+      if (!reference.url.startsWith("data:image/")) {
+        return { valid: false, invalid: reference };
+      }
+      continue;
+    }
+    if (!isCatalogPublicAssetUrl(reference.url)) {
+      return { valid: false, invalid: reference };
+    }
+  }
+  return { valid: true };
 }
 
 function normalizedConfidence(value: number | undefined): number {

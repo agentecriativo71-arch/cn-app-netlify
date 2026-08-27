@@ -3,6 +3,7 @@ import { buildCatalogElementPromptFragment } from "../lib/garmentPrompt";
 import {
   buildCandidateGatePrompt,
   buildCroquiReferenceImageUrls,
+  buildCroquiReferenceDescriptors,
   buildCroquiVisionAssessment,
   chooseCroquiCandidate,
   CROQUI_CANDIDATE_COUNT,
@@ -12,6 +13,7 @@ import {
   parseCroquiGenerationRequest,
   rankCroquiCandidates,
   scoreCroquiCandidate,
+  validateCroquiReferenceDescriptors,
 } from "../lib/croquiGeneration";
 
 describe("fidelidade do croqui", () => {
@@ -51,6 +53,24 @@ describe("fidelidade do croqui", () => {
           template.views.includes("front and back"),
       ),
     ).toBe(true);
+  });
+
+  it("valida referências catalogadas antes de enviá-las ao provedor", () => {
+    const references = buildCroquiReferenceDescriptors({
+      biotipo: "Triângulo Invertido",
+      renda: "Renda Inteira",
+    });
+    expect(validateCroquiReferenceDescriptors(references)).toEqual({ valid: true });
+    expect(
+      validateCroquiReferenceDescriptors([
+        {
+          role: "renda",
+          selectedValue: "Renda Inteira",
+          assetName: "renda-inteira.png",
+          url: "/src/assets/renda-inteira.png",
+        },
+      ]),
+    ).toMatchObject({ valid: false });
   });
 
   it("impõe invariável feminina e ocasião de fardamento", () => {

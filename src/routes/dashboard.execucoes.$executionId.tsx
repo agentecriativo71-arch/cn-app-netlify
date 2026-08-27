@@ -1,6 +1,8 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import {
   getDashboardSpecificationEntries,
+  getDashboardGenerationSummary,
+  getDashboardStepDiagnostic,
   getDashboardVisionEvaluation,
   getExecutionDetailFn,
 } from "@/server/dashboardApi";
@@ -54,6 +56,7 @@ function ExecutionDetailPage() {
   const specificationEntries = getDashboardSpecificationEntries(
     detail.specification,
   );
+  const generationSummary = getDashboardGenerationSummary(detail.steps);
   return (
     <section>
       <Link to="/dashboard" className="text-sm text-[#E5D3A2] underline">
@@ -71,6 +74,11 @@ function ExecutionDetailPage() {
           <p className="text-sm text-amber-200 mt-2">
             O rastreio apresentou falhas; a geração principal não foi
             interrompida.
+          </p>
+        )}
+        {detail.errorCode && (
+          <p className="text-sm text-red-200 mt-2">
+            Código da execução: {detail.errorCode}
           </p>
         )}
       </div>
@@ -102,6 +110,14 @@ function ExecutionDetailPage() {
           </div>
           <div className="card-soft p-5">
             <h3 className="font-semibold text-white mb-3">Etapas</h3>
+            {generationSummary && (
+              <p className="text-xs text-white/65 mb-3">
+                Croquis: {formatCount(generationSummary.generatedCandidateCount)}
+                /{formatCount(generationSummary.plannedCandidateCount)} gerados ·{" "}
+                {formatCount(generationSummary.evaluatedCandidateCount)} avaliados ·{" "}
+                {formatCount(generationSummary.eligibleCandidateCount)} elegíveis
+              </p>
+            )}
             <ol className="space-y-3">
               {detail.steps.map((step) => (
                 <li key={step.id} className="border-l-2 border-white/20 pl-3">
@@ -113,9 +129,54 @@ function ExecutionDetailPage() {
                     {step.durationMs == null ? "" : ` · ${step.durationMs} ms`}
                     {step.seed == null ? "" : ` · seed ${step.seed}`}
                   </p>
-                  {step.errorCode && (
-                    <p className="text-xs text-red-200">{step.errorCode}</p>
-                  )}
+                  {(() => {
+                    const diagnostic = getDashboardStepDiagnostic(step);
+                    if (!diagnostic) return null;
+                    return (
+                      <div className="mt-1 rounded border border-red-200/20 bg-red-950/20 p-2 text-xs">
+                        <p className="text-red-100">{diagnostic.message}</p>
+                        <p className="text-red-100/70 mt-1">
+                          Código: {diagnostic.code}
+                          {diagnostic.httpStatus == null
+                            ? ""
+                            : ` · HTTP ${diagnostic.httpStatus}`}
+                          {diagnostic.providerField == null
+                            ? ""
+                            : ` · campo ${diagnostic.providerField}`}
+                        </p>
+                        {diagnostic.referenceRole && (
+                          <p className="text-red-100/70 mt-1">
+                            Referência: {diagnostic.referenceRole}
+                            {diagnostic.referenceValue
+                              ? ` — ${diagnostic.referenceValue}`
+                              : ""}
+                            {diagnostic.assetName
+                              ? ` (${diagnostic.assetName})`
+                              : ""}
+                          </p>
+                        )}
+                        {diagnostic.referenceSummary.length > 0 && (
+                          <p className="text-red-100/70 mt-1">
+                            Referências enviadas: {diagnostic.referenceSummary
+                              .map((reference) =>
+                                `${reference.role}${reference.assetName ? ` (${reference.assetName})` : ""}`,
+                              )
+                              .join(", ")}
+                          </p>
+                        )}
+                        {diagnostic.retryable !== null && (
+                          <p className="text-red-100/70 mt-1">
+                            {diagnostic.retryable
+                              ? "Falha repetível"
+                              : "Falha não repetível"}
+                            {diagnostic.providerAttempt == null
+                              ? ""
+                              : ` · tentativa do provedor ${diagnostic.providerAttempt}`}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </li>
               ))}
             </ol>
@@ -236,54 +297,114 @@ function DashboardArtifactCard({
           Análise Vision detalhada não foi registrada nesta versão.
         </p>
       ) : (
-        Object.keys(evaluation.criteria).length > 0 && (
-          <details className="mt-3">
-            <summary className="cursor-pointer text-xs text-[#E5D3A2]">
-              Análise Vision
-            </summary>
-            <dl className="mt-2 space-y-2">
-              {Object.entries(evaluation.criteria).map(([key, criterion]) => (
-                <div key={key} className="rounded border border-white/10 p-2">
-                  <dt className="text-xs text-white/80">
-                    {CRITERION_LABELS[key] || key}
-                  </dt>
-                  <dd className="text-xs text-white/60">
-                    Esperado: {formatVisionValue(criterion.expected)} ·
-                    Observado: {formatVisionValue(criterion.observed)}
-                  </dd>
-                  <dd className="text-xs text-white/60">
-                    {criterion.matched ? "Compatível" : "Não compatível"} ·
-                    confiança {Math.round(criterion.confidence * 100)}%
-                  </dd>
-                  {criterion.evidence && (
-                    <dd className="text-xs text-white/50">
-                      Evidência: {criterion.evidence}
-                    </dd>
-                  )}
-                </div>
-              ))}
-              {getAdditionalVisionEntries(evaluation.visionAnalysis).map(
-                (entry) => (
-                  <div
-                    key={entry.key}
-                    className="rounded border border-white/10 p-2"
-                  >
-                    <dt className="text-xs text-white/80">{entry.label}</dt>
+        <>
+          {Object.keys(evaluation.criteria).length > 0 && (
+            <details className="mt-3" open>
+              <summary className="cursor-pointer text-xs text-[#E5D3A2]">
+                Análise Vision
+              </summary>
+              <dl className="mt-2 space-y-2">
+                {Object.entries(evaluation.criteria).map(([key, criterion]) => (
+                  <div key={key} className="rounded border border-white/10 p-2">
+                    <dt className="text-xs text-white/80">
+                      {CRITERION_LABELS[key] || key}
+                    </dt>
                     <dd className="text-xs text-white/60">
-                      Observado: {formatVisionValue(entry.value)} · confiança{" "}
-                      {Math.round(entry.confidence * 100)}%
+                      Esperado: {formatVisionValue(criterion.expected)} ·
+                      Observado: {formatVisionValue(criterion.observed)}
                     </dd>
-                    {entry.evidence && (
+                    <dd className="text-xs text-white/60">
+                      {criterion.matched ? "Compatível" : "Não compatível"} ·
+                      confiança {Math.round(criterion.confidence * 100)}%
+                    </dd>
+                    {criterion.evidence && (
                       <dd className="text-xs text-white/50">
-                        Evidência: {entry.evidence}
+                        Evidência: {criterion.evidence}
                       </dd>
                     )}
                   </div>
-                ),
-              )}
-            </dl>
-          </details>
-        )
+                ))}
+                {getAdditionalVisionEntries(evaluation.visionAnalysis).map(
+                  (entry) => (
+                    <div
+                      key={entry.key}
+                      className="rounded border border-white/10 p-2"
+                    >
+                      <dt className="text-xs text-white/80">{entry.label}</dt>
+                      <dd className="text-xs text-white/60">
+                        Observado: {formatVisionValue(entry.value)} · confiança{" "}
+                        {Math.round(entry.confidence * 100)}%
+                      </dd>
+                      {entry.evidence && (
+                        <dd className="text-xs text-white/50">
+                          Evidência: {entry.evidence}
+                        </dd>
+                      )}
+                    </div>
+                  ),
+                )}
+              </dl>
+            </details>
+          )}
+          {evaluation.focus.length > 0 && (
+            <details className="mt-3" open>
+              <summary className="cursor-pointer text-xs text-[#E5D3A2]">
+                Foco das imagens Vision
+              </summary>
+              <dl className="mt-2 space-y-2">
+                {evaluation.focus.map((focus, index) => (
+                  <div
+                    key={`${focus.role}-${index}`}
+                    className="rounded border border-white/10 p-2"
+                  >
+                    <dt className="text-xs text-white/80">
+                      {focus.role} · {focus.status} · {focus.candidateCount} candidato(s)
+                    </dt>
+                    <dd className="text-xs text-white/60">
+                      confiança {Math.round(focus.confidence * 100)}%
+                      {focus.targetDescription
+                        ? ` · ${focus.targetDescription}`
+                        : ""}
+                    </dd>
+                    {focus.evidence && (
+                      <dd className="text-xs text-white/50">
+                        Evidência: {focus.evidence}
+                      </dd>
+                    )}
+                  </div>
+                ))}
+              </dl>
+            </details>
+          )}
+          {evaluation.providerExtras.length > 0 && (
+            <details className="mt-3" open>
+              <summary className="cursor-pointer text-xs text-[#E5D3A2]">
+                Campos adicionais retornados pelo Vision
+              </summary>
+              <dl className="mt-2 space-y-2">
+                {evaluation.providerExtras.map((extra) => (
+                  <div key={`${extra.path}-${extra.sourceRole || "none"}`} className="rounded border border-white/10 p-2">
+                    <dt className="text-xs text-white/80">
+                      {extra.path}
+                      {extra.sourceRole ? ` · ${extra.sourceRole}` : ""}
+                    </dt>
+                    <dd className="text-xs text-white/60">
+                      Valor: {formatVisionValue(extra.value)} · confiança{" "}
+                      {extra.confidence == null
+                        ? "não informada"
+                        : `${Math.round(extra.confidence * 100)}%`}
+                    </dd>
+                    {extra.evidence && (
+                      <dd className="text-xs text-white/50">
+                        Evidência: {extra.evidence}
+                      </dd>
+                    )}
+                  </div>
+                ))}
+              </dl>
+            </details>
+          )}
+        </>
       )}
       {artifact.signedUrl ? (
         <>
@@ -316,6 +437,10 @@ function formatVisionValue(value: string | boolean | null): string {
   return value;
 }
 
+function formatCount(value: number | null): string {
+  return value == null ? "?" : String(value);
+}
+
 function getAdditionalVisionEntries(
   analysis: Record<string, unknown> | null,
 ): Array<{
@@ -326,13 +451,29 @@ function getAdditionalVisionEntries(
   evidence: string | null;
 }> {
   if (!analysis) return [];
+  const topLevelEntries = ["rendaDecisao"].flatMap((key) => {
+    const observation = analysis[key];
+    if (!observation || typeof observation !== "object" || Array.isArray(observation)) return [];
+    const value = observation as Record<string, unknown>;
+    if (typeof value.confidence !== "number") return [];
+    return [{
+      key,
+      label: "Decisão sobre renda",
+      value:
+        ["string", "boolean"].includes(typeof value.value) || value.value === null
+          ? (value.value as string | boolean | null)
+          : null,
+      confidence: value.confidence,
+      evidence: typeof value.evidence === "string" ? value.evidence : null,
+    }];
+  });
   const details =
     analysis.detalhesTecnicos &&
     typeof analysis.detalhesTecnicos === "object" &&
     !Array.isArray(analysis.detalhesTecnicos)
       ? (analysis.detalhesTecnicos as Record<string, unknown>)
       : {};
-  return Object.entries(details).flatMap(([key, value]) => {
+  const detailEntries = Object.entries(details).flatMap(([key, value]) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return [];
     const observation = value as Record<string, unknown>;
     if (typeof observation.confidence !== "number") return [];
@@ -353,4 +494,5 @@ function getAdditionalVisionEntries(
       },
     ];
   });
+  return [...topLevelEntries, ...detailEntries];
 }

@@ -60,6 +60,18 @@ import biotipoTriangulo from "@/assets/biotipo-triangulo.png";
 import biotipoTrianguloInvertido from "@/assets/biotipo-triangulo-invertido.png";
 import biotipoRetangulo from "@/assets/biotipo-retangulo.png";
 
+import rendaAplicacoes from "@/assets/renda-aplicacoes-localizadas.png";
+import rendaSobreposicao from "@/assets/renda-sobreposicao.png";
+import rendaInteira from "@/assets/renda-inteira.png";
+import rendaBarrados from "@/assets/renda-barrados.png";
+import rendaRecortes from "@/assets/renda-recortes.png";
+import rendaMangas from "@/assets/renda-mangas.png";
+import rendaCostas from "@/assets/renda-costas.png";
+import rendaBordado from "@/assets/renda-bordado.png";
+import rendaCamadas from "@/assets/renda-camadas.png";
+import rendaFlorais3D from "@/assets/renda-florais-3d.png";
+import rendaMisturaTecidos from "@/assets/renda-mistura-tecidos.png";
+
 const BIOTIPOS_ITEMS = [
   { id: "ampulheta", nome: "Ampulheta", image_url: biotipoAmpulheta },
   { id: "triangulo", nome: "Triângulo", image_url: biotipoTriangulo },
@@ -78,40 +90,35 @@ const COMPRIMENTOS = ["Curto", "Médio", "Longo", "Midi"];
 const TIPOS_CERIMONIA = ["Civil", "Igreja", "Cerimônia Aberta"];
 const DECISAO_RENDA = ["Sim", "Não"];
 
-import rendaAplicacoes from "@/assets/renda-aplicacoes-localizadas.png";
-import rendaSobreposicao from "@/assets/renda-sobreposicao.png";
-import rendaInteira from "@/assets/renda-inteira.png";
-import rendaBarrados from "@/assets/renda-barrados.png";
-import rendaRecortes from "@/assets/renda-recortes.png";
-import rendaMangas from "@/assets/renda-mangas.png";
-import rendaCostas from "@/assets/renda-costas.png";
-import rendaBordado from "@/assets/renda-bordado.png";
-import rendaCamadas from "@/assets/renda-camadas.png";
-import rendaFlorais3D from "@/assets/renda-florais-3d.png";
-import rendaMisturaTecidos from "@/assets/renda-mistura-tecidos.png";
-
-const ASSETS_MAP: Record<string, string> = {
-  "/src/assets/renda-aplicacoes-localizadas.png": rendaAplicacoes,
-  "/src/assets/renda-sobreposicao.png": rendaSobreposicao,
-  "/src/assets/renda-inteira.png": rendaInteira,
-  "/src/assets/renda-barrados.png": rendaBarrados,
-  "/src/assets/renda-recortes.png": rendaRecortes,
-  "/src/assets/renda-mangas.png": rendaMangas,
-  "/src/assets/renda-costas.png": rendaCostas,
-  "/src/assets/renda-bordado.png": rendaBordado,
-  "/src/assets/renda-camadas.png": rendaCamadas,
-  "/src/assets/renda-florais-3d.png": rendaFlorais3D,
-  "/src/assets/renda-mistura-tecidos.png": rendaMisturaTecidos,
-};
-
 // Elementos por categoria que possuem imagem
 const MANGAS = elementosData.filter(e => e.categoria === "manga" && e.image_url);
 const DECOTES = elementosData.filter(e => e.categoria === "decote" && e.image_url);
 const SAIAS = elementosData.filter(e => e.categoria === "saia" && e.image_url);
-const RENDAS = elementosData.filter(e => e.categoria === "renda").map(e => ({
-  ...e,
-  image_url: e.image_url ? (ASSETS_MAP[e.image_url] || e.image_url) : null
-}));
+
+// A interface mantém a prévia local enquanto o job de publicação do catálogo
+// não foi executado. O servidor continua lendo as URLs públicas do JSON.
+const LOCAL_RENDA_ASSETS: Record<string, string> = {
+  "renda-aplicacoes-localizadas.png": rendaAplicacoes,
+  "renda-sobreposicao.png": rendaSobreposicao,
+  "renda-inteira.png": rendaInteira,
+  "renda-barrados.png": rendaBarrados,
+  "renda-recortes.png": rendaRecortes,
+  "renda-mangas.png": rendaMangas,
+  "renda-costas.png": rendaCostas,
+  "renda-bordado.png": rendaBordado,
+  "renda-camadas.png": rendaCamadas,
+  "renda-florais-3d.png": rendaFlorais3D,
+  "renda-mistura-tecidos.png": rendaMisturaTecidos,
+};
+
+const RENDAS = elementosData
+  .filter(e => e.categoria === "renda" && e.image_url)
+  .map(e => ({
+    ...e,
+    image_url: e.image_url
+      ? LOCAL_RENDA_ASSETS[e.image_url.split("/").at(-1) || ""] || e.image_url
+      : null,
+  }));
 
 // ── Section Icons ────────────────────────────────────────────────
 const SECTION_ICONS: Record<string, React.ReactNode> = {

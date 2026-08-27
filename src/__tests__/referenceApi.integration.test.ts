@@ -313,7 +313,7 @@ describe("fluxo público de referência", () => {
     let attempts = 0;
     subscribeMock.mockImplementation(async () => {
       attempts += 1;
-      if (attempts <= 6) throw new Error("falha Seedream");
+      if (attempts <= 8) throw new Error("falha Seedream");
       return { images: [{ url: "https://fal.test/retry.png" }] };
     });
     const session = await createUploadSession("Cliente retry", "Festa");
@@ -331,14 +331,60 @@ describe("fluxo público de referência", () => {
       sessionId: session.id,
     });
 
-    expect(analyzeMock).toHaveBeenCalledTimes(3);
+    expect(analyzeMock).toHaveBeenCalledTimes(5);
     expect(
-      JSON.stringify(subscribeMock.mock.calls[6][1].input.image_urls),
+      JSON.stringify(subscribeMock.mock.calls[8][1].input.image_urls),
     ).toContain("data:image/jpeg");
     expect(
       (await executeServerFn(pollUploadSessionFn, { sessionId: session.id }))
         .session.status,
     ).toBe("uploaded");
+  });
+
+  it("persiste diagnóstico Fal.ai 422 e não chama Vision sem imagem gerada", async () => {
+    const falError = Object.assign(new Error("Client Error"), {
+      status: 422,
+      body: {
+        detail: [
+          {
+            loc: ["body", "image_urls"],
+            msg: "Failed to download the file. https://private.test/?token=secret",
+            type: "value_error",
+          },
+        ],
+      },
+    });
+    subscribeMock.mockRejectedValue(falError);
+
+    const session = await createUploadSession("Cliente 422", "Festa", "Vestido");
+    const result = await executeServerFn(uploadReferenceFilesFn, {
+      sessionId: session.id,
+      mode: "single",
+      images: [{ role: "single", dataUrl: jpeg }],
+    });
+
+    expect(result.status).toBe("generation_failed");
+    expect(analyzeMock).toHaveBeenCalledTimes(1);
+    const detail = await operationalAnalytics.getExecutionDetail(result.executionId);
+    const providerStep = detail?.steps.find(
+      (step) => step.stage === "croqui_provider_request",
+    );
+    expect(providerStep).toMatchObject({
+      status: "error",
+      errorCode: "fal_reference_download_failed",
+      provider: "fal",
+      model: "seedream-v4",
+        metadata: {
+          httpStatus: 422,
+          providerField: "image_urls",
+          retryable: false,
+          referenceSummary: expect.arrayContaining([
+            expect.objectContaining({ role: "biotipo" }),
+          ]),
+        },
+    });
+    expect(JSON.stringify(detail)).not.toContain("private.test");
+    expect(JSON.stringify(detail)).not.toContain("secret");
   });
 
   it("não registra a mensagem integral do erro de Vision", async () => {

@@ -4,6 +4,7 @@ import { getExecutionAssetStore } from "./executionAssetsRuntime";
 import type {
   ExecutionArtifactRecord,
   ExecutionDetail,
+  ExecutionStepRecord,
 } from "./operationalAnalytics";
 
 const SPECIFICATION_LABELS: Record<string, string> = {
@@ -47,14 +48,156 @@ export type DashboardVisionEvaluation = {
       evidence: string | null;
     }
   >;
+  focus: Array<{
+    role: string;
+    status: string;
+    targetDescription: string | null;
+    candidateCount: number;
+    confidence: number;
+    evidence: string | null;
+  }>;
+  providerExtras: Array<{
+    path: string;
+    value: string | boolean | null;
+    confidence: number | null;
+    evidence: string | null;
+    sourceRole: string | null;
+  }>;
   visionAnalysis: Record<string, unknown> | null;
   legacy: boolean;
+};
+
+export type DashboardStepDiagnostic = {
+  code: string;
+  message: string;
+  provider: string | null;
+  model: string | null;
+  httpStatus: number | null;
+  providerField: string | null;
+  candidateIndex: number | null;
+  providerAttempt: number | null;
+  retryable: boolean | null;
+  referenceRole: string | null;
+  referenceValue: string | null;
+  assetName: string | null;
+  referenceSummary: Array<{
+    role: string;
+    selectedValue: string | null;
+    assetName: string | null;
+  }>;
+  detailed: boolean;
+};
+
+export type DashboardGenerationSummary = {
+  plannedCandidateCount: number | null;
+  generatedCandidateCount: number | null;
+  evaluatedCandidateCount: number | null;
+  eligibleCandidateCount: number | null;
+  failedCandidateCount: number | null;
+  selectedSeed: number | null;
+};
+
+const STEP_ERROR_MESSAGES: Record<string, string> = {
+  invalid_catalog_reference_url:
+    "A referência do catálogo não possui URL pública válida.",
+  invalid_customer_reference_url:
+    "O recorte do cliente não possui formato aceito para geração.",
+  fal_reference_download_failed:
+    "Fal.ai não conseguiu baixar uma imagem de referência.",
+  fal_input_validation_failed: "Fal.ai recusou os parâmetros de entrada.",
+  fal_authentication_failed: "Fal.ai recusou a autenticação do servidor.",
+  fal_rate_limited: "Fal.ai limitou temporariamente as requisições.",
+  fal_provider_unavailable: "Fal.ai esteve indisponível durante a geração.",
+  fal_network_error: "Não foi possível comunicar com Fal.ai.",
+  fal_generation_failed: "Fal.ai falhou durante a geração do croqui.",
+  generation_failed: "A geração do croqui falhou.",
+  vision_evaluation_failed: "A análise Vision falhou para este candidato.",
 };
 
 function metadataRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function optionalNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === "string" && value.length <= 500 ? value : null;
+}
+
+function confidenceOf(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : null;
+}
+
+function scalarValue(value: unknown): string | boolean | null {
+  return typeof value === "string" || typeof value === "boolean" || value === null
+    ? value
+    : null;
+}
+
+export function getDashboardStepDiagnostic(
+  step: ExecutionStepRecord,
+): DashboardStepDiagnostic | null {
+  if (!step.errorCode) return null;
+  const metadata = metadataRecord(step.metadata);
+  const referenceSummary = Array.isArray(metadata.referenceSummary)
+    ? metadata.referenceSummary.flatMap((value) => {
+        const item = metadataRecord(value);
+        if (typeof item.role !== "string") return [];
+        return [{
+          role: item.role,
+          selectedValue: optionalString(item.selectedValue),
+          assetName: optionalString(item.assetName),
+        }];
+      })
+    : [];
+  return {
+    code: step.errorCode,
+    message:
+      STEP_ERROR_MESSAGES[step.errorCode] ||
+      "A etapa falhou; consulte o código técnico para investigação.",
+    provider: step.provider,
+    model: step.model,
+    httpStatus: optionalNumber(metadata.httpStatus),
+    providerField: optionalString(metadata.providerField),
+    candidateIndex: optionalNumber(metadata.candidateIndex),
+    providerAttempt: optionalNumber(metadata.providerAttempt),
+    retryable:
+      typeof metadata.retryable === "boolean" ? metadata.retryable : null,
+    referenceRole: optionalString(metadata.referenceRole),
+    referenceValue: optionalString(metadata.referenceValue),
+    assetName: optionalString(metadata.assetName),
+    referenceSummary,
+    detailed:
+      typeof metadata.category === "string" ||
+      typeof metadata.httpStatus === "number" ||
+      typeof metadata.providerField === "string",
+  };
+}
+
+export function getDashboardGenerationSummary(
+  steps: ExecutionStepRecord[],
+): DashboardGenerationSummary | null {
+  const overall = steps.find((step) => step.stage === "croqui_generation");
+  if (!overall) return null;
+  const metadata = metadataRecord(overall.metadata);
+  const plannedCandidateCount =
+    optionalNumber(metadata.plannedCandidateCount) ??
+    optionalNumber(metadata.candidateCountExpected);
+  const summary = {
+    plannedCandidateCount,
+    generatedCandidateCount: optionalNumber(metadata.generatedCandidateCount),
+    evaluatedCandidateCount: optionalNumber(metadata.evaluatedCandidateCount),
+    eligibleCandidateCount: optionalNumber(metadata.eligibleCandidateCount),
+    failedCandidateCount: optionalNumber(metadata.failedCandidateCount),
+    selectedSeed: optionalNumber(metadata.selectedSeed),
+  };
+  return Object.values(summary).some((value) => value !== null) ? summary : null;
 }
 
 export function getDashboardVisionEvaluation(
@@ -131,6 +274,41 @@ export function getDashboardVisionEvaluation(
     !Array.isArray(metadata.visionAnalysis)
       ? (metadata.visionAnalysis as Record<string, unknown>)
       : null;
+  const focus = visionAnalysis && Array.isArray(visionAnalysis.focus)
+    ? visionAnalysis.focus.flatMap((value) => {
+        const item = metadataRecord(value);
+        const confidence = confidenceOf(item.confidence);
+        if (
+          typeof item.role !== "string" ||
+          typeof item.status !== "string" ||
+          typeof item.candidateCount !== "number" ||
+          confidence === null
+        ) {
+          return [];
+        }
+        return [{
+          role: item.role,
+          status: item.status,
+          targetDescription: optionalString(item.targetDescription),
+          candidateCount: Math.max(0, Math.floor(item.candidateCount)),
+          confidence,
+          evidence: optionalString(item.evidence),
+        }];
+      })
+    : [];
+  const providerExtras = visionAnalysis && Array.isArray(visionAnalysis.providerExtras)
+    ? visionAnalysis.providerExtras.flatMap((value) => {
+        const item = metadataRecord(value);
+        if (typeof item.path !== "string" || item.path.length > 500) return [];
+        return [{
+          path: item.path,
+          value: scalarValue(item.value),
+          confidence: confidenceOf(item.confidence),
+          evidence: optionalString(item.evidence),
+          sourceRole: optionalString(item.sourceRole),
+        }];
+      })
+    : [];
   return {
     technicalScore,
     averageConfidence,
@@ -139,6 +317,8 @@ export function getDashboardVisionEvaluation(
     disqualifiers,
     qualityWarnings,
     criteria: normalizedCriteria,
+    focus,
+    providerExtras,
     visionAnalysis,
     legacy: !assessment.schemaVersion && !visionAnalysis,
   };

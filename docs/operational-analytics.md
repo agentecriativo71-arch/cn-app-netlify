@@ -32,6 +32,26 @@ npm run telegram:outbox
 
 A limpeza remove pela Storage API apenas objetos expirados (recortes após 30 dias e resultados após 90 dias), registra sucesso/falha no banco e mantém os metadados analíticos até 12 meses. O worker Telegram usa `FOR UPDATE SKIP LOCKED`, chave idempotente por artefato e backoff de até duas horas.
 
+## Assets de renda do catálogo
+
+O bucket público `elementos` já existente recebe somente os onze assets de renda
+que faltavam. O seeder é não destrutivo: lista cada nome antes do upload,
+preserva objetos já existentes e usa `upsert=false`; não executa exclusão nem
+substituição.
+
+Com a service key do projeto operacional configurada apenas no ambiente local
+ou no job de implantação, execute:
+
+```bash
+npm run seed:catalog-assets
+npm run verify:catalog-assets
+```
+
+O verificador deve retornar HTTP 200 e `image/*` para todos os onze objetos.
+Sem `SUPABASE_SERVICE_KEY`, o seeder aborta sem alterar o Storage. As URLs
+publicadas são usadas pelo servidor ao montar `image_urls` do Fal.ai; os assets
+locais permanecem no repositório como fonte do upload.
+
 ## Segurança
 
 - `app_analytics` e `execution-assets` são privados; somente o servidor com `service_role` acessa esses recursos.

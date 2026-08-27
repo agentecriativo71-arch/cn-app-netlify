@@ -59,6 +59,7 @@ import {
 import {
   buildCandidateGatePrompt,
   buildCroquiEvaluationPrompt,
+  buildCroquiReferenceDescriptors,
   buildCroquiReferenceImageUrls,
   buildCroquiReferenceRoleInstruction,
   chooseCroquiCandidate,
@@ -72,10 +73,12 @@ import {
   occasionInstruction,
   parseCroquiGenerationRequest,
   scoreCroquiCandidate,
+  validateCroquiReferenceDescriptors,
   type CroquiGenerationRequest,
   type CroquiGenerationMetadata,
   type CroquiVisualAssessment,
 } from "../lib/croquiGeneration";
+import { classifyFalGenerationError } from "./falDiagnostics";
 import {
   failOpenOperationalAnalytics,
   operationalAnalytics,
@@ -350,31 +353,26 @@ ${backViewInstruction}
 No color, no photographs, no realistic rendering, no 3D, no shading gradients, no painted or digital look.
 No text, no labels, no annotations, no watermarks, no faces, no facial features.`;
 
-  try {
-    const referenceImageUrls = buildCroquiReferenceImageUrls(
-      data,
-      data.referenceImageUrls || [],
-    );
-    const input = buildReferenceSeedreamInput(
-      prompt,
-      referenceImageUrls,
-      data.seed,
-    );
-    const result: any = await fal.subscribe(
-      "fal-ai/bytedance/seedream/v4/edit",
-      {
-        input,
-      },
-    );
+  const referenceImageUrls = buildCroquiReferenceImageUrls(
+    data,
+    data.referenceImageUrls || [],
+  );
+  const input = buildReferenceSeedreamInput(
+    prompt,
+    referenceImageUrls,
+    data.seed,
+  );
+  const result: any = await fal.subscribe(
+    "fal-ai/bytedance/seedream/v4/edit",
+    {
+      input,
+    },
+  );
 
-    const imageUrl = result.images?.[0]?.url;
-    if (!imageUrl) throw new Error("No image returned from Fal.ai");
+  const imageUrl = result.images?.[0]?.url;
+  if (!imageUrl) throw new Error("No image returned from Fal.ai");
 
-    return imageUrl;
-  } catch (error) {
-    console.error("[CROQUI] Error generating:", error);
-    throw error;
-  }
+  return imageUrl;
 }
 
 async function generateCroquiCandidates(
@@ -463,6 +461,69 @@ async function generateCroquiCandidates(
     if (artifact) candidateArtifactIds.set(candidate.seed, artifact.artifactId);
   };
 
+  const references = buildCroquiReferenceDescriptors(
+    request,
+    request.referenceImageUrls || [],
+  );
+  const referenceValidation = validateCroquiReferenceDescriptors(references);
+  const referenceValidationStep = await execution?.startStep({
+    stage: "croqui_reference_validation",
+    parentStepId: overallStep?.stepId,
+    attempt: 1,
+    promptVersion: CROQUI_PROMPT_VERSION,
+  });
+  if (!referenceValidation.valid) {
+    const invalid = referenceValidation.invalid;
+    const errorCode =
+      invalid.role === "customer_crop"
+        ? "invalid_customer_reference_url"
+        : "invalid_catalog_reference_url";
+    await referenceValidationStep?.fail(errorCode, {
+      provider: "catalog",
+      model: "catalog-assets",
+      metadata: {
+        errorCode,
+        referenceRole: invalid.role,
+        referenceValue: invalid.selectedValue,
+        assetName: invalid.assetName,
+        referenceCount: references.length,
+      },
+    });
+    await overallStep?.fail(errorCode, {
+      provider: "catalog",
+      model: "catalog-assets",
+      metadata: {
+        errorCode,
+        referenceRole: invalid.role,
+        referenceValue: invalid.selectedValue,
+        assetName: invalid.assetName,
+        referenceCount: references.length,
+      },
+    });
+    const failure = new Error(
+      "Uma referência de croqui não possui URL pública acessível.",
+    ) as Error & {
+      metadata?: CroquiGenerationMetadata;
+      errorCode?: string;
+    };
+    failure.errorCode = errorCode;
+    failure.metadata = {
+      generator: CROQUI_GENERATOR,
+      promptVersion: CROQUI_PROMPT_VERSION,
+      candidates: [],
+    };
+    throw failure;
+  }
+  await referenceValidationStep?.succeed({
+    provider: "catalog",
+    model: "catalog-assets",
+    metadata: {
+      referenceCount: references.length,
+      referenceRoles: references.map((reference) => reference.role),
+    },
+  });
+
+  let abortAfterNonRetryableFailure = false;
   for (let index = 0; index < CROQUI_CANDIDATE_COUNT; index += 1) {
     const seed = 260826 + index;
     const attempt = index + 1;
@@ -473,84 +534,63 @@ async function generateCroquiCandidates(
       seed,
       promptVersion: CROQUI_PROMPT_VERSION,
     });
-    try {
-      const url = await internalGenerateCroqui({ ...request, seed });
-      if (generationStep) candidateStepIds.set(seed, generationStep.stepId);
-      await generationStep?.succeed({
-        provider: "fal",
-        model: CROQUI_GENERATOR,
-        metadata: { attempt },
-      });
-      const evaluationStep = await execution?.startStep({
-        stage: "croqui_candidate_evaluation",
+    if (generationStep) candidateStepIds.set(seed, generationStep.stepId);
+
+    let url: string | null = null;
+    let finalDiagnostic: ReturnType<typeof classifyFalGenerationError> | null = null;
+    let providerAttempts = 0;
+    for (let providerAttempt = 1; providerAttempt <= 2; providerAttempt += 1) {
+      providerAttempts = providerAttempt;
+      const providerStep = await execution?.startStep({
+        stage: "croqui_provider_request",
         parentStepId: generationStep?.stepId || overallStep?.stepId,
-        attempt,
+        attempt: providerAttempt,
         seed,
         promptVersion: CROQUI_PROMPT_VERSION,
       });
-      if (evaluationStep) evaluationStepIds.set(seed, evaluationStep.stepId);
       try {
-        const evaluator = createReferenceVisionAnalyzer();
-        const evaluated = await evaluator.analyze({
-          mode: "single",
-          occasion: request.ocasiao || undefined,
-          targetPiece: request.peca as ReferencePiece,
-          imageDataUrls: [url],
-          prompt: buildCroquiEvaluationPrompt(request),
+        url = await internalGenerateCroqui({ ...request, seed });
+        await providerStep?.succeed({
+          provider: "fal",
+          model: CROQUI_GENERATOR,
+          metadata: { candidateIndex: attempt, providerAttempt },
         });
-        const visual: CroquiVisualAssessment = {
-          comprimento: evaluated.analysis.comprimento,
-          peca: evaluated.analysis.peca,
-          decote: evaluated.analysis.decote,
-          possuiManga: evaluated.analysis.possuiManga,
-          manga: evaluated.analysis.manga,
-          saia: evaluated.analysis.saia,
-          renda: evaluated.analysis.renda,
-        };
-        const candidate = scoreCroquiCandidate(
-          request,
-          buildCandidateGatePrompt(request),
-          url,
-          seed,
-          visual,
-          attempt,
-        );
-        candidate.visionAnalysis = evaluated.analysis;
-        await evaluationStep?.succeed({
-          provider: evaluator.providerName,
-          model: evaluator.modelName,
-          metadata: {
-            schemaVersion: CROQUI_VISION_ASSESSMENT_VERSION,
-            technicalScore: candidate.score,
-            averageConfidence: candidate.averageConfidence ?? null,
-            eligible: candidate.eligible !== false,
-            disqualifiers: candidate.rejectionReasons,
-            qualityWarnings: candidate.qualityWarnings || [],
-            criteria: candidate.assessment?.criteria,
-            visionAnalysis: evaluated.analysis,
-          },
+        break;
+      } catch (error) {
+        finalDiagnostic = classifyFalGenerationError(error, {
+          model: CROQUI_GENERATOR,
+          candidateIndex: attempt,
+          providerAttempt,
+          referenceSummary: references.map((reference) => ({
+            role: reference.role,
+            selectedValue: reference.selectedValue,
+            assetName: reference.assetName,
+          })),
         });
-        candidates.push(candidate);
-        await persistCandidateArtifact(candidate);
-      } catch {
-        await evaluationStep?.fail("vision_evaluation_failed");
-        const candidate = {
-          url,
-          seed,
-          attempt,
-          score: 0,
-          rejected: true,
-          eligible: false,
-          averageConfidence: null,
-          assessment: null,
-          visionAnalysis: null,
-          rejectionReasons: ["vision_evaluation_failed"],
-        };
-        candidates.push(candidate);
-        await persistCandidateArtifact(candidate);
+        console.error("[CROQUI] Fal.ai generation failed", finalDiagnostic);
+        await providerStep?.fail(finalDiagnostic.errorCode, {
+          provider: finalDiagnostic.provider,
+          model: finalDiagnostic.model,
+          metadata: finalDiagnostic,
+        });
+        if (!finalDiagnostic.retryable) {
+          abortAfterNonRetryableFailure = true;
+          break;
+        }
       }
-    } catch {
-      await generationStep?.fail("generation_failed");
+    }
+
+    if (!url) {
+      const errorCode = finalDiagnostic?.errorCode || "fal_generation_failed";
+      await generationStep?.fail(errorCode, {
+        provider: "fal",
+        model: CROQUI_GENERATOR,
+        metadata: {
+          candidateIndex: attempt,
+          providerAttempts,
+          ...(finalDiagnostic || {}),
+        },
+      });
       candidates.push({
         url: "",
         seed,
@@ -561,8 +601,88 @@ async function generateCroquiCandidates(
         averageConfidence: null,
         assessment: null,
         visionAnalysis: null,
-        rejectionReasons: ["generation_failed"],
+        rejectionReasons: [errorCode],
       });
+      if (abortAfterNonRetryableFailure) break;
+      continue;
+    }
+
+    await generationStep?.succeed({
+      provider: "fal",
+      model: CROQUI_GENERATOR,
+      metadata: { attempt, candidateIndex: attempt, providerAttempts },
+    });
+    const evaluationStep = await execution?.startStep({
+      stage: "croqui_candidate_evaluation",
+      parentStepId: generationStep?.stepId || overallStep?.stepId,
+      attempt,
+      seed,
+      promptVersion: CROQUI_PROMPT_VERSION,
+    });
+    if (evaluationStep) evaluationStepIds.set(seed, evaluationStep.stepId);
+    try {
+      const evaluator = createReferenceVisionAnalyzer();
+      const evaluated = await evaluator.analyze({
+        mode: "single",
+        occasion: request.ocasiao || undefined,
+        targetPiece: request.peca as ReferencePiece,
+        imageDataUrls: [url],
+        prompt: buildCroquiEvaluationPrompt(request),
+      });
+      const visual: CroquiVisualAssessment = {
+        comprimento: evaluated.analysis.comprimento,
+        peca: evaluated.analysis.peca,
+        decote: evaluated.analysis.decote,
+        possuiManga: evaluated.analysis.possuiManga,
+        manga: evaluated.analysis.manga,
+        saia: evaluated.analysis.saia,
+        renda: evaluated.analysis.renda,
+      };
+      const candidate = scoreCroquiCandidate(
+        request,
+        buildCandidateGatePrompt(request),
+        url,
+        seed,
+        visual,
+        attempt,
+      );
+      candidate.visionAnalysis = evaluated.analysis;
+      await evaluationStep?.succeed({
+        provider: evaluator.providerName,
+        model: evaluator.modelName,
+        metadata: {
+          schemaVersion: CROQUI_VISION_ASSESSMENT_VERSION,
+          technicalScore: candidate.score,
+          averageConfidence: candidate.averageConfidence ?? null,
+          eligible: candidate.eligible !== false,
+          disqualifiers: candidate.rejectionReasons,
+          qualityWarnings: candidate.qualityWarnings || [],
+          criteria: candidate.assessment?.criteria,
+          visionAnalysis: evaluated.analysis,
+        },
+      });
+      candidates.push(candidate);
+      await persistCandidateArtifact(candidate);
+    } catch {
+      await evaluationStep?.fail("vision_evaluation_failed", {
+        provider: "fal",
+        model: "google/gemini-2.5-flash",
+        metadata: { candidateIndex: attempt, seed },
+      });
+      const candidate = {
+        url,
+        seed,
+        attempt,
+        score: 0,
+        rejected: true,
+        eligible: false,
+        averageConfidence: null,
+        assessment: null,
+        visionAnalysis: null,
+        rejectionReasons: ["vision_evaluation_failed"],
+      };
+      candidates.push(candidate);
+      await persistCandidateArtifact(candidate);
     }
   }
   const ranked = rankCroquiCandidates(candidates);
@@ -570,10 +690,43 @@ async function generateCroquiCandidates(
   try {
     selected = chooseCroquiCandidate(ranked);
   } catch {
-    await overallStep?.fail("no_eligible_candidate");
+    const generatedCandidateCount = candidates.filter(
+      (candidate) => Boolean(candidate.url),
+    ).length;
+    const errorCode =
+      generatedCandidateCount === 0
+        ? "candidate_generation_failed"
+        : "no_eligible_candidate";
+    await overallStep?.fail(errorCode, {
+      provider: generatedCandidateCount === 0 ? "fal" : "vision",
+      model:
+        generatedCandidateCount === 0
+          ? CROQUI_GENERATOR
+          : "google/gemini-2.5-flash",
+      metadata: {
+        plannedCandidateCount: CROQUI_CANDIDATE_COUNT,
+        generatedCandidateCount,
+        evaluatedCandidateCount: candidates.filter(
+          (candidate) => candidate.visionAnalysis,
+        ).length,
+        eligibleCandidateCount: candidates.filter(
+          (candidate) => candidate.eligible,
+        ).length,
+        failedCandidateCount: candidates.filter(
+          (candidate) => candidate.rejectionReasons.length > 0,
+        ).length,
+        primaryFailureCode:
+          candidates.find((candidate) => candidate.rejectionReasons.length > 0)
+            ?.rejectionReasons[0] || null,
+      },
+    });
     const failure = new Error(
       "Nenhum candidato de croqui pôde ser selecionado.",
-    ) as Error & { metadata?: CroquiGenerationMetadata };
+    ) as Error & {
+      metadata?: CroquiGenerationMetadata;
+      errorCode?: string;
+    };
+    failure.errorCode = errorCode;
     failure.metadata = {
       generator: CROQUI_GENERATOR,
       promptVersion: CROQUI_PROMPT_VERSION,
@@ -610,6 +763,19 @@ async function generateCroquiCandidates(
     provider: "fal",
     model: CROQUI_GENERATOR,
     metadata: {
+      plannedCandidateCount: CROQUI_CANDIDATE_COUNT,
+      generatedCandidateCount: candidates.filter(
+        (candidate) => Boolean(candidate.url),
+      ).length,
+      evaluatedCandidateCount: candidates.filter(
+        (candidate) => candidate.visionAnalysis,
+      ).length,
+      eligibleCandidateCount: candidates.filter(
+        (candidate) => candidate.eligible,
+      ).length,
+      failedCandidateCount: candidates.filter(
+        (candidate) => candidate.rejectionReasons.length > 0,
+      ).length,
       candidateCount: candidates.length,
       selectedSeed: selected.seed,
       selectedScore: selected.score,
@@ -664,7 +830,14 @@ const generateCroquiServerFn = createServerFn({ method: "POST" }).handler<
         tracking.execution?.trackingStatus || tracking.trackingStatus,
     };
   } catch (error) {
-    await tracking.execution?.fail("croqui_generation_failed");
+    const errorCode =
+      error &&
+      typeof error === "object" &&
+      "errorCode" in error &&
+      typeof (error as { errorCode?: unknown }).errorCode === "string"
+        ? (error as { errorCode: string }).errorCode
+        : "croqui_generation_failed";
+    await tracking.execution?.fail(errorCode);
     throw error;
   }
 });

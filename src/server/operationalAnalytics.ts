@@ -167,7 +167,7 @@ function addMonths(date: Date, months: number): Date {
   return next;
 }
 
-const UNSAFE_METADATA_KEYS = /(prompt|token|secret|password|telefone|phone|imageData|imageUrl|referenceImage|base64|payload)/i;
+const UNSAFE_METADATA_KEYS = /(prompt|token|secret|password|telefone|phone|url|uri|href|imageData|referenceImage|base64|payload)/i;
 
 export function sanitizeMetadata(input: unknown, depth = 0): Record<string, SafeJson> {
   if (!input || typeof input !== "object" || Array.isArray(input) || depth > 4) return {};
@@ -552,9 +552,12 @@ export class FailOpenTrackedStep {
     }
   }
 
-  async fail(errorCode: string): Promise<void> {
+  async fail(
+    errorCode: string,
+    input: { provider?: string; model?: string; metadata?: unknown } = {},
+  ): Promise<void> {
     try {
-      await this.step.fail(errorCode);
+      await this.step.fail(errorCode, input);
     } catch {
       this.degrade();
       this.logger.warn("[TRACKING] falha da etapa não persistida", { code: "tracking_step_write_failed" });
@@ -676,11 +679,17 @@ export class TrackedStep {
     });
   }
 
-  async fail(errorCode: string): Promise<void> {
+  async fail(
+    errorCode: string,
+    input: { provider?: string; model?: string; metadata?: unknown } = {},
+  ): Promise<void> {
     const finishedAt = this.now();
     await this.repository.updateStep(this.stepId, {
       status: "error",
       errorCode,
+      provider: input.provider || null,
+      model: input.model || null,
+      metadata: sanitizeMetadata(input.metadata),
       finishedAt: finishedAt.toISOString(),
       durationMs: Math.max(0, finishedAt.getTime() - this.startedAt.getTime()),
     });

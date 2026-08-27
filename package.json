@@ -19,6 +19,8 @@
     "test:vision:live": "vitest run src/__tests__/referenceVision.live.test.ts",
     "benchmark:vision": "node --experimental-strip-types scripts/benchmark_vision.ts",
     "migrate:app-db": "tsx scripts/migrate-app-database.ts",
+    "seed:catalog-assets": "tsx scripts/seed-catalog-assets.ts",
+    "verify:catalog-assets": "tsx scripts/verify-catalog-assets.ts",
     "cleanup:reference-images:dry-run": "node scripts/reference-image-cleanup.mjs --dry-run",
     "cleanup:reference-images": "node scripts/reference-image-cleanup.mjs --execute",
     "cleanup:execution-assets": "tsx scripts/execution-assets-cleanup.ts",
