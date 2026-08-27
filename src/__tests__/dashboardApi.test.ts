@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getDashboardSpecificationEntries, loadDashboardOverview, loadExecutionDetail } from "../server/dashboardApi";
+import {
+  getDashboardSpecificationEntries,
+  getDashboardVisionEvaluation,
+  loadDashboardOverview,
+  loadExecutionDetail,
+} from "../server/dashboardApi";
 
 describe("carregamento do dashboard", () => {
   it("distingue usuário não autorizado de falha do analytics", async () => {
@@ -58,14 +63,77 @@ describe("carregamento do dashboard", () => {
   });
 
   it("formata no detalhe todos os campos selecionados pelo usuário", () => {
-    expect(getDashboardSpecificationEntries({
-      peca: "Calça",
-      biotipo: "Ampulheta",
-      possuiManga: false,
-    })).toEqual([
+    expect(
+      getDashboardSpecificationEntries({
+        peca: "Calça",
+        biotipo: "Ampulheta",
+        possuiManga: false,
+      }),
+    ).toEqual([
       { key: "peca", label: "Peça", value: "Calça" },
       { key: "biotipo", label: "Biotipo", value: "Ampulheta" },
       { key: "possuiManga", label: "Possui manga", value: "Não" },
     ]);
+  });
+
+  it("expõe análise Vision detalhada e diferencia avaliação técnica da avaliação do cliente", () => {
+    const evaluation = getDashboardVisionEvaluation({
+      id: "artifact-1",
+      executionId: "execution-1",
+      stepId: "step-1",
+      kind: "croqui",
+      selected: true,
+      status: "available",
+      storageBucket: "execution-assets",
+      storagePath: "generated/a.png",
+      sourceUrl: null,
+      mimeType: "image/png",
+      retentionUntil: "2026-01-01T00:00:00.000Z",
+      deletionAttempts: 0,
+      deletionErrorCode: null,
+      deletedAt: null,
+      createdAt: "2025-01-01T00:00:00.000Z",
+      rating: 2,
+      metadata: {
+        technicalScore: 4.35,
+        averageConfidence: 0.88,
+        rank: 1,
+        eligible: true,
+        assessment: {
+          schemaVersion: "croqui-vision-assessment-v1",
+          criteria: {
+            peca: {
+              expected: "Saia",
+              observed: "Saia",
+              applicable: true,
+              matched: true,
+              confidence: 0.95,
+              evidence: "Peça visível.",
+            },
+          },
+        },
+        visionAnalysis: {
+          detalhesTecnicos: {
+            barra: {
+              value: "Midi",
+              confidence: 0.8,
+              evidence: "Barra visível.",
+            },
+          },
+        },
+      },
+    });
+    expect(evaluation).toMatchObject({
+      technicalScore: 4.35,
+      averageConfidence: 0.88,
+      rank: 1,
+      legacy: false,
+      visionAnalysis: expect.any(Object),
+    });
+    expect(evaluation.criteria.peca).toMatchObject({
+      observed: "Saia",
+      confidence: 0.95,
+      evidence: "Peça visível.",
+    });
   });
 });
