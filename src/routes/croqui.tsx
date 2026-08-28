@@ -3,8 +3,9 @@ import { Header } from "@/components/Header";
 import { Stepper } from "@/components/Stepper";
 import { WhatsAppModal } from "@/components/WhatsAppModal";
 import { useLook } from "@/lib/store";
+import { resetLookAndNavigateHome } from "@/lib/flowReset";
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, Printer, Camera, Pencil } from "lucide-react";
+import { MessageCircle, Printer, Camera, Pencil, RotateCcw } from "lucide-react";
 import { generateCroquiFn, saveLookDbFn } from "@/server/api";
 
 import { LoadingScreen } from "@/components/LoadingScreen";
@@ -161,6 +162,7 @@ function Croqui() {
   }, [loading, s.croquiUrl, s.croquiUploadSessionId, s.dbId, s.executionId]);
 
   const handlePrint = () => window.print();
+  const resetToHome = () => resetLookAndNavigateHome(s, router);
 
   if (loading) {
     return <LoadingScreen initialStatus="Desenhando seu croqui..." statuses={dynamicMsgs} estimatedDuration={12000} />;
@@ -224,6 +226,9 @@ function Croqui() {
                   <Printer size={16} /> Imprimir
                 </button>
               </div>
+              <button onClick={resetToHome} className="btn-secondary flex items-center justify-center gap-2 w-full">
+                <RotateCcw size={16} /> Limpar tudo e voltar ao início
+              </button>
 
               {/* Seção de Ajuste integrada e fluida */}
               <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showAdjust ? 'max-h-[300px] opacity-100 border-t pt-4 mt-2' : 'max-h-0 opacity-0 pointer-events-none'}`}

@@ -3,6 +3,7 @@ import { Header } from "@/components/Header";
 import { Stepper } from "@/components/Stepper";
 import { WhatsAppModal } from "@/components/WhatsAppModal";
 import { useLook } from "@/lib/store";
+import { resetLookAndNavigateHome } from "@/lib/flowReset";
 import { useEffect, useState } from "react";
 import { MessageCircle, RotateCcw, Palette, Sparkles } from "lucide-react";
 
@@ -106,12 +107,7 @@ function Resultado() {
     return <LoadingScreen initialStatus="Renderizando sua peça..." statuses={dynamicMsgs} estimatedDuration={15000} />;
   }
 
-  const reset = () => {
-    const nome = s.nome;
-    s.reset();
-    s.set({ nome });
-    router.navigate({ to: "/criar" });
-  };
+  const resetToHome = () => resetLookAndNavigateHome(s, router);
 
   return (
     <>
@@ -158,8 +154,8 @@ function Resultado() {
                 <MessageCircle size={18} /> Enviar por WhatsApp
               </button>
               
-              <button onClick={reset} className="btn-secondary flex items-center justify-center gap-2">
-                <RotateCcw size={18} /> Criar outro look
+              <button onClick={resetToHome} className="btn-secondary flex items-center justify-center gap-2">
+                <RotateCcw size={18} /> Limpar tudo e voltar ao início
               </button>
             </div>
           </div>
