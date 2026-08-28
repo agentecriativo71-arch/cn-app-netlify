@@ -95,3 +95,24 @@ Esta camada disponibiliza o contrato HTTP; para que um assistente consulte
 automaticamente apenas com o identificador, o ambiente do assistente precisa
 ter um conector configurado com a URL da aplicação e esse token. Sem esse
 conector, o ID sozinho não concede acesso a dados privados.
+
+### Adaptador MCP local para Codex
+
+O repositório inclui `scripts/execution-mcp-server.ts`, um adaptador MCP
+somente leitura. Ele expõe a ferramenta `consultar_execucao` e encaminha cada
+ID para o endpoint HTTP usando o Bearer token. Para registrar o adaptador no
+Codex CLI, execute a partir deste repositório (com o token já definido apenas
+no ambiente local):
+
+```bash
+export APP_BASE_URL="https://seu-dominio"
+export EXECUTION_INTEGRATION_TOKEN="seu-token"
+codex mcp add cn-execucoes \
+  --env APP_BASE_URL="$APP_BASE_URL" \
+  --env EXECUTION_INTEGRATION_TOKEN="$EXECUTION_INTEGRATION_TOKEN" \
+  -- node --experimental-strip-types "$(pwd)/scripts/execution-mcp-server.ts"
+```
+
+Confirme com `codex mcp list` e reinicie a sessão do Codex para carregar a
+ferramenta. O token fica na configuração local do MCP, não no código nem no
+bundle do navegador.
