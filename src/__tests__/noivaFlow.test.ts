@@ -8,6 +8,7 @@ import {
   buildSleevelessInstruction,
   buildMannequinSurfaceInstruction,
   clearIncompatibleLookFields,
+  getPieceFlowRules,
 } from "../lib/noivaUtils";
 
 describe("Fluxo Vestido de Noiva - Ajustes Cliente", () => {
@@ -102,5 +103,26 @@ describe("Fluxo Vestido de Noiva - Ajustes Cliente", () => {
 
   it("limpa campos incompatíveis ao trocar para peça de baixo", () => {
     expect(clearIncompatibleLookFields("Saia", "Festa")).toMatchObject({ decote: null, manga: null, possuiManga: null, rendaDecisao: null, renda: null });
+  });
+
+  it("mantém Blazer sem opções de decote, manga ou biotipo", () => {
+    expect(getPieceFlowRules("Blazer")).toMatchObject({
+      showDecote: false,
+      showManga: false,
+      showBiotipo: false,
+    });
+    expect(isFormValidForNoiva({
+      nome: "Maria",
+      ocasiao: "Fardamento",
+      peca: "Blazer",
+      biotipo: null,
+      decote: null,
+      manga: null,
+      possuiManga: null,
+    })).toBe(true);
+    expect(clearIncompatibleLookFields("Blazer", "Fardamento")).toMatchObject({
+      decote: null,
+      biotipo: null,
+    });
   });
 });

@@ -46,6 +46,19 @@ export function getBackgroundInstruction(ocasiao?: string | null) {
   return "a clean white background";
 }
 
+export const SLEEVELESS_DECOTES = ["Frente Única", "Coração (Sweetheart)", "Tomara que Caia"];
+
+const NECKLINE_PIECES = ["Vestido", "Blusa", "Macacão", "Top"];
+
+export function getPieceFlowRules(peca?: string | null, decote?: string | null) {
+  const showDecote = NECKLINE_PIECES.includes(peca || "");
+  return {
+    showDecote,
+    showManga: showDecote && !SLEEVELESS_DECOTES.includes(decote || ""),
+    showBiotipo: peca !== "Blazer",
+  };
+}
+
 export function isFormValidForNoiva(state: {
   nome?: string | null;
   ocasiao?: string | null;
@@ -78,13 +91,13 @@ export function isFormValidForNoiva(state: {
     );
   }
 
-  const hasNeckline = ["Vestido", "Blusa", "Macacão", "Top", "Blazer"].includes(state.peca || "");
-  const hasSleeve = hasNeckline && !SLEEVELESS_DECOTES.includes(state.decote || "");
+  const { showDecote, showManga, showBiotipo } = getPieceFlowRules(state.peca, state.decote);
   const hasSkirt = ["Vestido", "Saia", "Macacão"].includes(state.peca || "");
   return !!(
-    state.peca && state.biotipo &&
-    (!hasNeckline || state.decote) &&
-    (!hasSleeve || state.possuiManga === false || state.manga) &&
+    state.peca &&
+    (!showBiotipo || state.biotipo) &&
+    (!showDecote || state.decote) &&
+    (!showManga || state.possuiManga === false || state.manga) &&
     (!hasSkirt || state.saia)
   );
 }
@@ -106,10 +119,12 @@ export function clearIncompatibleLookFields(peca: string | null, ocasiao?: strin
     patch.rendaDecisao = null;
     patch.renda = null;
   }
+  if (peca === "Blazer") {
+    patch.decote = null;
+    patch.biotipo = null;
+  }
   return patch;
 }
-
-export const SLEEVELESS_DECOTES = ["Frente Única", "Coração (Sweetheart)", "Tomara que Caia"];
 
 export function buildSleevelessInstruction(decote?: string | null, manga?: string | null): string {
   if (manga && manga !== "Sem Manga") return '';

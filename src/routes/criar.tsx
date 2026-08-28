@@ -6,7 +6,7 @@ import { ImageOff, Check, PartyPopper, Shirt, Ruler, MessageSquare } from "lucid
 import elementosData from "@/lib/elementos_vestuario.json";
 import { useEffect, useState } from "react";
 import { useVideoStore } from "@/lib/videoStore";
-import { clearIncompatibleLookFields, isFormValidForNoiva, SLEEVELESS_DECOTES } from "@/lib/noivaUtils";
+import { clearIncompatibleLookFields, getPieceFlowRules, isFormValidForNoiva } from "@/lib/noivaUtils";
 
 import ocasiaoCasamento from "@/assets/ocasiao-casamento.png";
 import ocasiaoFesta from "@/assets/ocasiao-festa.png";
@@ -241,10 +241,11 @@ function Criar() {
 
   // Condicionais de exibição baseadas na peça principal selecionada
   const pecaAtual = isNoiva ? "Vestido" : s.peca;
+  const pieceFlowRules = getPieceFlowRules(pecaAtual, s.decote);
   const showComprimento = pecaAtual === "Vestido" || pecaAtual === "Saia";
-  const showDecote = pecaAtual === "Vestido" || pecaAtual === "Blusa" || pecaAtual === "Macacão" || pecaAtual === "Top" || pecaAtual === "Blazer";
-  const isSleevelessDecote = SLEEVELESS_DECOTES.includes(s.decote || "");
-  const showManga = (pecaAtual === "Vestido" || pecaAtual === "Blusa" || pecaAtual === "Macacão" || pecaAtual === "Top" || pecaAtual === "Blazer") && !isSleevelessDecote;
+  const showDecote = pieceFlowRules.showDecote;
+  const showManga = pieceFlowRules.showManga;
+  const showBiotipo = pieceFlowRules.showBiotipo;
   const showSaia = pecaAtual === "Vestido" || pecaAtual === "Saia" || pecaAtual === "Macacão";
 
   // Definindo as etapas ativas dinamicamente
@@ -422,6 +423,8 @@ function Criar() {
               } else if (v === "Blazer") {
                 patch.saia = null;
                 patch.comprimento = null;
+                patch.decote = null;
+                patch.biotipo = null;
                 patch.manga = "Longa (Long Sleeve)";
                 patch.possuiManga = true;
               } else if (v === "Blusa" || v === "Macacão" || v === "Top") {
@@ -507,20 +510,22 @@ function Criar() {
         });
       }
       
-      steps.push({
-        id: "biotipo",
-        title: "Seu Biotipo",
-        hint: "Obrigatório",
-        valid: !!s.biotipo,
-        render: () => (
-          <ElementGrid
-            className="grid-2x2"
-            items={BIOTIPOS_ITEMS}
-            selected={s.biotipo}
-            onSelect={(nome) => s.set({ biotipo: nome || null })}
-          />
-        )
-      });
+      if (showBiotipo) {
+        steps.push({
+          id: "biotipo",
+          title: "Seu Biotipo",
+          hint: "Obrigatório",
+          valid: !!s.biotipo,
+          render: () => (
+            <ElementGrid
+              className="grid-2x2"
+              items={BIOTIPOS_ITEMS}
+              selected={s.biotipo}
+              onSelect={(nome) => s.set({ biotipo: nome || null })}
+            />
+          )
+        });
+      }
     }
   }
 

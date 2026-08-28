@@ -506,4 +506,30 @@ describe("fluxo público de referência", () => {
     expect(subscribeMock).toHaveBeenCalledTimes(4);
     expect(maxActiveGenerations).toBe(2);
   });
+
+  it("gera Blazer sem exigir decote, manga ou biotipo", async () => {
+    analyzeMock.mockImplementation(async ({ prompt }: { prompt?: string }) => {
+      const analysis = validAnalysis();
+      if (prompt?.startsWith("Evaluate this generated fashion croqui")) {
+        analysis.peca = { ...analysis.peca, value: "Blazer" };
+        analysis.comprimento = { ...analysis.comprimento, value: null };
+        analysis.decote = { ...analysis.decote, value: null };
+        analysis.possuiManga = { ...analysis.possuiManga, value: true };
+        analysis.manga = { ...analysis.manga, value: "Longa (Long Sleeve)" };
+        analysis.saia = { ...analysis.saia, value: null };
+      }
+      return { analysis, providerExtras: [] };
+    });
+
+    const result = await executeServerFn(generateCroquiFn, {
+      peca: "Blazer",
+      ocasiao: "Fardamento",
+    });
+
+    expect(result.url).toBe("https://fal.test/croqui.png");
+    expect(result.metadata.candidates).toHaveLength(4);
+    expect(subscribeMock.mock.calls[0][1].input.prompt).not.toContain(
+      "NECKLINE STYLE",
+    );
+  });
 });

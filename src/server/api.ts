@@ -18,6 +18,7 @@ import {
   getMannequinUrl,
   buildSleevelessInstruction,
   buildMannequinSurfaceInstruction,
+  getPieceFlowRules,
   SLEEVELESS_DECOTES,
 } from "../lib/noivaUtils";
 import { buildCatalogElementPromptFragment } from "../lib/garmentPrompt";
@@ -208,13 +209,11 @@ async function internalGenerateCroqui(
       "O fluxo de Noiva exige cerimônia, renda, comprimento, biotipo e comentário.",
     );
   }
-  const topPiece = ["Vestido", "Blusa", "Macacão", "Top", "Blazer"].includes(
-    peca,
-  );
   const bottomPiece = ["Vestido", "Saia", "Macacão"].includes(peca);
-  if (topPiece && !decote)
+  const { showDecote, showManga } = getPieceFlowRules(peca, decote);
+  if (showDecote && !decote)
     throw new Error("Decote ou gola é obrigatório para esta peça.");
-  if (topPiece && possuiManga !== false && !manga)
+  if (showManga && possuiManga !== false && !manga)
     throw new Error(
       "Manga é obrigatória para esta peça, exceto quando sem manga for confirmado.",
     );
