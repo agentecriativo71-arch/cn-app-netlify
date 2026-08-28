@@ -184,6 +184,45 @@ describe("carregamento do dashboard", () => {
           startedAt: "2026-01-01T00:00:00.000Z",
           finishedAt: "2026-01-01T00:00:01.000Z",
           durationMs: 1000,
+        }, {
+          id: "realistic-step",
+          executionId: "execution-1",
+          parentStepId: null,
+          stage: "realistic_provider_request",
+          attempt: 1,
+          status: "success",
+          provider: "fal",
+          model: "seedream-v4",
+          promptVersion: "realista-manequim-v1",
+          seed: null,
+          errorCode: null,
+          metadata: {
+            schemaVersion: "provider-call-v1",
+            operation: "fal-ai/bytedance/seedream/v4/edit",
+            responseSummary: { outputImageCount: 1 },
+            referenceManifest: [
+              {
+                position: 1,
+                role: "croqui",
+                source: "generated_artifact",
+                transport: "https_url",
+                providerHost: "v3b.fal.media",
+                providerPath: "/files/croqui.png",
+                referenceDigest: "candidate-digest",
+              },
+              {
+                position: 2,
+                role: "fabric",
+                source: "fabric",
+                transport: "https_url",
+                providerHost: "cdn.example",
+                providerPath: "/fabric.png",
+              },
+            ],
+          },
+          startedAt: "2026-01-01T00:00:00.000Z",
+          finishedAt: "2026-01-01T00:00:01.000Z",
+          durationMs: 1000,
         }],
         artifacts: [{
           id: "crop-artifact",
@@ -246,6 +285,21 @@ describe("carregamento do dashboard", () => {
           imageUrl: "https://signed.test/generated/execution-1/candidate.png",
         }),
       ]);
+      const realisticCall = getDashboardProviderCall(detail.steps[2]);
+      expect(realisticCall).toMatchObject({
+        operation: "fal-ai/bytedance/seedream/v4/edit",
+        responseSummary: { outputImageCount: 1 },
+      });
+      expect(realisticCall?.references).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          role: "croqui",
+          imageUrl: "https://signed.test/generated/execution-1/candidate.png",
+        }),
+        expect.objectContaining({
+          role: "fabric",
+          imageUrl: "https://cdn.example/fabric.png",
+        }),
+      ]));
     } finally {
       setExecutionAssetStoreForTests(null);
     }

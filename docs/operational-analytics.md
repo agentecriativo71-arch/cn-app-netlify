@@ -76,6 +76,13 @@ digest curto para correlação. Quando a referência corresponde a um recorte
 principal retido, o dashboard também exibe uma miniatura e um link temporário
 assinado; os recortes de detalhe continuam sem miniatura por não serem retidos.
 
+O fluxo de croqui gera quatro candidatos em lotes de, no máximo, dois em
+paralelo. Cada candidato mantém seu próprio retry, análise Vision, persistência
+e registro de duração/seed; a seleção final continua sendo feita somente após
+todos os candidatos do lote. As chamadas de foto realista também registram
+manifesto e resumo de resposta do Fal.ai, incluindo as referências de manequim,
+croqui, tecido e variantes quando o pipeline de tecido estiver habilitado.
+
 O sistema não grava a URL completa, query string, data URL, base64 ou prompt.
 Execuções antigas sem o manifesto continuam visíveis, mas exibem somente o
 diagnóstico legado disponível.

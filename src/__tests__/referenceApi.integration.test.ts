@@ -23,6 +23,7 @@ vi.mock("../server/referenceVision", () => ({
 }));
 
 import {
+  generateCroquiFn,
   pollUploadSessionFn,
   retryReferenceGenerationFn,
   uploadReferenceFilesFn,
@@ -468,5 +469,41 @@ describe("fluxo público de referência", () => {
       if (previousGate === undefined) delete process.env.CROQUI_VISUAL_GATE;
       else process.env.CROQUI_VISUAL_GATE = previousGate;
     }
+  });
+
+  it("gera no máximo dois candidatos de croqui simultaneamente", async () => {
+    let activeGenerations = 0;
+    let maxActiveGenerations = 0;
+    analyzeMock.mockImplementation(async ({ prompt }: { prompt?: string }) => {
+      const analysis = validAnalysis();
+      if (prompt?.startsWith("Evaluate this generated fashion croqui")) {
+        analysis.peca = { ...analysis.peca, value: "Saia" };
+        analysis.saia = { ...analysis.saia, value: "Evasê" };
+      }
+      return { analysis, providerExtras: [] };
+    });
+    subscribeMock.mockImplementation(async () => {
+      activeGenerations += 1;
+      maxActiveGenerations = Math.max(
+        maxActiveGenerations,
+        activeGenerations,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      activeGenerations -= 1;
+      return {
+        images: [{ url: `https://fal.test/candidate-${subscribeMock.mock.calls.length}.png` }],
+      };
+    });
+
+    const result = await executeServerFn(generateCroquiFn, {
+      peca: "Saia",
+      biotipo: "Retângulo",
+      saia: "Evasê",
+      ocasiao: "Festa",
+    });
+
+    expect(result.metadata.candidates).toHaveLength(4);
+    expect(subscribeMock).toHaveBeenCalledTimes(4);
+    expect(maxActiveGenerations).toBe(2);
   });
 });

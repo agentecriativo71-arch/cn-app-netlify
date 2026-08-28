@@ -590,13 +590,12 @@ export async function signDashboardArtifacts(
         ? artifact.metadata.referenceDigest
         : null;
     if (
-      artifact.stepId &&
       (artifact.kind === "croqui_candidate" ||
         artifact.kind === "croqui" ||
         artifact.kind === "realistic")
     ) {
-      generatedArtifactsByStepId.set(artifact.stepId, artifact.signedUrl);
       if (artifactDigest) generatedArtifactsByDigest.set(artifactDigest, artifact.signedUrl);
+      if (artifact.stepId) generatedArtifactsByStepId.set(artifact.stepId, artifact.signedUrl);
     }
     if (artifact.kind !== "reference_crop") continue;
     if (artifactDigest) referenceArtifactsByDigest.set(artifactDigest, artifact.signedUrl);
@@ -623,12 +622,12 @@ export async function signDashboardArtifacts(
           const source = typeof reference.source === "string" ? reference.source : "";
           const digest = typeof reference.referenceDigest === "string" ? reference.referenceDigest : null;
           const generatedArtifactUrl =
-            source === "generated_artifact" &&
-            (step.stage === "croqui_candidate_evaluation" ||
-              step.stage === "realistic_vision_evaluation")
+            source === "generated_artifact"
               ? (digest ? generatedArtifactsByDigest.get(digest) : null) ||
-                generatedArtifactsByStepId.get(step.id) ||
-                null
+                ((step.stage === "croqui_candidate_evaluation" ||
+                  step.stage === "realistic_vision_evaluation")
+                  ? generatedArtifactsByStepId.get(step.id) || null
+                  : null)
               : null;
           const signedUrl =
             (digest ? referenceArtifactsByDigest.get(digest) : null) ||
@@ -646,7 +645,7 @@ export async function signDashboardArtifacts(
           const providerPath = typeof reference.providerPath === "string" ? reference.providerPath : null;
           const publicImageUrl =
             !signedUrl &&
-            (source === "catalog" || source === "mannequin") &&
+            (source === "catalog" || source === "mannequin" || source === "fabric") &&
             providerHost &&
             providerPath
               ? `https://${providerHost}${providerPath}`

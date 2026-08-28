@@ -103,6 +103,7 @@ import {
 
 const crmSupabase = getCrmSupabaseAdminClient();
 const operationalSupabase = getOperationalSupabaseAdminClient();
+const CROQUI_CANDIDATE_CONCURRENCY = 2;
 
 const PECA_EN: Record<string, string> = {
   Vestido: "dress",
@@ -534,7 +535,9 @@ async function generateCroquiCandidates(
   });
 
   let abortAfterNonRetryableFailure = false;
-  for (let index = 0; index < CROQUI_CANDIDATE_COUNT; index += 1) {
+  const processCandidate = async (
+    index: number,
+  ): Promise<CroquiGenerationMetadata["candidates"][number]> => {
     const seed = 260826 + index;
     const attempt = index + 1;
     const generationStep = await execution?.startStep({
@@ -636,7 +639,7 @@ async function generateCroquiCandidates(
           ...(finalDiagnostic || {}),
         },
       });
-      candidates.push({
+      return {
         url: "",
         seed,
         attempt,
@@ -647,9 +650,7 @@ async function generateCroquiCandidates(
         assessment: null,
         visionAnalysis: null,
         rejectionReasons: [errorCode],
-      });
-      if (abortAfterNonRetryableFailure) break;
-      continue;
+      };
     }
 
     await generationStep?.succeed({
@@ -730,8 +731,8 @@ async function generateCroquiCandidates(
           visionAnalysis: evaluated.analysis,
         },
       });
-      candidates.push(candidate);
       await persistCandidateArtifact(candidate);
+      return candidate;
     } catch {
       await evaluationStep?.fail("vision_evaluation_failed", {
         provider: evaluator.providerName,
@@ -754,9 +755,26 @@ async function generateCroquiCandidates(
         visionAnalysis: null,
         rejectionReasons: ["vision_evaluation_failed"],
       };
-      candidates.push(candidate);
       await persistCandidateArtifact(candidate);
+      return candidate;
     }
+  };
+
+  // Duas tarefas independentes rodam em paralelo; cada lote termina antes do
+  // próximo, preservando limite de concorrência e parada após erro fatal.
+  for (
+    let batchStart = 0;
+    batchStart < CROQUI_CANDIDATE_COUNT && !abortAfterNonRetryableFailure;
+    batchStart += CROQUI_CANDIDATE_CONCURRENCY
+  ) {
+    const batchIndexes = Array.from(
+      { length: Math.min(CROQUI_CANDIDATE_CONCURRENCY, CROQUI_CANDIDATE_COUNT - batchStart) },
+      (_, offset) => batchStart + offset,
+    );
+    const batchCandidates = await Promise.all(
+      batchIndexes.map((index) => processCandidate(index)),
+    );
+    candidates.push(...batchCandidates);
   }
   const ranked = rankCroquiCandidates(candidates);
   let selected: CroquiGenerationMetadata["candidates"][number];
