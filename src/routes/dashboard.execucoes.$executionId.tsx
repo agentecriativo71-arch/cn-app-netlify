@@ -191,8 +191,14 @@ function ExecutionDetailPage() {
                                   <span className="text-white/80">{reference.position}. {referenceRoleLabel(reference.role)}</span>
                                   {reference.selectedValue ? ` — ${reference.selectedValue}` : ""}
                                   {reference.assetName ? ` (${reference.assetName})` : ""}
-                                  <span className="block text-white/40">{referenceSourceLabel(reference.source)} · {reference.transport}</span>
-                                  {reference.providerHost ? <span className="block text-white/40">{reference.providerHost}{reference.providerPath || ""}</span> : null}
+                                  <span className="block text-white/40">
+                                    {referenceSourceLabel(reference.source)} · {referenceTransportLabel(reference.transport)}
+                                  </span>
+                                  {referenceLocationLabel(reference) ? (
+                                    <span className="block break-all text-white/40">
+                                      {referenceLocationLabel(reference)}
+                                    </span>
+                                  ) : null}
                                 </div>
                               </li>
                             ))}
@@ -560,6 +566,25 @@ function referenceRoleLabel(role: string): string {
 
 function referenceSourceLabel(source: string): string {
   return REFERENCE_SOURCE_LABELS[source] || source;
+}
+
+const REFERENCE_TRANSPORT_LABELS: Record<string, string> = {
+  https_url: "HTTPS público",
+  data_url: "imagem privada",
+  other_url: "URL externa",
+  unknown: "transporte não informado",
+};
+
+function referenceTransportLabel(transport: string): string {
+  return REFERENCE_TRANSPORT_LABELS[transport] || transport;
+}
+
+function referenceLocationLabel(reference: {
+  providerHost: string | null;
+  providerPath: string | null;
+}): string | null {
+  if (!reference.providerHost) return null;
+  return `https://${reference.providerHost}${reference.providerPath || ""}`;
 }
 
 function formatSummary(summary: Record<string, string | number | boolean | null>): string {

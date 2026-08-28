@@ -453,6 +453,9 @@ async function generateCroquiCandidates(
         schemaVersion: "croqui-candidate-v2",
         attempt: candidate.attempt || 1,
         seed: candidate.seed,
+        referenceDigest: candidate.url
+          ? providerReferenceDigest(candidate.url)
+          : null,
         score: candidate.score,
         technicalScore: candidate.score,
         averageConfidence: candidate.averageConfidence ?? null,
@@ -815,6 +818,9 @@ async function generateCroquiCandidates(
         schemaVersion: "croqui-candidate-v2",
         attempt: candidate.attempt || 1,
         seed: candidate.seed,
+        referenceDigest: candidate.url
+          ? providerReferenceDigest(candidate.url)
+          : null,
         score: candidate.score,
         technicalScore: candidate.score,
         averageConfidence: candidate.averageConfidence ?? null,

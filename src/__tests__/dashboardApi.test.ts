@@ -157,6 +157,33 @@ describe("carregamento do dashboard", () => {
           startedAt: "2026-01-01T00:00:00.000Z",
           finishedAt: "2026-01-01T00:00:01.000Z",
           durationMs: 1000,
+        }, {
+          id: "vision-step",
+          executionId: "execution-1",
+          parentStepId: null,
+          stage: "croqui_candidate_evaluation",
+          attempt: 1,
+          status: "success",
+          provider: "fal",
+          model: "google/gemini-2.5-flash",
+          promptVersion: "croqui-vision-assessment-v1",
+          seed: 260826,
+          errorCode: null,
+          metadata: {
+            schemaVersion: "provider-call-v1",
+            operation: "openrouter/router/vision",
+            referenceManifest: [{
+              position: 1,
+              role: "croqui_candidate",
+              source: "generated_artifact",
+              transport: "https_url",
+              providerHost: "v3b.fal.media",
+              providerPath: "/files/candidate.png",
+            }],
+          },
+          startedAt: "2026-01-01T00:00:00.000Z",
+          finishedAt: "2026-01-01T00:00:01.000Z",
+          durationMs: 1000,
         }],
         artifacts: [{
           id: "crop-artifact",
@@ -171,6 +198,24 @@ describe("carregamento do dashboard", () => {
           mimeType: "image/jpeg",
           metadata: { role: "single", referenceDigest: "crop-digest" },
           retentionUntil: "2026-02-01T00:00:00.000Z",
+          deletionAttempts: 0,
+          deletionErrorCode: null,
+          deletedAt: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          rating: null,
+        }, {
+          id: "candidate-artifact",
+          executionId: "execution-1",
+          stepId: "vision-step",
+          kind: "croqui_candidate",
+          selected: false,
+          status: "available",
+          storageBucket: "execution-assets",
+          storagePath: "generated/execution-1/candidate.png",
+          sourceUrl: null,
+          mimeType: "image/png",
+          metadata: { seed: 260826, referenceDigest: "candidate-digest" },
+          retentionUntil: "2026-04-01T00:00:00.000Z",
           deletionAttempts: 0,
           deletionErrorCode: null,
           deletedAt: null,
@@ -194,6 +239,13 @@ describe("carregamento do dashboard", () => {
           imageUrl: "https://cdn.example/biotipo.png",
         }),
       ]));
+      const visionCall = getDashboardProviderCall(detail.steps[1]);
+      expect(visionCall?.references).toEqual([
+        expect.objectContaining({
+          role: "croqui_candidate",
+          imageUrl: "https://signed.test/generated/execution-1/candidate.png",
+        }),
+      ]);
     } finally {
       setExecutionAssetStoreForTests(null);
     }

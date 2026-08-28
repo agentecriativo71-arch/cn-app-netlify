@@ -581,13 +581,25 @@ export async function signDashboardArtifacts(
 
   const referenceArtifactsByDigest = new Map<string, string>();
   const referenceArtifactsByRole = new Map<string, string>();
+  const generatedArtifactsByDigest = new Map<string, string>();
+  const generatedArtifactsByStepId = new Map<string, string>();
   for (const artifact of artifacts) {
-    if (artifact.kind !== "reference_crop" || !artifact.signedUrl) continue;
-    const digest =
+    if (!artifact.signedUrl) continue;
+    const artifactDigest =
       artifact.metadata && typeof artifact.metadata.referenceDigest === "string"
         ? artifact.metadata.referenceDigest
         : null;
-    if (digest) referenceArtifactsByDigest.set(digest, artifact.signedUrl);
+    if (
+      artifact.stepId &&
+      (artifact.kind === "croqui_candidate" ||
+        artifact.kind === "croqui" ||
+        artifact.kind === "realistic")
+    ) {
+      generatedArtifactsByStepId.set(artifact.stepId, artifact.signedUrl);
+      if (artifactDigest) generatedArtifactsByDigest.set(artifactDigest, artifact.signedUrl);
+    }
+    if (artifact.kind !== "reference_crop") continue;
+    if (artifactDigest) referenceArtifactsByDigest.set(artifactDigest, artifact.signedUrl);
     const role =
       artifact.metadata && typeof artifact.metadata.role === "string"
         ? artifact.metadata.role
@@ -610,8 +622,17 @@ export async function signDashboardArtifacts(
           const reference = value as Record<string, unknown>;
           const source = typeof reference.source === "string" ? reference.source : "";
           const digest = typeof reference.referenceDigest === "string" ? reference.referenceDigest : null;
+          const generatedArtifactUrl =
+            source === "generated_artifact" &&
+            (step.stage === "croqui_candidate_evaluation" ||
+              step.stage === "realistic_vision_evaluation")
+              ? (digest ? generatedArtifactsByDigest.get(digest) : null) ||
+                generatedArtifactsByStepId.get(step.id) ||
+                null
+              : null;
           const signedUrl =
             (digest ? referenceArtifactsByDigest.get(digest) : null) ||
+            generatedArtifactUrl ||
             (source === "customer_crop"
               ? referenceArtifactsByRole.get(
                   customerReferenceCount > 1
