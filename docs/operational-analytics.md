@@ -8,6 +8,8 @@
 4. Configurar `VITE_SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` e `SUPABASE_SERVICE_KEY` com credenciais do projeto operacional.
 5. Configurar `CRM_SUPABASE_URL`, `CRM_SUPABASE_SERVICE_KEY` e `CN_ORGANIZATION_ID` com dados do projeto CRM.
 6. Definir `app_metadata.role=admin` nos usuários autorizados e configurar `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` e `APP_BASE_URL`.
+7. Para permitir consulta por um conector externo, definir também
+   `EXECUTION_INTEGRATION_TOKEN` somente no ambiente do servidor.
 
 Em um container persistente do EasyPanel com saída IPv4, prefira a URL do Supavisor em session mode, porta 5432, para `ANALYTICS_DATABASE_URL`.
 
@@ -61,3 +63,35 @@ locais permanecem no repositório como fonte do upload.
 - A aplicação não persiste a foto original, base64, payload bruto, prompt integral ou segredos.
 
 O acesso começa em `/dashboard/login`; a visão geral fica em `/dashboard` e o detalhe em `/dashboard/execucoes/:executionId`. O cliente pode avaliar croqui e foto realista com 1–5 estrelas, editando a nota enquanto o resultado estiver disponível.
+
+## Integração por `executionId`
+
+O endpoint somente leitura
+`GET /api/integrations/execucoes/:executionId` devolve o mesmo detalhe
+operacional usado pelo dashboard: seleção do usuário, etapas, tentativas,
+avaliações Vision, artefatos aprovados/reprovados e estado das notificações.
+Artefatos disponíveis recebem URL assinada válida por cinco minutos; a URL de
+origem nunca é retornada.
+
+Há duas formas de autenticação:
+
+- sessão de um usuário administrativo já autenticado no dashboard;
+- `Authorization: Bearer <EXECUTION_INTEGRATION_TOKEN>` para um conector
+  externo.
+
+Exemplo de consulta do conector:
+
+```bash
+curl -H "Authorization: Bearer $EXECUTION_INTEGRATION_TOKEN" \
+  "$APP_BASE_URL/api/integrations/execucoes/<executionId>"
+```
+
+O token não deve ser enviado em query string, registrado em logs ou incluído
+no bundle do navegador. A resposta envia `Cache-Control: no-store` e o
+endpoint não altera a execução. Troque o valor da variável para revogar ou
+rotacionar o acesso.
+
+Esta camada disponibiliza o contrato HTTP; para que um assistente consulte
+automaticamente apenas com o identificador, o ambiente do assistente precisa
+ter um conector configurado com a URL da aplicação e esse token. Sem esse
+conector, o ID sozinho não concede acesso a dados privados.

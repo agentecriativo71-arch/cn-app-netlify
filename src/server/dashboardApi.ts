@@ -376,6 +376,31 @@ export type DashboardExecutionDetail = Omit<ExecutionDetail, "artifacts"> & {
   artifacts: Array<ExecutionArtifactRecord & { signedUrl?: string | null }>;
 };
 
+/**
+ * Sanitiza as URLs dos artefatos para qualquer consumidor administrativo.
+ * O analytics guarda somente o caminho privado; a URL assinada é curta e
+ * criada no momento da consulta, evitando exposição de credenciais ou links
+ * persistentes no dashboard e na integração externa.
+ */
+export async function signDashboardArtifacts(
+  detail: ExecutionDetail,
+): Promise<DashboardExecutionDetail> {
+  const assets = getExecutionAssetStore();
+  const artifacts = await Promise.all(
+    detail.artifacts.map(async (artifact) => ({
+      ...artifact,
+      sourceUrl: null,
+      signedUrl:
+        assets && artifact.storagePath && artifact.status === "available"
+          ? await assets
+              .createSignedUrl(artifact.storagePath, 300)
+              .catch(() => null)
+          : null,
+    })),
+  );
+  return { ...detail, artifacts };
+}
+
 export type ExecutionDetailLoadResult =
   | { status: "ready"; data: DashboardExecutionDetail }
   | { status: "unauthorized" }
@@ -427,21 +452,6 @@ export const getExecutionDetailFn: any = createServerFn({
   return loadExecutionDetail(executionId, {
     requireAdmin: requireAdministrativeUser,
     getDetail: (id) => operationalAnalytics.getExecutionDetail(id),
-    signArtifacts: async (detail) => {
-      const assets = getExecutionAssetStore();
-      const artifacts = await Promise.all(
-        detail.artifacts.map(async (artifact) => ({
-          ...artifact,
-          sourceUrl: null,
-          signedUrl:
-            assets && artifact.storagePath && artifact.status === "available"
-              ? await assets
-                  .createSignedUrl(artifact.storagePath, 300)
-                  .catch(() => null)
-              : null,
-        })),
-      );
-      return { ...detail, artifacts };
-    },
+    signArtifacts: signDashboardArtifacts,
   });
 });

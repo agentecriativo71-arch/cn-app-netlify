@@ -19,6 +19,7 @@ import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
 import { Route as UploadSessionIdRouteImport } from './routes/upload.$sessionId'
 import { Route as DashboardLoginRouteImport } from './routes/dashboard.login'
 import { Route as DashboardExecucoesExecutionIdRouteImport } from './routes/dashboard.execucoes.$executionId'
+import { Route as ApiIntegrationsExecucoesExecutionIdRouteImport } from './routes/api.integrations.execucoes.$executionId'
 
 const ResultadoRoute = ResultadoRouteImport.update({
   id: '/resultado',
@@ -71,6 +72,12 @@ const DashboardExecucoesExecutionIdRoute =
     path: '/execucoes/$executionId',
     getParentRoute: () => DashboardRoute,
   } as any)
+const ApiIntegrationsExecucoesExecutionIdRoute =
+  ApiIntegrationsExecucoesExecutionIdRouteImport.update({
+    id: '/api/integrations/execucoes/$executionId',
+    path: '/api/integrations/execucoes/$executionId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/upload/$sessionId': typeof UploadSessionIdRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/execucoes/$executionId': typeof DashboardExecucoesExecutionIdRoute
+  '/api/integrations/execucoes/$executionId': typeof ApiIntegrationsExecucoesExecutionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -94,6 +102,7 @@ export interface FileRoutesByTo {
   '/upload/$sessionId': typeof UploadSessionIdRoute
   '/dashboard': typeof DashboardIndexRoute
   '/dashboard/execucoes/$executionId': typeof DashboardExecucoesExecutionIdRoute
+  '/api/integrations/execucoes/$executionId': typeof ApiIntegrationsExecucoesExecutionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -107,6 +116,7 @@ export interface FileRoutesById {
   '/upload/$sessionId': typeof UploadSessionIdRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/execucoes/$executionId': typeof DashboardExecucoesExecutionIdRoute
+  '/api/integrations/execucoes/$executionId': typeof ApiIntegrationsExecucoesExecutionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -121,6 +131,7 @@ export interface FileRouteTypes {
     | '/upload/$sessionId'
     | '/dashboard/'
     | '/dashboard/execucoes/$executionId'
+    | '/api/integrations/execucoes/$executionId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -132,6 +143,7 @@ export interface FileRouteTypes {
     | '/upload/$sessionId'
     | '/dashboard'
     | '/dashboard/execucoes/$executionId'
+    | '/api/integrations/execucoes/$executionId'
   id:
     | '__root__'
     | '/'
@@ -144,6 +156,7 @@ export interface FileRouteTypes {
     | '/upload/$sessionId'
     | '/dashboard/'
     | '/dashboard/execucoes/$executionId'
+    | '/api/integrations/execucoes/$executionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -154,6 +167,7 @@ export interface RootRouteChildren {
   RealistaRoute: typeof RealistaRoute
   ResultadoRoute: typeof ResultadoRoute
   UploadSessionIdRoute: typeof UploadSessionIdRoute
+  ApiIntegrationsExecucoesExecutionIdRoute: typeof ApiIntegrationsExecucoesExecutionIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -228,6 +242,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardExecucoesExecutionIdRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/api/integrations/execucoes/$executionId': {
+      id: '/api/integrations/execucoes/$executionId'
+      path: '/api/integrations/execucoes/$executionId'
+      fullPath: '/api/integrations/execucoes/$executionId'
+      preLoaderRoute: typeof ApiIntegrationsExecucoesExecutionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -255,6 +276,8 @@ const rootRouteChildren: RootRouteChildren = {
   RealistaRoute: RealistaRoute,
   ResultadoRoute: ResultadoRoute,
   UploadSessionIdRoute: UploadSessionIdRoute,
+  ApiIntegrationsExecucoesExecutionIdRoute:
+    ApiIntegrationsExecucoesExecutionIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
