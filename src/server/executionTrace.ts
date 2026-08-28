@@ -44,7 +44,7 @@ export type ProviderCallTrace = {
   requestSummary: Record<string, string | number | boolean | null>;
 };
 
-function digest(value: string): string {
+export function providerReferenceDigest(value: string): string {
   return createHash("sha256").update(value).digest("hex").slice(0, 16);
 }
 
@@ -95,7 +95,7 @@ export function sanitizeProviderReferences(
       providerPath: isPrivateInput ? null : location.providerPath,
       referenceDigest:
         typeof reference.value === "string" && reference.value.length > 0
-          ? digest(reference.value)
+          ? providerReferenceDigest(reference.value)
           : null,
     };
   });
@@ -117,7 +117,7 @@ export function createProviderCallTrace(input: {
     referenceCount: input.references?.length || 0,
     referenceManifest: sanitizeProviderReferences(input.references || []),
     templateVersion: input.templateVersion || null,
-    templateDigest: template ? digest(template) : null,
+    templateDigest: template ? providerReferenceDigest(template) : null,
     templateChars: template ? template.length : null,
     requestSummary: input.requestSummary || {},
   };

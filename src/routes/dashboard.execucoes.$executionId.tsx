@@ -168,12 +168,32 @@ function ExecutionDetailPage() {
                           <p className="text-xs text-white/80">Referências enviadas ao provedor</p>
                           <ol className="mt-1 space-y-1">
                             {providerCall.references.map((reference) => (
-                              <li key={`${reference.position}-${reference.referenceDigest || reference.role}`} className="text-xs text-white/60">
-                                <span className="text-white/80">{reference.position}. {referenceRoleLabel(reference.role)}</span>
-                                {reference.selectedValue ? ` — ${reference.selectedValue}` : ""}
-                                {reference.assetName ? ` (${reference.assetName})` : ""}
-                                <span className="text-white/40"> · {referenceSourceLabel(reference.source)} · {reference.transport}</span>
-                                {reference.providerHost ? <span className="text-white/40"> · {reference.providerHost}</span> : null}
+                              <li key={`${reference.position}-${reference.referenceDigest || reference.role}`} className="flex gap-2 rounded border border-white/10 p-2 text-xs text-white/60">
+                                {reference.imageUrl ? (
+                                  <a
+                                    href={reference.imageUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title="Abrir referência em tamanho maior"
+                                  >
+                                    <img
+                                      src={reference.imageUrl}
+                                      alt={`Referência ${referenceRoleLabel(reference.role)}`}
+                                      className="h-16 w-16 shrink-0 rounded object-cover bg-black/20"
+                                    />
+                                  </a>
+                                ) : (
+                                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded bg-black/20 px-1 text-center text-[10px] text-white/35">
+                                    Miniatura não retida
+                                  </div>
+                                )}
+                                <div>
+                                  <span className="text-white/80">{reference.position}. {referenceRoleLabel(reference.role)}</span>
+                                  {reference.selectedValue ? ` — ${reference.selectedValue}` : ""}
+                                  {reference.assetName ? ` (${reference.assetName})` : ""}
+                                  <span className="block text-white/40">{referenceSourceLabel(reference.source)} · {reference.transport}</span>
+                                  {reference.providerHost ? <span className="block text-white/40">{reference.providerHost}{reference.providerPath || ""}</span> : null}
+                                </div>
                               </li>
                             ))}
                           </ol>

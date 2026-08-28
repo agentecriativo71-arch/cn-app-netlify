@@ -3,12 +3,14 @@ import {
   getDashboardSpecificationEntries,
   getDashboardProviderCall,
   getDashboardStepPresentation,
+  signDashboardArtifacts,
   getDashboardStepDiagnostic,
   getDashboardGenerationSummary,
   getDashboardVisionEvaluation,
   loadDashboardOverview,
   loadExecutionDetail,
 } from "../server/dashboardApi";
+import { setExecutionAssetStoreForTests } from "../server/executionAssetsRuntime";
 
 describe("carregamento do dashboard", () => {
   it("traduz etapas técnicas para títulos e estados descritivos em português", () => {
@@ -101,6 +103,100 @@ describe("carregamento do dashboard", () => {
     });
     expect(JSON.stringify(call)).not.toContain("data:image");
     expect(JSON.stringify(call)).not.toContain("https://");
+  });
+
+  it("assina recortes retidos e injeta a miniatura somente na resposta do dashboard", async () => {
+    setExecutionAssetStoreForTests({
+      createSignedUrl: async (path: string) => `https://signed.test/${path}`,
+    } as any);
+    try {
+      const detail = await signDashboardArtifacts({
+        id: "execution-1",
+        source: "reference",
+        status: "completed",
+        trackingStatus: "healthy",
+        specification: {},
+        startedAt: "2026-01-01T00:00:00.000Z",
+        completedAt: "2026-01-01T00:00:01.000Z",
+        failedAt: null,
+        errorCode: null,
+        analyticsRetentionUntil: "2027-01-01T00:00:00.000Z",
+        steps: [{
+          id: "step-1",
+          executionId: "execution-1",
+          parentStepId: null,
+          stage: "croqui_provider_request",
+          attempt: 1,
+          status: "success",
+          provider: "fal",
+          model: "seedream-v4",
+          promptVersion: "croqui-fidelity-v3",
+          seed: 260826,
+          errorCode: null,
+          metadata: {
+            schemaVersion: "provider-call-v1",
+            operation: "fal-ai/bytedance/seedream/v4/edit",
+            referenceManifest: [
+              {
+                position: 1,
+                role: "customer_crop",
+                source: "customer_crop",
+                transport: "data_url",
+                referenceDigest: "crop-digest",
+              },
+              {
+                position: 2,
+                role: "biotipo",
+                source: "catalog",
+                transport: "https_url",
+                providerHost: "cdn.example",
+                providerPath: "/biotipo.png",
+              },
+            ],
+          },
+          startedAt: "2026-01-01T00:00:00.000Z",
+          finishedAt: "2026-01-01T00:00:01.000Z",
+          durationMs: 1000,
+        }],
+        artifacts: [{
+          id: "crop-artifact",
+          executionId: "execution-1",
+          stepId: "step-1",
+          kind: "reference_crop",
+          selected: false,
+          status: "available",
+          storageBucket: "execution-assets",
+          storagePath: "reference/execution-1/single.jpg",
+          sourceUrl: null,
+          mimeType: "image/jpeg",
+          metadata: { role: "single", referenceDigest: "crop-digest" },
+          retentionUntil: "2026-02-01T00:00:00.000Z",
+          deletionAttempts: 0,
+          deletionErrorCode: null,
+          deletedAt: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          rating: null,
+        }],
+        notifications: [],
+      });
+
+      expect(detail.artifacts[0].signedUrl).toBe(
+        "https://signed.test/reference/execution-1/single.jpg",
+      );
+      const call = getDashboardProviderCall(detail.steps[0]);
+      expect(call?.references).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          role: "customer_crop",
+          imageUrl: "https://signed.test/reference/execution-1/single.jpg",
+        }),
+        expect.objectContaining({
+          role: "biotipo",
+          imageUrl: "https://cdn.example/biotipo.png",
+        }),
+      ]));
+    } finally {
+      setExecutionAssetStoreForTests(null);
+    }
   });
 
   it("distingue usuário não autorizado de falha do analytics", async () => {

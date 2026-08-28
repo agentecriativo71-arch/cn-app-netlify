@@ -72,7 +72,9 @@ Quando a etapa chama Fal.ai ou Vision, o bloco **Chamada de API** mostra a
 operação, fase, modelo, tentativa, parâmetros não sensíveis, quantidade de
 resultados e o manifesto ordenado das referências enviadas. Cada referência
 exibe papel, origem, transporte, host/caminho público quando aplicável e um
-digest curto para correlação.
+digest curto para correlação. Quando a referência corresponde a um recorte
+principal retido, o dashboard também exibe uma miniatura e um link temporário
+assinado; os recortes de detalhe continuam sem miniatura por não serem retidos.
 
 O sistema não grava a URL completa, query string, data URL, base64 ou prompt.
 Execuções antigas sem o manifesto continuam visíveis, mas exibem somente o

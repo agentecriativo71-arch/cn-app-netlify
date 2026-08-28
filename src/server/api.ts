@@ -90,6 +90,7 @@ import type {
 } from "./operationalAnalytics";
 import {
   createProviderCallTrace,
+  providerReferenceDigest,
   providerResponseSummary,
   type ProviderReferenceInput,
 } from "./executionTrace";
@@ -2349,7 +2350,11 @@ async function retainReferenceCrops(
         storageBucket: stored.storageBucket,
         storagePath: stored.storagePath,
         mimeType: stored.mimeType,
-        metadata: { role: image.role, anonymized: true },
+        metadata: {
+          role: image.role,
+          anonymized: true,
+          referenceDigest: providerReferenceDigest(image.dataUrl),
+        },
         retentionDays: 30,
       });
       await storageStep?.succeed({
@@ -2362,7 +2367,11 @@ async function retainReferenceCrops(
         kind: "reference_crop",
         stepId: storageStep?.stepId || null,
         status: "storage_failed",
-        metadata: { role: image.role, anonymized: true },
+        metadata: {
+          role: image.role,
+          anonymized: true,
+          referenceDigest: providerReferenceDigest(image.dataUrl),
+        },
         retentionDays: 30,
       });
       await storageStep?.fail("reference_storage_failed");

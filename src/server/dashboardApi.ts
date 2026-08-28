@@ -105,6 +105,7 @@ export type DashboardProviderReference = {
   providerHost: string | null;
   providerPath: string | null;
   referenceDigest: string | null;
+  imageUrl: string | null;
 };
 
 export type DashboardProviderCall = {
@@ -275,6 +276,7 @@ export function getDashboardProviderCall(
           providerHost: optionalString(reference.providerHost),
           providerPath: optionalString(reference.providerPath),
           referenceDigest: optionalString(reference.referenceDigest),
+          imageUrl: optionalString(reference.imageUrl),
         }];
       })
     : [];
@@ -566,18 +568,75 @@ export async function signDashboardArtifacts(
 ): Promise<DashboardExecutionDetail> {
   const assets = getExecutionAssetStore();
   const artifacts = await Promise.all(
-    detail.artifacts.map(async (artifact) => ({
-      ...artifact,
-      sourceUrl: null,
-      signedUrl:
+    detail.artifacts.map(async (artifact) => {
+      const signedUrl =
         assets && artifact.storagePath && artifact.status === "available"
           ? await assets
               .createSignedUrl(artifact.storagePath, 300)
               .catch(() => null)
-          : null,
-    })),
+          : null;
+      return { ...artifact, sourceUrl: null, signedUrl };
+    }),
   );
-  return { ...detail, artifacts };
+
+  const referenceArtifactsByDigest = new Map<string, string>();
+  const referenceArtifactsByRole = new Map<string, string>();
+  for (const artifact of artifacts) {
+    if (artifact.kind !== "reference_crop" || !artifact.signedUrl) continue;
+    const digest =
+      artifact.metadata && typeof artifact.metadata.referenceDigest === "string"
+        ? artifact.metadata.referenceDigest
+        : null;
+    if (digest) referenceArtifactsByDigest.set(digest, artifact.signedUrl);
+    const role =
+      artifact.metadata && typeof artifact.metadata.role === "string"
+        ? artifact.metadata.role
+        : null;
+    if (role) referenceArtifactsByRole.set(role, artifact.signedUrl);
+  }
+
+  const steps = detail.steps.map((step) => {
+    const metadata = step.metadata || {};
+    let customerReferencePosition = 0;
+    const customerReferenceCount = Array.isArray(metadata.referenceManifest)
+      ? metadata.referenceManifest.filter((value) =>
+          value && typeof value === "object" && !Array.isArray(value) &&
+          (value as Record<string, unknown>).source === "customer_crop"
+        ).length
+      : 0;
+    const manifest = Array.isArray(metadata.referenceManifest)
+      ? metadata.referenceManifest.map((value) => {
+          if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+          const reference = value as Record<string, unknown>;
+          const source = typeof reference.source === "string" ? reference.source : "";
+          const digest = typeof reference.referenceDigest === "string" ? reference.referenceDigest : null;
+          const signedUrl =
+            (digest ? referenceArtifactsByDigest.get(digest) : null) ||
+            (source === "customer_crop"
+              ? referenceArtifactsByRole.get(
+                  customerReferenceCount > 1
+                    ? customerReferencePosition++ === 0
+                      ? "top"
+                      : "bottom"
+                    : "single",
+                ) || null
+              : null);
+          const providerHost = typeof reference.providerHost === "string" ? reference.providerHost : null;
+          const providerPath = typeof reference.providerPath === "string" ? reference.providerPath : null;
+          const publicImageUrl =
+            !signedUrl &&
+            (source === "catalog" || source === "mannequin") &&
+            providerHost &&
+            providerPath
+              ? `https://${providerHost}${providerPath}`
+              : null;
+          return { ...reference, imageUrl: signedUrl || publicImageUrl };
+        })
+      : null;
+    return manifest ? { ...step, metadata: { ...metadata, referenceManifest: manifest } } : step;
+  });
+
+  return { ...detail, steps, artifacts };
 }
 
 export type ExecutionDetailLoadResult =
