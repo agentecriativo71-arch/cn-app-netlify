@@ -150,6 +150,64 @@ describe("pipeline de fidelidade de tecidos", () => {
     }
   });
 
+  it("registra cada chamada Fal e a comparação Vision no rastreio", async () => {
+    const steps: Array<{ input: any; succeed: ReturnType<typeof vi.fn>; fail: ReturnType<typeof vi.fn> }> = [];
+    const execution = {
+      startStep: vi.fn(async (input: any) => {
+        const step = { input, succeed: vi.fn(), fail: vi.fn() };
+        steps.push(step);
+        return step;
+      }),
+    };
+    const subscribe = vi.fn(async (endpoint: string) => endpoint === "openrouter/router/vision"
+      ? { output: JSON.stringify({ candidates: [
+          { index: 0, scores: { colorPattern: 5, material: 5, design: 5, artifactFree: 5 } },
+          { index: 1, scores: { colorPattern: 4, material: 4, design: 4, artifactFree: 4 } },
+          { index: 2, scores: { colorPattern: 3, material: 3, design: 3, artifactFree: 3 } },
+        ] }) }
+      : { images: [{ url: `https://fal.test/result-${subscribe.mock.calls.length}.png` }] });
+
+    await runFabricPipeline({
+      client: { subscribe },
+      execution: execution as any,
+      croquiUrl: "https://app.test/croqui.png",
+      tecidoImageUrl: "https://app.test/fabric.png",
+      pecaEn: "dress",
+      mannequinUrl: "https://app.test/mannequin.png",
+      background: "white",
+      normalize: async () => "data:image/jpeg;base64,normalized",
+      evaluate: (candidates, context) => evaluateFabricCandidates({
+        client: { subscribe },
+        normalizedFabricUrl: context.normalizedFabricUrl,
+        intermediateUrl: context.intermediateUrl,
+        candidates,
+      }),
+    });
+
+    expect(steps.map((step) => step.input.stage)).toEqual([
+      "realistic_provider_request",
+      "realistic_provider_request",
+      "realistic_provider_request",
+      "realistic_provider_request",
+      "realistic_vision_evaluation",
+    ]);
+    expect(steps[0].succeed).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({
+        operation: "fal-ai/bytedance/seedream/v4/edit",
+        referenceManifest: expect.arrayContaining([
+          expect.objectContaining({ role: "croqui" }),
+          expect.objectContaining({ role: "fabric", transport: "data_url" }),
+        ]),
+      }),
+    }));
+    expect(steps[4].succeed).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({
+        operation: "openrouter/router/vision",
+        referenceCount: 5,
+      }),
+    }));
+  });
+
   it("avalia candidatos comparando swatch, peça intermediária e resultados", async () => {
     const subscribe = vi.fn().mockResolvedValue({
       output: JSON.stringify({

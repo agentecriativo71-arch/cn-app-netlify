@@ -88,6 +88,37 @@ export type DashboardStepDiagnostic = {
   detailed: boolean;
 };
 
+export type DashboardStepPresentation = {
+  label: string;
+  description: string;
+  statusLabel: string;
+  technicalCode: string;
+};
+
+export type DashboardProviderReference = {
+  position: number;
+  role: string;
+  source: string;
+  selectedValue: string | null;
+  assetName: string | null;
+  transport: string;
+  providerHost: string | null;
+  providerPath: string | null;
+  referenceDigest: string | null;
+};
+
+export type DashboardProviderCall = {
+  phase: string | null;
+  operation: string | null;
+  referenceCount: number | null;
+  templateVersion: string | null;
+  templateDigest: string | null;
+  templateChars: number | null;
+  requestSummary: Record<string, string | number | boolean | null>;
+  responseSummary: Record<string, string | number | boolean | null>;
+  references: DashboardProviderReference[];
+};
+
 export type DashboardGenerationSummary = {
   plannedCandidateCount: number | null;
   generatedCandidateCount: number | null;
@@ -112,7 +143,155 @@ const STEP_ERROR_MESSAGES: Record<string, string> = {
   fal_generation_failed: "Fal.ai falhou durante a geração do croqui.",
   generation_failed: "A geração do croqui falhou.",
   vision_evaluation_failed: "A análise Vision falhou para este candidato.",
+  provider_request_failed: "O provedor externo falhou durante a chamada.",
+  realistic_provider_request_failed:
+    "A chamada de geração da foto realista falhou.",
 };
+
+const STEP_LABELS: Record<string, { label: string; description: string }> = {
+  form_submission: {
+    label: "Formulário recebido",
+    description: "As escolhas do usuário foram recebidas e registradas.",
+  },
+  reference_upload: {
+    label: "Referências recebidas",
+    description: "Os recortes foram validados para o fluxo de referência.",
+  },
+  reference_crop_storage: {
+    label: "Recortes retidos",
+    description: "Os recortes principais foram guardados conforme a retenção.",
+  },
+  reference_vision: {
+    label: "Análise Vision da referência",
+    description: "A referência foi interpretada para extrair as especificações.",
+  },
+  reference_vision_request: {
+    label: "Chamada Vision da referência",
+    description: "Uma imagem ou composição foi enviada ao modelo Vision.",
+  },
+  reference_vision_part: {
+    label: "Análise Vision de uma parte",
+    description: "Uma parte da referência foi analisada separadamente.",
+  },
+  croqui_reference_validation: {
+    label: "Referências do croqui validadas",
+    description: "As imagens que serão usadas no croqui foram conferidas.",
+  },
+  croqui_generation: {
+    label: "Geração dos croquis",
+    description: "A execução coordenou candidatos, avaliações e seleção.",
+  },
+  croqui_candidate_generation: {
+    label: "Candidato de croqui gerado",
+    description: "Um candidato de croqui foi produzido para comparação.",
+  },
+  croqui_provider_request: {
+    label: "Chamada Fal.ai para croqui",
+    description: "O candidato foi solicitado ao provedor de geração.",
+  },
+  croqui_candidate_evaluation: {
+    label: "Candidato de croqui analisado",
+    description: "O candidato foi comparado com os critérios pelo Vision.",
+  },
+  generated_artifact_storage: {
+    label: "Imagem armazenada",
+    description: "O resultado foi copiado para o armazenamento privado.",
+  },
+  realistic_generation: {
+    label: "Geração da foto realista",
+    description: "A execução coordenou a produção da foto realista.",
+  },
+  realistic_provider_request: {
+    label: "Chamada Fal.ai para foto realista",
+    description: "Uma imagem realista foi solicitada ao provedor.",
+  },
+  realistic_vision_evaluation: {
+    label: "Avaliação Vision da foto realista",
+    description: "As variantes realistas foram comparadas pelo Vision.",
+  },
+  persistence: {
+    label: "Resultado persistido",
+    description: "Os dados finais da execução foram salvos.",
+  },
+};
+
+const STEP_STATUS_LABELS: Record<ExecutionStepRecord["status"], string> = {
+  running: "Em andamento",
+  success: "Concluída",
+  error: "Falhou",
+};
+
+function candidateDescription(step: ExecutionStepRecord): string | null {
+  const metadata = metadataRecord(step.metadata);
+  const candidate = optionalNumber(metadata.candidateIndex);
+  if (candidate != null) return `Candidato ${Math.max(1, Math.floor(candidate))}`;
+  const variant = optionalNumber(metadata.variantIndex);
+  if (variant != null) return `Variante ${Math.max(1, Math.floor(variant) + 1)}`;
+  return null;
+}
+
+export function getDashboardStepPresentation(
+  step: ExecutionStepRecord,
+): DashboardStepPresentation {
+  const configured = STEP_LABELS[step.stage] || {
+    label: "Etapa da execução",
+    description: "Uma etapa técnica do fluxo foi registrada.",
+  };
+  const candidate = candidateDescription(step);
+  return {
+    label: candidate ? `${configured.label} · ${candidate}` : configured.label,
+    description: configured.description,
+    statusLabel: STEP_STATUS_LABELS[step.status],
+    technicalCode: step.stage,
+  };
+}
+
+function safeScalarMap(value: unknown): Record<string, string | number | boolean | null> {
+  const record = metadataRecord(value);
+  return Object.fromEntries(
+    Object.entries(record).flatMap(([key, item]) =>
+      typeof item === "string" || typeof item === "number" || typeof item === "boolean" || item === null
+        ? [[key, item]]
+        : [],
+    ),
+  );
+}
+
+export function getDashboardProviderCall(
+  step: ExecutionStepRecord,
+): DashboardProviderCall | null {
+  const metadata = metadataRecord(step.metadata);
+  const manifest = Array.isArray(metadata.referenceManifest)
+    ? metadata.referenceManifest.flatMap((value) => {
+        const reference = metadataRecord(value);
+        if (typeof reference.role !== "string") return [];
+        return [{
+          position: optionalNumber(reference.position) || 0,
+          role: reference.role,
+          source: optionalString(reference.source) || "unknown",
+          selectedValue: optionalString(reference.selectedValue),
+          assetName: optionalString(reference.assetName),
+          transport: optionalString(reference.transport) || "unknown",
+          providerHost: optionalString(reference.providerHost),
+          providerPath: optionalString(reference.providerPath),
+          referenceDigest: optionalString(reference.referenceDigest),
+        }];
+      })
+    : [];
+  const isTrace = metadata.schemaVersion === "provider-call-v1" || manifest.length > 0;
+  if (!isTrace) return null;
+  return {
+    phase: optionalString(metadata.phase),
+    operation: optionalString(metadata.operation),
+    referenceCount: optionalNumber(metadata.referenceCount),
+    templateVersion: optionalString(metadata.templateVersion),
+    templateDigest: optionalString(metadata.templateDigest),
+    templateChars: optionalNumber(metadata.templateChars),
+    requestSummary: safeScalarMap(metadata.requestSummary),
+    responseSummary: safeScalarMap(metadata.responseSummary),
+    references: manifest,
+  };
+}
 
 function metadataRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)

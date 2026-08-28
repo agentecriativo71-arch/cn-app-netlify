@@ -41,6 +41,7 @@ import {
   resolveVisionModel,
   type ReferenceVisionResult,
   type VisionProvider,
+  type VisionInput,
 } from "./referenceVision";
 import {
   validateReferenceDataUrl,
@@ -87,6 +88,11 @@ import type {
   FailOpenTrackedExecution,
   FailOpenTrackedStep,
 } from "./operationalAnalytics";
+import {
+  createProviderCallTrace,
+  providerResponseSummary,
+  type ProviderReferenceInput,
+} from "./executionTrace";
 import { deriveGarmentDetailDataUrls } from "./executionAssets";
 import { getExecutionAssetStore } from "./executionAssetsRuntime";
 import {
@@ -548,12 +554,47 @@ async function generateCroquiCandidates(
         seed,
         promptVersion: CROQUI_PROMPT_VERSION,
       });
+      const providerReferences: ProviderReferenceInput[] = request.previousCroquiUrl
+        ? [{
+            role: "croqui_anterior",
+            source: "generated_artifact",
+            value: request.previousCroquiUrl,
+          }]
+        : references.map((reference) => ({
+            role: reference.role,
+            source:
+              reference.role === "customer_crop" ? "customer_crop" : "catalog",
+            selectedValue: reference.selectedValue,
+            assetName: reference.assetName,
+            value: reference.url,
+          }));
+      const providerTrace = createProviderCallTrace({
+        phase: `Geração do candidato ${attempt} · tentativa Fal.ai ${providerAttempt}`,
+        operation: "fal-ai/bytedance/seedream/v4/edit",
+        references: providerReferences,
+        templateVersion: CROQUI_PROMPT_VERSION,
+        requestSummary: {
+          candidateIndex: attempt,
+          providerAttempt,
+          seed,
+          imageSize: "portrait_4_3",
+          numImages: 1,
+          safetyCheckerEnabled: false,
+        },
+      });
       try {
         url = await internalGenerateCroqui({ ...request, seed });
         await providerStep?.succeed({
           provider: "fal",
           model: CROQUI_GENERATOR,
-          metadata: { candidateIndex: attempt, providerAttempt },
+          metadata: {
+            ...providerTrace,
+            candidateIndex: attempt,
+            providerAttempt,
+            responseSummary: providerResponseSummary({
+              outputImageCount: url ? 1 : 0,
+            }),
+          },
         });
         break;
       } catch (error) {
@@ -571,7 +612,7 @@ async function generateCroquiCandidates(
         await providerStep?.fail(finalDiagnostic.errorCode, {
           provider: finalDiagnostic.provider,
           model: finalDiagnostic.model,
-          metadata: finalDiagnostic,
+          metadata: { ...providerTrace, ...finalDiagnostic },
         });
         if (!finalDiagnostic.retryable) {
           abortAfterNonRetryableFailure = true;
@@ -620,14 +661,31 @@ async function generateCroquiCandidates(
       promptVersion: CROQUI_PROMPT_VERSION,
     });
     if (evaluationStep) evaluationStepIds.set(seed, evaluationStep.stepId);
+    const evaluationPrompt = buildCroquiEvaluationPrompt(request);
+    const evaluator = createReferenceVisionAnalyzer();
+    const evaluationTrace = createProviderCallTrace({
+      phase: `Avaliação Vision do candidato ${attempt}`,
+      operation: "openrouter/router/vision",
+      references: [{
+        role: "croqui_candidate",
+        source: "generated_artifact",
+        value: url,
+      }],
+      templateVersion: CROQUI_VISION_ASSESSMENT_VERSION,
+      template: evaluationPrompt,
+      requestSummary: {
+        candidateIndex: attempt,
+        imageCount: 1,
+        mode: "single",
+      },
+    });
     try {
-      const evaluator = createReferenceVisionAnalyzer();
       const evaluated = await evaluator.analyze({
         mode: "single",
         occasion: request.ocasiao || undefined,
         targetPiece: request.peca as ReferencePiece,
         imageDataUrls: [url],
-        prompt: buildCroquiEvaluationPrompt(request),
+        prompt: evaluationPrompt,
       });
       const visual: CroquiVisualAssessment = {
         comprimento: evaluated.analysis.comprimento,
@@ -651,6 +709,13 @@ async function generateCroquiCandidates(
         provider: evaluator.providerName,
         model: evaluator.modelName,
         metadata: {
+          ...evaluationTrace,
+          responseSummary: providerResponseSummary({
+            outputText: true,
+            resultCount: 1,
+          }),
+          candidateIndex: attempt,
+          seed,
           schemaVersion: CROQUI_VISION_ASSESSMENT_VERSION,
           technicalScore: candidate.score,
           averageConfidence: candidate.averageConfidence ?? null,
@@ -665,9 +730,13 @@ async function generateCroquiCandidates(
       await persistCandidateArtifact(candidate);
     } catch {
       await evaluationStep?.fail("vision_evaluation_failed", {
-        provider: "fal",
-        model: "google/gemini-2.5-flash",
-        metadata: { candidateIndex: attempt, seed },
+        provider: evaluator.providerName,
+        model: evaluator.modelName,
+        metadata: {
+          ...evaluationTrace,
+          candidateIndex: attempt,
+          seed,
+        },
       });
       const candidate = {
         url,
@@ -1051,6 +1120,33 @@ The garment sits naturally on the body with realistic draping and proportions.
 Do not add other people, do not change the subject's face or body.
 No illustrations, no sketches, no cartoons.`;
 
+      const providerStep = await tracking.execution?.startStep({
+        stage: "realistic_provider_request",
+        parentStepId: generationStep?.stepId || null,
+        attempt: 1,
+        promptVersion: "realista-foto-v1",
+      });
+      const providerTrace = createProviderCallTrace({
+        phase: "Geração da foto realista da pessoa",
+        operation: "fal-ai/bytedance/seedream/v4/edit",
+        references: [
+          { role: "customer_photo", source: "customer_photo", value: userImageUrl },
+          { role: "croqui", source: "generated_artifact", value: croquiUrl },
+          ...(tecidoImageUrl
+            ? [{ role: "fabric", source: "fabric" as const, value: tecidoImageUrl }]
+            : []),
+        ],
+        templateVersion: "realista-foto-v1",
+        template: prompt,
+        requestSummary: {
+          mode: "foto",
+          imageCount: imageUrls.length,
+          imageSize: "square_hd",
+          numImages: 1,
+          safetyCheckerEnabled: false,
+        },
+      });
+
       try {
         result = await fal.subscribe("fal-ai/bytedance/seedream/v4/edit", {
           input: {
@@ -1061,7 +1157,20 @@ No illustrations, no sketches, no cartoons.`;
             enable_safety_checker: false,
           },
         });
+        await providerStep?.succeed({
+          provider: "fal",
+          model: "seedream-v4",
+          metadata: {
+            ...providerTrace,
+            responseSummary: providerResponseSummary({ outputImageCount: 1 }),
+          },
+        });
       } catch (error) {
+        await providerStep?.fail("realistic_provider_request_failed", {
+          provider: "fal",
+          model: "seedream-v4",
+          metadata: providerTrace,
+        });
         console.error("[REALISTA FOTO] Error generating:", error);
         throw error;
       }
@@ -1115,6 +1224,9 @@ No illustrations, no sketches, no cartoons.`;
         try {
           const pipeline = await runFabricPipeline({
             client: fal,
+            execution: tracking.execution,
+            parentStepId: generationStep?.stepId || null,
+            visionModel: fabricVisionModel,
             croquiUrl,
             tecidoImageUrl,
             tecidoSku,
@@ -1207,6 +1319,35 @@ The final result must look like a professional editorial fashion photograph with
 ${comentario ? `Extra design details: ${comentario}\n` : ""}
 No face, no person, just the mannequin with the garment. No text, no watermark, no illustration, no sketch, no cartoon, no flat drawing.`;
 
+        const providerStep = await tracking.execution?.startStep({
+          stage: "realistic_provider_request",
+          parentStepId: generationStep?.stepId || null,
+          attempt: 1,
+          promptVersion: "realista-manequim-v1",
+        });
+        const providerTrace = createProviderCallTrace({
+          phase: "Geração da foto realista do manequim",
+          operation: "fal-ai/bytedance/seedream/v4/edit",
+          references: [
+            ...(mannequinUrl
+              ? [{ role: "mannequin", source: "mannequin" as const, value: mannequinUrl }]
+              : []),
+            { role: "croqui", source: "generated_artifact", value: croquiUrl },
+            ...(tecidoImageUrl
+              ? [{ role: "fabric", source: "fabric" as const, value: tecidoImageUrl }]
+              : []),
+          ],
+          templateVersion: "realista-manequim-v1",
+          template: prompt,
+          requestSummary: {
+            mode: "manequim",
+            imageCount: imageUrls.length,
+            imageSize: "square_hd",
+            numImages: 1,
+            safetyCheckerEnabled: false,
+          },
+        });
+
         try {
           result = await fal.subscribe("fal-ai/bytedance/seedream/v4/edit", {
             input: {
@@ -1217,7 +1358,20 @@ No face, no person, just the mannequin with the garment. No text, no watermark, 
               enable_safety_checker: false,
             },
           });
+          await providerStep?.succeed({
+            provider: "fal",
+            model: "seedream-v4",
+            metadata: {
+              ...providerTrace,
+              responseSummary: providerResponseSummary({ outputImageCount: 1 }),
+            },
+          });
         } catch (error) {
+          await providerStep?.fail("realistic_provider_request_failed", {
+            provider: "fal",
+            model: "seedream-v4",
+            metadata: providerTrace,
+          });
           console.error("[REALISTA MANEQUIM] Error generating:", error);
           throw error;
         }
@@ -1729,12 +1883,81 @@ async function uploadBase64ToStorage(
   }
 }
 
+async function analyzeVisionWithTracking(input: {
+  analyzer: {
+    analyze: (request: VisionInput) => Promise<ReferenceVisionResult>;
+    providerName: VisionProvider;
+    modelName: string;
+    lastAttempts: number;
+  };
+  request: VisionInput;
+  execution: FailOpenTrackedExecution | null | undefined;
+  parentStepId?: string | null;
+  phase: string;
+  references: ProviderReferenceInput[];
+}): Promise<ReferenceVisionResult> {
+  const operation =
+    input.analyzer.providerName === "fal"
+      ? "openrouter/router/vision"
+      : "OpenAI Responses API";
+  const step = await input.execution?.startStep({
+    stage: "reference_vision_request",
+    parentStepId: input.parentStepId || null,
+    attempt: 1,
+    promptVersion: REFERENCE_PROMPT_VERSION,
+  });
+  const trace = createProviderCallTrace({
+    phase: input.phase,
+    operation,
+    references: input.references,
+    templateVersion: REFERENCE_PROMPT_VERSION,
+    template: input.request.prompt,
+    requestSummary: {
+      mode: input.request.mode,
+      imageCount: input.request.imageDataUrls.length,
+      targetPiece: input.request.targetPiece || null,
+    },
+  });
+  try {
+    const result = await input.analyzer.analyze(input.request);
+    await step?.succeed({
+      provider: input.analyzer.providerName,
+      model: input.analyzer.modelName,
+      metadata: {
+        ...trace,
+        responseSummary: providerResponseSummary({
+          outputText: true,
+          resultCount: 1,
+          retryCount: Math.max(0, input.analyzer.lastAttempts - 1),
+        }),
+        providerExtrasCount: result.providerExtras.length,
+      },
+    });
+    return result;
+  } catch (error) {
+    await step?.fail("vision_provider_error", {
+      provider: input.analyzer.providerName,
+      model: input.analyzer.modelName,
+      metadata: {
+        ...trace,
+        diagnosticCode:
+          error instanceof ReferenceVisionError
+            ? error.diagnosticCode || null
+            : null,
+      },
+    });
+    throw error;
+  }
+}
+
 async function analyzeReferenceImages(params: {
   mode: "single" | "composite";
   ocasiao?: string;
   targetPiece?: ReferencePiece | null;
   imageDataUrls: string[];
   detailImageDataUrls?: string[];
+  execution?: FailOpenTrackedExecution | null;
+  parentStepId?: string | null;
 }): Promise<ReferenceVisionResult> {
   if (params.mode === "composite") {
     const roles = ["top", "bottom"] as const;
@@ -1744,16 +1967,28 @@ async function analyzeReferenceImages(params: {
         const analyzer = createReferenceVisionAnalyzer();
         const partStartedAt = Date.now();
         try {
-          const result = await analyzer.analyze({
-            mode: "single",
-            occasion: params.ocasiao,
-            targetPiece: params.targetPiece,
-            imageDataUrls: [params.imageDataUrls[index]],
-            prompt: buildVisionPromptForReferencePart(
-              role,
-              params.ocasiao,
-              params.targetPiece,
-            ),
+          const prompt = buildVisionPromptForReferencePart(
+            role,
+            params.ocasiao,
+            params.targetPiece,
+          );
+          const result = await analyzeVisionWithTracking({
+            analyzer,
+            execution: params.execution,
+            parentStepId: params.parentStepId,
+            phase: `Análise da parte ${role} da referência`,
+            request: {
+              mode: "single",
+              occasion: params.ocasiao,
+              targetPiece: params.targetPiece,
+              imageDataUrls: [params.imageDataUrls[index]],
+              prompt,
+            },
+            references: [{
+              role: `reference_${role}`,
+              source: "customer_crop",
+              value: params.imageDataUrls[index],
+            }],
           });
           const analysis = relabelReferenceAnalysisPart(result.analysis, role);
           console.info("[REFERENCE VISION] parte concluída", {
@@ -1794,15 +2029,27 @@ async function analyzeReferenceImages(params: {
     );
     // Segunda leitura conjunta evita costuras incompatíveis entre top e bottom.
     const reconciliationAnalyzer = createReferenceVisionAnalyzer();
-    const reconciliation = await reconciliationAnalyzer.analyze({
-      mode: "composite",
-      occasion: params.ocasiao,
-      targetPiece: params.targetPiece,
-      imageDataUrls: params.imageDataUrls,
-      prompt: buildVisionPromptForCompositeReference(
-        params.ocasiao,
-        params.targetPiece,
-      ),
+    const reconciliationPrompt = buildVisionPromptForCompositeReference(
+      params.ocasiao,
+      params.targetPiece,
+    );
+    const reconciliation = await analyzeVisionWithTracking({
+      analyzer: reconciliationAnalyzer,
+      execution: params.execution,
+      parentStepId: params.parentStepId,
+      phase: "Reconciliação conjunta da referência",
+      request: {
+        mode: "composite",
+        occasion: params.ocasiao,
+        targetPiece: params.targetPiece,
+        imageDataUrls: params.imageDataUrls,
+        prompt: reconciliationPrompt,
+      },
+      references: params.imageDataUrls.map((value, index) => ({
+        role: index === 0 ? "reference_top" : "reference_bottom",
+        source: "customer_crop" as const,
+        value,
+      })),
     });
     const independent = mergeCompositeReferenceAnalyses({
       top: parts[0].analysis,
@@ -1889,24 +2136,52 @@ async function analyzeReferenceImages(params: {
   const analyzer = createReferenceVisionAnalyzer();
   const startedAt = Date.now();
   try {
-    const result = await analyzer.analyze({
-      mode: params.mode,
-      occasion: params.ocasiao,
-      targetPiece: params.targetPiece,
-      imageDataUrls: params.imageDataUrls,
+    const primaryPrompt = buildVisionPromptForSingleReference(
+      params.ocasiao,
+      params.targetPiece,
+    );
+    const result = await analyzeVisionWithTracking({
+      analyzer,
+      execution: params.execution,
+      parentStepId: params.parentStepId,
+      phase: "Análise principal da referência",
+      request: {
+        mode: params.mode,
+        occasion: params.ocasiao,
+        targetPiece: params.targetPiece,
+        imageDataUrls: params.imageDataUrls,
+        prompt: primaryPrompt,
+      },
+      references: params.imageDataUrls.map((value) => ({
+        role: "reference_primary",
+        source: "customer_crop" as const,
+        value,
+      })),
     });
     let enrichedAnalysis = result.analysis;
     if (params.mode === "single" && params.detailImageDataUrls?.length) {
       const details = await Promise.all(
-        params.detailImageDataUrls.map((detailImageDataUrl) =>
-          analyzer.analyze({
-            mode: "single",
-            occasion: params.ocasiao,
-            targetPiece: params.targetPiece,
-            imageDataUrls: [detailImageDataUrl],
-            prompt: `${buildVisionPromptForSingleReference(params.ocasiao, params.targetPiece)}\nThis is a detail crop from the confirmed garment crop. Resolve small neckline, waist, skirt and hem details only.`,
-          }),
-        ),
+        params.detailImageDataUrls.map((detailImageDataUrl, index) => {
+          const prompt = `${buildVisionPromptForSingleReference(params.ocasiao, params.targetPiece)}\nThis is a detail crop from the confirmed garment crop. Resolve small neckline, waist, skirt and hem details only.`;
+          return analyzeVisionWithTracking({
+            analyzer,
+            execution: params.execution,
+            parentStepId: params.parentStepId,
+            phase: `Análise Vision do recorte de detalhe ${index + 1}`,
+            request: {
+              mode: "single",
+              occasion: params.ocasiao,
+              targetPiece: params.targetPiece,
+              imageDataUrls: [detailImageDataUrl],
+              prompt,
+            },
+            references: [{
+              role: `reference_detail_${index + 1}`,
+              source: "customer_crop",
+              value: detailImageDataUrl,
+            }],
+          });
+        }),
       );
       for (const detailResult of details) {
         const detail = detailResult.analysis;
@@ -2227,6 +2502,8 @@ export const uploadReferenceFilesFn: any = createServerFn({
       targetPiece: currentSession.reference_piece,
       imageDataUrls,
       detailImageDataUrls,
+      execution: tracking.execution,
+      parentStepId: visionStep?.stepId || null,
     });
     const analysis = validateReferenceAnalysisForMode(
       visionResult.analysis,

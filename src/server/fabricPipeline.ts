@@ -1,7 +1,14 @@
 import sharp from "sharp";
+import type { FailOpenTrackedExecution } from "./operationalAnalytics";
+import {
+  createProviderCallTrace,
+  providerResponseSummary,
+  type ProviderReferenceInput,
+} from "./executionTrace";
 
 const MAX_FABRIC_IMAGE_BYTES = 10 * 1024 * 1024;
 const MIN_FABRIC_IMAGE_DIMENSION = 256;
+const FABRIC_PIPELINE_PROMPT_VERSION = "realista-tecido-v1";
 
 export interface FabricVariantSeedInput {
   tecidoSku?: string | null;
@@ -53,6 +60,9 @@ export interface FabricPipelineCandidateReference {
 
 export interface FabricPipelineInput {
   client: FabricPipelineClient;
+  execution?: FailOpenTrackedExecution | null;
+  parentStepId?: string | null;
+  visionModel?: string | null;
   croquiUrl: string;
   tecidoImageUrl: string;
   tecidoSku?: string | null;
@@ -296,18 +306,61 @@ export async function runFabricPipeline(input: FabricPipelineInput): Promise<Fab
     variantIndex: 0,
   });
 
-  const garmentReferenceResult = await input.client.subscribe("fal-ai/bytedance/seedream/v4/edit", {
-    input: {
-      prompt: garmentReferencePrompt,
-      image_urls: [input.croquiUrl, normalizedFabricUrl],
-      image_size: "square_hd",
-      num_images: 1,
+  const garmentReferences: ProviderReferenceInput[] = [
+    { role: "croqui", source: "generated_artifact", value: input.croquiUrl },
+    { role: "fabric", source: "fabric", value: normalizedFabricUrl },
+  ];
+  const garmentStep = await input.execution?.startStep({
+    stage: "realistic_provider_request",
+    parentStepId: input.parentStepId || null,
+    attempt: 1,
+    seed: referenceSeed,
+    promptVersion: FABRIC_PIPELINE_PROMPT_VERSION,
+  });
+  const garmentTrace = createProviderCallTrace({
+    phase: "Criação da referência intermediária da peça",
+    operation: "fal-ai/bytedance/seedream/v4/edit",
+    references: garmentReferences,
+    templateVersion: FABRIC_PIPELINE_PROMPT_VERSION,
+    template: garmentReferencePrompt,
+    requestSummary: {
+      imageCount: 2,
+      imageSize: "square_hd",
+      numImages: 1,
       seed: referenceSeed,
-      enhance_prompt_mode: "standard",
-      enable_safety_checker: false,
+      safetyCheckerEnabled: false,
     },
   });
-  const intermediateUrl = firstImageUrl(garmentReferenceResult, "referência da peça");
+  let intermediateUrl: string;
+  try {
+    const garmentReferenceResult = await input.client.subscribe("fal-ai/bytedance/seedream/v4/edit", {
+      input: {
+        prompt: garmentReferencePrompt,
+        image_urls: [input.croquiUrl, normalizedFabricUrl],
+        image_size: "square_hd",
+        num_images: 1,
+        seed: referenceSeed,
+        enhance_prompt_mode: "standard",
+        enable_safety_checker: false,
+      },
+    });
+    intermediateUrl = firstImageUrl(garmentReferenceResult, "referência da peça");
+    await garmentStep?.succeed({
+      provider: "fal",
+      model: "seedream-v4",
+      metadata: {
+        ...garmentTrace,
+        responseSummary: providerResponseSummary({ outputImageCount: 1 }),
+      },
+    });
+  } catch (error) {
+    await garmentStep?.fail("provider_request_failed", {
+      provider: "fal",
+      model: "seedream-v4",
+      metadata: garmentTrace,
+    });
+    throw error;
+  }
 
   const seeds = [0, 1, 2].map((variantIndex) => deriveFabricVariantSeed({
     tecidoSku: input.tecidoSku,
@@ -324,22 +377,113 @@ export async function runFabricPipeline(input: FabricPipelineInput): Promise<Fab
       mannequinSurfaceInstruction: input.mannequinSurfaceInstruction,
       comentario: input.comentario,
     });
-    const result = await input.client.subscribe("fal-ai/bytedance/seedream/v4/edit", {
-      input: {
-        prompt,
-        image_urls: [input.mannequinUrl, intermediateUrl],
-        image_size: "square_hd",
-        num_images: 1,
+    const variantReferences: ProviderReferenceInput[] = [
+      { role: "mannequin", source: "mannequin", value: input.mannequinUrl },
+      { role: "intermediate_garment", source: "generated_artifact", value: intermediateUrl },
+    ];
+    const variantStep = await input.execution?.startStep({
+      stage: "realistic_provider_request",
+      parentStepId: input.parentStepId || null,
+      attempt: variantIndex + 2,
+      seed: seeds[variantIndex],
+      promptVersion: FABRIC_PIPELINE_PROMPT_VERSION,
+    });
+    const variantTrace = createProviderCallTrace({
+      phase: `Geração da variante realista ${variantIndex + 1}`,
+      operation: "fal-ai/bytedance/seedream/v4/edit",
+      references: variantReferences,
+      templateVersion: FABRIC_PIPELINE_PROMPT_VERSION,
+      template: prompt,
+      requestSummary: {
+        variantIndex,
+        imageCount: 2,
+        imageSize: "square_hd",
+        numImages: 1,
         seed: seeds[variantIndex],
-        enhance_prompt_mode: "standard",
-        enable_safety_checker: false,
+        safetyCheckerEnabled: false,
       },
     });
-
-    return { index: variantIndex, url: firstImageUrl(result, `variante ${variantIndex + 1}`) };
+    try {
+      const result = await input.client.subscribe("fal-ai/bytedance/seedream/v4/edit", {
+        input: {
+          prompt,
+          image_urls: [input.mannequinUrl, intermediateUrl],
+          image_size: "square_hd",
+          num_images: 1,
+          seed: seeds[variantIndex],
+          enhance_prompt_mode: "standard",
+          enable_safety_checker: false,
+        },
+      });
+      const url = firstImageUrl(result, `variante ${variantIndex + 1}`);
+      await variantStep?.succeed({
+        provider: "fal",
+        model: "seedream-v4",
+      metadata: {
+        ...variantTrace,
+        variantIndex,
+        responseSummary: providerResponseSummary({ outputImageCount: 1 }),
+      },
+      });
+      return { index: variantIndex, url };
+    } catch (error) {
+      await variantStep?.fail("provider_request_failed", {
+        provider: "fal",
+        model: "seedream-v4",
+        metadata: variantTrace,
+      });
+      throw error;
+    }
   }));
 
-  const evaluatedCandidates = await input.evaluate(candidates, { normalizedFabricUrl, intermediateUrl });
+  const evaluationReferences: ProviderReferenceInput[] = [
+    { role: "fabric", source: "fabric", value: normalizedFabricUrl },
+    { role: "intermediate_garment", source: "generated_artifact", value: intermediateUrl },
+    ...candidates.map((candidate) => ({
+      role: `candidate_${candidate.index + 1}`,
+      source: "generated_artifact" as const,
+      value: candidate.url,
+    })),
+  ];
+  const evaluationStep = await input.execution?.startStep({
+    stage: "realistic_vision_evaluation",
+    parentStepId: input.parentStepId || null,
+    attempt: 1,
+    promptVersion: FABRIC_PIPELINE_PROMPT_VERSION,
+  });
+  const evaluationTrace = createProviderCallTrace({
+    phase: "Comparação Vision das variantes realistas",
+    operation: "openrouter/router/vision",
+    references: evaluationReferences,
+    templateVersion: FABRIC_PIPELINE_PROMPT_VERSION,
+    requestSummary: {
+      imageCount: evaluationReferences.length,
+      candidateCount: candidates.length,
+      mode: "fabric_fidelity",
+    },
+  });
+  let evaluatedCandidates: FabricCandidate[];
+  try {
+    evaluatedCandidates = await input.evaluate(candidates, { normalizedFabricUrl, intermediateUrl });
+    await evaluationStep?.succeed({
+      provider: "fal",
+      model: input.visionModel || "google/gemini-2.5-flash",
+      metadata: {
+        ...evaluationTrace,
+        responseSummary: providerResponseSummary({
+          outputText: true,
+          resultCount: evaluatedCandidates.length,
+        }),
+      },
+    });
+  } catch (error) {
+    await evaluationStep?.fail("vision_evaluation_failed", {
+      provider: "fal",
+      model: input.visionModel || "google/gemini-2.5-flash",
+      metadata: evaluationTrace,
+    });
+    throw error;
+  }
   const selected = selectBestFabricCandidate(evaluatedCandidates);
   if (!selected) throw new Error("Nenhuma variante atingiu o nível mínimo de fidelidade do tecido.");
 

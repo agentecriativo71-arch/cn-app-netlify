@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   getDashboardSpecificationEntries,
+  getDashboardProviderCall,
+  getDashboardStepPresentation,
   getDashboardStepDiagnostic,
   getDashboardGenerationSummary,
   getDashboardVisionEvaluation,
@@ -9,6 +11,98 @@ import {
 } from "../server/dashboardApi";
 
 describe("carregamento do dashboard", () => {
+  it("traduz etapas técnicas para títulos e estados descritivos em português", () => {
+    const presentation = getDashboardStepPresentation({
+      id: "step-1",
+      executionId: "execution-1",
+      parentStepId: null,
+      stage: "croqui_provider_request",
+      attempt: 2,
+      status: "success",
+      provider: "fal",
+      model: "seedream-v4",
+      promptVersion: "croqui-fidelity-v3",
+      seed: 260827,
+      errorCode: null,
+      metadata: { candidateIndex: 2 },
+      startedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "2026-01-01T00:00:01.000Z",
+      durationMs: 1000,
+    });
+
+    expect(presentation).toEqual({
+      label: "Chamada Fal.ai para croqui · Candidato 2",
+      description: "O candidato foi solicitado ao provedor de geração.",
+      statusLabel: "Concluída",
+      technicalCode: "croqui_provider_request",
+    });
+  });
+
+  it("expõe manifesto sanitizado da chamada e não a URL original", () => {
+    const call = getDashboardProviderCall({
+      id: "step-1",
+      executionId: "execution-1",
+      parentStepId: null,
+      stage: "croqui_provider_request",
+      attempt: 1,
+      status: "success",
+      provider: "fal",
+      model: "seedream-v4",
+      promptVersion: "croqui-fidelity-v3",
+      seed: 260826,
+      errorCode: null,
+      metadata: {
+        schemaVersion: "provider-call-v1",
+        phase: "candidato de croqui",
+        operation: "fal-ai/bytedance/seedream/v4/edit",
+        referenceCount: 2,
+        templateVersion: "croqui-fidelity-v3",
+        templateDigest: "abc123",
+        templateChars: 4000,
+        requestSummary: { imageSize: "portrait_4_3", numImages: 1 },
+        responseSummary: { outputImageCount: 1 },
+        referenceManifest: [
+          {
+            position: 1,
+            role: "biotipo",
+            source: "catalog",
+            selectedValue: "Ampulheta",
+            assetName: "ampulheta.png",
+            transport: "https_url",
+            providerHost: "cdn.example",
+            providerPath: "/assets/ampulheta.png",
+            referenceDigest: "digest-1",
+          },
+          {
+            position: 2,
+            role: "customer_crop",
+            source: "customer_crop",
+            selectedValue: null,
+            assetName: null,
+            transport: "data_url",
+            providerHost: null,
+            providerPath: null,
+            referenceDigest: "digest-2",
+          },
+        ],
+      },
+      startedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "2026-01-01T00:00:01.000Z",
+      durationMs: 1000,
+    });
+
+    expect(call).toMatchObject({
+      operation: "fal-ai/bytedance/seedream/v4/edit",
+      referenceCount: 2,
+      references: [
+        { role: "biotipo", providerPath: "/assets/ampulheta.png" },
+        { role: "customer_crop", providerPath: null, transport: "data_url" },
+      ],
+    });
+    expect(JSON.stringify(call)).not.toContain("data:image");
+    expect(JSON.stringify(call)).not.toContain("https://");
+  });
+
   it("distingue usuário não autorizado de falha do analytics", async () => {
     const result = await loadDashboardOverview({
       requireAdmin: async () => {

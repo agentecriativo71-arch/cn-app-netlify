@@ -64,6 +64,20 @@ locais permanecem no repositório como fonte do upload.
 
 O acesso começa em `/dashboard/login`; a visão geral fica em `/dashboard` e o detalhe em `/dashboard/execucoes/:executionId`. O cliente pode avaliar croqui e foto realista com 1–5 estrelas, editando a nota enquanto o resultado estiver disponível.
 
+### Leitura das etapas e chamadas externas
+
+No detalhe da execução, as etapas são exibidas com título e descrição em
+português. O código técnico original permanece recolhido para diagnóstico.
+Quando a etapa chama Fal.ai ou Vision, o bloco **Chamada de API** mostra a
+operação, fase, modelo, tentativa, parâmetros não sensíveis, quantidade de
+resultados e o manifesto ordenado das referências enviadas. Cada referência
+exibe papel, origem, transporte, host/caminho público quando aplicável e um
+digest curto para correlação.
+
+O sistema não grava a URL completa, query string, data URL, base64 ou prompt.
+Execuções antigas sem o manifesto continuam visíveis, mas exibem somente o
+diagnóstico legado disponível.
+
 ## Integração por `executionId`
 
 O endpoint somente leitura

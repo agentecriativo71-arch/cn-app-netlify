@@ -2,6 +2,8 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import {
   getDashboardSpecificationEntries,
   getDashboardGenerationSummary,
+  getDashboardProviderCall,
+  getDashboardStepPresentation,
   getDashboardStepDiagnostic,
   getDashboardVisionEvaluation,
   getExecutionDetailFn,
@@ -119,20 +121,77 @@ function ExecutionDetailPage() {
               </p>
             )}
             <ol className="space-y-3">
-              {detail.steps.map((step) => (
+              {detail.steps.map((step) => {
+                const presentation = getDashboardStepPresentation(step);
+                const providerCall = getDashboardProviderCall(step);
+                const diagnostic = getDashboardStepDiagnostic(step);
+                return (
                 <li key={step.id} className="border-l-2 border-white/20 pl-3">
                   <p className="text-sm text-white">
-                    {step.stage} · tentativa {step.attempt}
+                    {presentation.label} · tentativa {step.attempt}
                   </p>
                   <p className="text-xs text-white/55">
-                    {step.status}
-                    {step.durationMs == null ? "" : ` · ${step.durationMs} ms`}
+                    {presentation.statusLabel}
+                    {step.durationMs == null ? "" : ` · ${formatDuration(step.durationMs)}`}
                     {step.seed == null ? "" : ` · seed ${step.seed}`}
+                    {step.provider ? ` · ${step.provider}` : ""}
+                    {step.model ? ` · ${step.model}` : ""}
                   </p>
-                  {(() => {
-                    const diagnostic = getDashboardStepDiagnostic(step);
-                    if (!diagnostic) return null;
-                    return (
+                  <p className="text-xs text-white/45 mt-1">
+                    {presentation.description}
+                  </p>
+                  {providerCall && (
+                    <details className="mt-2 rounded border border-[#E5D3A2]/20 bg-black/10 p-2">
+                      <summary className="cursor-pointer text-xs text-[#E5D3A2]">
+                        Chamada de API
+                        {providerCall.operation ? ` · ${providerCall.operation}` : ""}
+                      </summary>
+                      <dl className="mt-2 space-y-1 text-xs text-white/65">
+                        {providerCall.phase && (
+                          <div><dt className="inline text-white/45">Fase: </dt><dd className="inline">{providerCall.phase}</dd></div>
+                        )}
+                        {providerCall.operation && (
+                          <div><dt className="inline text-white/45">Operação: </dt><dd className="inline break-all">{providerCall.operation}</dd></div>
+                        )}
+                        {providerCall.referenceCount != null && (
+                          <div><dt className="inline text-white/45">Referências enviadas: </dt><dd className="inline">{providerCall.referenceCount}</dd></div>
+                        )}
+                        {providerCall.templateVersion && (
+                          <div><dt className="inline text-white/45">Versão do template: </dt><dd className="inline">{providerCall.templateVersion}</dd></div>
+                        )}
+                        {providerCall.templateChars != null && (
+                          <div><dt className="inline text-white/45">Tamanho do prompt: </dt><dd className="inline">{providerCall.templateChars} caracteres (conteúdo não persistido)</dd></div>
+                        )}
+                      </dl>
+                      {providerCall.references.length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-xs text-white/80">Referências enviadas ao provedor</p>
+                          <ol className="mt-1 space-y-1">
+                            {providerCall.references.map((reference) => (
+                              <li key={`${reference.position}-${reference.referenceDigest || reference.role}`} className="text-xs text-white/60">
+                                <span className="text-white/80">{reference.position}. {referenceRoleLabel(reference.role)}</span>
+                                {reference.selectedValue ? ` — ${reference.selectedValue}` : ""}
+                                {reference.assetName ? ` (${reference.assetName})` : ""}
+                                <span className="text-white/40"> · {referenceSourceLabel(reference.source)} · {reference.transport}</span>
+                                {reference.providerHost ? <span className="text-white/40"> · {reference.providerHost}</span> : null}
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
+                      {Object.keys(providerCall.requestSummary).length > 0 && (
+                        <p className="mt-2 text-xs text-white/50">
+                          Parâmetros: {formatSummary(providerCall.requestSummary)}
+                        </p>
+                      )}
+                      {Object.keys(providerCall.responseSummary).length > 0 && (
+                        <p className="mt-2 text-xs text-white/50">
+                          Resposta registrada: {formatSummary(providerCall.responseSummary)}
+                        </p>
+                      )}
+                    </details>
+                  )}
+                  {diagnostic && (
                       <div className="mt-1 rounded border border-red-200/20 bg-red-950/20 p-2 text-xs">
                         <p className="text-red-100">{diagnostic.message}</p>
                         <p className="text-red-100/70 mt-1">
@@ -175,10 +234,14 @@ function ExecutionDetailPage() {
                           </p>
                         )}
                       </div>
-                    );
-                  })()}
+                  )}
+                  <details className="mt-2 text-[11px] text-white/35">
+                    <summary className="cursor-pointer">Código técnico</summary>
+                    <p className="mt-1 break-all">{presentation.technicalCode}</p>
+                  </details>
                 </li>
-              ))}
+                );
+              })}
             </ol>
           </div>
         </div>
@@ -439,6 +502,50 @@ function formatVisionValue(value: string | boolean | null): string {
 
 function formatCount(value: number | null): string {
   return value == null ? "?" : String(value);
+}
+
+function formatDuration(value: number): string {
+  if (value < 1000) return `${value} ms`;
+  return `${(value / 1000).toFixed(1)} s`;
+}
+
+const REFERENCE_ROLE_LABELS: Record<string, string> = {
+  biotipo: "Modelo de biotipo",
+  decote: "Referência de decote",
+  manga: "Referência de manga",
+  saia: "Referência de saia",
+  renda: "Referência de renda",
+  customer_crop: "Recorte do cliente",
+  customer_photo: "Foto do cliente",
+  croqui: "Croqui selecionado",
+  croqui_candidate: "Candidato de croqui",
+  mannequin: "Modelo de manequim",
+  fabric: "Imagem do tecido",
+  intermediate_garment: "Referência intermediária da peça",
+};
+
+const REFERENCE_SOURCE_LABELS: Record<string, string> = {
+  catalog: "catálogo",
+  customer_crop: "recorte anonimizado",
+  customer_photo: "foto do cliente",
+  generated_artifact: "artefato gerado",
+  mannequin: "template de manequim",
+  fabric: "tecido",
+  unknown: "origem não informada",
+};
+
+function referenceRoleLabel(role: string): string {
+  return REFERENCE_ROLE_LABELS[role] || role;
+}
+
+function referenceSourceLabel(source: string): string {
+  return REFERENCE_SOURCE_LABELS[source] || source;
+}
+
+function formatSummary(summary: Record<string, string | number | boolean | null>): string {
+  return Object.entries(summary)
+    .map(([key, value]) => `${key}=${value === null ? "não informado" : String(value)}`)
+    .join(" · ");
 }
 
 function getAdditionalVisionEntries(
